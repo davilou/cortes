@@ -22,6 +22,7 @@ class ErroIngestao(RuntimeError):
 
 def comando_download(url: str, destino: Path, cliente: str | None) -> list[str]:
     args = [sys.executable, "-m", "yt_dlp", "-f", FORMATO, "--merge-output-format", "mp4",
+            "--remux-video", "mp4",
             "--write-info-json", "--no-progress", "--sleep-requests", "1.5",
             "-o", str(destino / "video.%(ext)s")]
     if cliente:
@@ -29,6 +30,9 @@ def comando_download(url: str, destino: Path, cliente: str | None) -> list[str]:
     return args + [url]
 
 
+# Mensagens observadas em 2026-09-30 com yt-dlp 2026.08.19 durante a pesquisa:
+# "Requested format is not available" em pesquisa/corpus2/download_erros.txt;
+# "Only images are available for download" na saída de `yt-dlp -F` de um vídeo bloqueado.
 def precisa_cliente_alternativo(stderr: str) -> bool:
     return "Requested format is not available" in stderr or "Only images are available" in stderr
 
@@ -47,12 +51,19 @@ def _rodar(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
+def altura_de_saida(stdout: str, video: Path) -> int:
+    try:
+        return int(stdout.strip())
+    except ValueError:
+        raise ErroIngestao(f"ffprobe não retornou altura para {video}: {stdout!r}") from None
+
+
 def _altura(video: Path) -> int:
     r = _rodar(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
                 "stream=height", "-of", "csv=p=0", str(video)])
     if r.returncode != 0:
         raise ErroIngestao(f"ffprobe falhou em {video}: {r.stderr[-300:]}")
-    return int(r.stdout.strip())
+    return altura_de_saida(r.stdout, video)
 
 
 def baixar(url: str, destino: Path) -> None:

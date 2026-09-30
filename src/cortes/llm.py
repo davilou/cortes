@@ -34,8 +34,11 @@ def montar_comando(sistema: str, schema: dict[str, Any], modelo: str) -> list[st
 
 
 def _executar(args: list[str], entrada: str) -> str:
-    r = subprocess.run(args, input=entrada, capture_output=True, text=True,
-                       encoding="utf-8", timeout=TIMEOUT_S)
+    try:
+        r = subprocess.run(args, input=entrada, capture_output=True, text=True,
+                           encoding="utf-8", timeout=TIMEOUT_S)
+    except subprocess.TimeoutExpired as e:
+        raise ErroLLM(f"claude -p não respondeu em {TIMEOUT_S}s") from e
     if r.returncode != 0 and not r.stdout.strip():
         raise ErroLLM(f"claude saiu com código {r.returncode}: {r.stderr[-500:]}")
     return r.stdout

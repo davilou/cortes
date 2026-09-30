@@ -1,8 +1,10 @@
 import json
+import subprocess
 from typing import Any
 
 import pytest
 
+import cortes.llm as llm
 from cortes.llm import ErroLLM, chamar, montar_comando
 
 SCHEMA: dict[str, Any] = {
@@ -51,6 +53,15 @@ def test_fora_do_schema_levanta() -> None:
 def test_saida_nao_json_levanta() -> None:
     with pytest.raises(ErroLLM, match="não é JSON"):
         chamar("p", SCHEMA, "s", executar=lambda a, e: "Error: not logged in")
+
+
+def test_executar_timeout_levanta_erro_claro(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _run_que_expira(*args: Any, **kwargs: Any) -> Any:
+        raise subprocess.TimeoutExpired(cmd=["claude"], timeout=1)
+
+    monkeypatch.setattr(subprocess, "run", _run_que_expira)
+    with pytest.raises(ErroLLM, match="não respondeu"):
+        llm._executar(["claude"], "x")
 
 
 def test_comando_isola_contexto_e_nao_usa_bare() -> None:

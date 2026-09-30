@@ -6,6 +6,7 @@ import pytest
 from cortes.ingestao import (
     ALTURA_MINIMA,
     ErroIngestao,
+    altura_de_saida,
     comando_download,
     extrair_meta,
     precisa_cliente_alternativo,
@@ -18,7 +19,17 @@ def test_comando_padrao_pede_1080_e_info_json(tmp_path: Path) -> None:
     assert cmd[:3] == [sys.executable, "-m", "yt_dlp"]
     assert "--write-info-json" in cmd and "--extractor-args" not in cmd
     assert "height<=1080" in cmd[cmd.index("-f") + 1]
+    assert cmd[cmd.index("--remux-video") + 1] == "mp4"
     assert cmd[-1] == "https://youtu.be/x"
+
+
+def test_altura_de_saida_converte_stdout() -> None:
+    assert altura_de_saida("1080\n", Path("v.mp4")) == 1080
+
+
+def test_altura_de_saida_vazia_levanta_erro_claro() -> None:
+    with pytest.raises(ErroIngestao, match="não retornou altura"):
+        altura_de_saida("", Path("v.mp4"))
 
 
 def test_comando_com_cliente_alternativo(tmp_path: Path) -> None:
