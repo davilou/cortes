@@ -187,7 +187,7 @@ humor; em finanças só vira sinal auxiliar). Picos de energia marcam candidatos
 1. **Segmentação** em unidades de ideia: frases completas agrupadas por pausa e troca
    de assunto.
 2. **Regra dura de início:** um candidato não pode começar em frase que dependa de
-   contexto anterior (conectivo inicial — "mas", "também", "e aí", "então" —, pronome
+   contexto anterior (conectivo inicial — "mas", "também", "e aí", "só que" —, pronome
    sem referente no trecho). Implementada em código + confirmada pelo LLM.
    “Então” fica de fora da regra dura de propósito: em PT-BR falado costuma abrir história ("Então, eu vendi a casa").
 3. **Pontuação** via `llm` (§7): uma chamada por episódio com a transcrição inteira
