@@ -12,6 +12,7 @@ from cortes.regra_inicio import comeca_no_meio
     "Porque o juro lá é outro.",
     "Aí ele pegou e vendeu.",
     "— Mas não é bem assim.",
+    "“Mas ninguém fala disso.”",              # aspas curvas da transcrição
 ])
 def test_detecta_continuacao(texto: str) -> None:
     assert comeca_no_meio(texto) is True
