@@ -1,0 +1,22 @@
+# Perfil de nicho: finanças PT-BR. Fontes: pesquisa/02-corpus-financas.md (R1) e 03 (R2).
+nicho: financas
+filtro_tema: >-
+  O trecho é sobre dinheiro: ganhar, perder, gastar, investir, salário, preço, patrimônio,
+  negócio, economia ou quanto alguém ganha. Vale em podcast de qualquer assunto.
+rubrica:                 # R1 6/6 e R2 8×4 (gancho, autocontido); espanto R1 9×0; fechamento R2 8×2
+  gancho_3s: 0.30
+  autocontido: 0.25
+  espanto: 0.20
+  historia_ou_virada: 0.10
+  fechamento: 0.15
+bonus:                   # R1/R2: número no gancho 15·7·2%; humor 18·8%; famoso 6×3 canais
+  - numero_ou_dado
+  - dinheiro_alheio_quanto_ganha
+  - humor
+  - personagem_famoso_citado
+  - conversa_de_estudio
+penalidade:              # R1: utilidade 8×14; R2: motivacional 13·25%, palestra 5·11·12%
+  - utilidade_sem_surpresa
+  - motivacional_sem_espanto
+  - palestra_ou_palco
+duracao_s: {min: 20, max: 90}   # 01-pesquisa-documental: YouTube diz que não há duração mágica
