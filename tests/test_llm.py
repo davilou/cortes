@@ -1,0 +1,64 @@
+import json
+from typing import Any
+
+import pytest
+
+from cortes.llm import ErroLLM, chamar, montar_comando
+
+SCHEMA: dict[str, Any] = {
+    "type": "object", "required": ["nota"], "additionalProperties": False,
+    "properties": {"nota": {"type": "integer", "minimum": 1, "maximum": 5}},
+}
+
+
+def executor_que_devolve(resposta: dict[str, Any]):  # type: ignore[no-untyped-def]
+    chamadas: list[tuple[list[str], str]] = []
+
+    def executar(args: list[str], entrada: str) -> str:
+        chamadas.append((args, entrada))
+        return json.dumps(resposta)
+
+    executar.chamadas = chamadas  # type: ignore[attr-defined]
+    return executar
+
+
+def test_devolve_structured_output_valido() -> None:
+    ex = executor_que_devolve({"is_error": False, "structured_output": {"nota": 4}})
+    assert chamar("prompt", SCHEMA, "sistema", executar=ex) == {"nota": 4}
+    args, entrada = ex.chamadas[0]
+    assert entrada == "prompt"
+    assert args[:2] == ["claude", "-p"]
+
+
+def test_is_error_levanta() -> None:
+    ex = executor_que_devolve({"is_error": True, "result": "limite de uso atingido"})
+    with pytest.raises(ErroLLM, match="limite de uso"):
+        chamar("p", SCHEMA, "s", executar=ex)
+
+
+def test_sem_structured_output_levanta() -> None:
+    ex = executor_que_devolve({"is_error": False, "result": "texto solto"})
+    with pytest.raises(ErroLLM, match="structured_output"):
+        chamar("p", SCHEMA, "s", executar=ex)
+
+
+def test_fora_do_schema_levanta() -> None:
+    ex = executor_que_devolve({"is_error": False, "structured_output": {"nota": 9}})
+    with pytest.raises(ErroLLM, match="fora do schema"):
+        chamar("p", SCHEMA, "s", executar=ex)
+
+
+def test_saida_nao_json_levanta() -> None:
+    with pytest.raises(ErroLLM, match="não é JSON"):
+        chamar("p", SCHEMA, "s", executar=lambda a, e: "Error: not logged in")
+
+
+def test_comando_isola_contexto_e_nao_usa_bare() -> None:
+    cmd = montar_comando("sis", SCHEMA, "sonnet")
+    assert "--bare" not in cmd
+    for flag in ["--system-prompt", "--setting-sources", "--strict-mcp-config",
+                 "--no-session-persistence", "--json-schema"]:
+        assert flag in cmd
+    assert cmd[cmd.index("--tools") + 1] == ""
+    assert cmd[cmd.index("--setting-sources") + 1] == "project"
+    assert json.loads(cmd[cmd.index("--json-schema") + 1]) == SCHEMA
