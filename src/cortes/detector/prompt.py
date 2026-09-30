@@ -38,7 +38,7 @@ def montar_prompt(frases: list[Frase], perfil: Perfil) -> str:
     return f"""Encontre até {MAX_CANDIDATOS} trechos deste podcast que dariam bons Shorts.
 
 TEMA DO NICHO ({perfil.nicho}): {perfil.filtro_tema}
-Marque no_tema=false para trechos fora do tema (o podcast pode ser de outro assunto).
+Marque dentro_do_tema=true se o trecho é sobre o tema; false se não é (o podcast pode ser de outro assunto).
 
 REGRAS
 - Cada trecho vai de frase_inicio a frase_fim (índices F da transcrição), com {perfil.duracao_min:.0f}
@@ -74,14 +74,14 @@ def schema_candidatos(perfil: Perfil) -> dict[str, Any]:
     nota = {"type": "integer", "minimum": 1, "maximum": 5}
     item = {
         "type": "object", "additionalProperties": False,
-        "required": ["frase_inicio", "frase_fim", "notas", "no_tema", "bonus", "penalidades",
+        "required": ["frase_inicio", "frase_fim", "notas", "dentro_do_tema", "bonus", "penalidades",
                      "justificativa", "titulo"],
         "properties": {
             "frase_inicio": {"type": "integer", "minimum": 0},
             "frase_fim": {"type": "integer", "minimum": 0},
             "notas": {"type": "object", "additionalProperties": False, "required": list(CRITERIOS),
                       "properties": {c: nota for c in CRITERIOS}},
-            "no_tema": {"type": "boolean"},
+            "dentro_do_tema": {"type": "boolean"},
             "bonus": _lista_fechada(perfil.bonus),
             "penalidades": _lista_fechada(perfil.penalidade),
             "justificativa": {"type": "string"},

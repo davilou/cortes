@@ -24,7 +24,7 @@ def test_prompt_traz_tema_criterios_bonus_exemplos_e_transcricao() -> None:
 def test_schema_aceita_resposta_valida_e_recusa_bonus_fora_da_lista() -> None:
     schema = schema_candidatos(PERFIL)
     ok = {"candidatos": [{"frase_inicio": 0, "frase_fim": 1, "notas": dict.fromkeys(CRITERIOS, 3),
-                          "no_tema": True, "bonus": ["humor"], "penalidades": [],
+                          "dentro_do_tema": True, "bonus": ["humor"], "penalidades": [],
                           "justificativa": "x", "titulo": "y"}]}
     jsonschema.validate(ok, schema)
     ok["candidatos"][0]["bonus"] = ["inventado"]

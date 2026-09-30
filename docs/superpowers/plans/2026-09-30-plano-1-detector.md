@@ -1215,7 +1215,7 @@ def test_prompt_traz_tema_criterios_bonus_exemplos_e_transcricao() -> None:
 def test_schema_aceita_resposta_valida_e_recusa_bonus_fora_da_lista() -> None:
     schema = schema_candidatos(PERFIL)
     ok = {"candidatos": [{"frase_inicio": 0, "frase_fim": 1, "notas": dict.fromkeys(CRITERIOS, 3),
-                          "no_tema": True, "bonus": ["humor"], "penalidades": [],
+                          "dentro_do_tema": True, "bonus": ["humor"], "penalidades": [],
                           "justificativa": "x", "titulo": "y"}]}
     jsonschema.validate(ok, schema)
     ok["candidatos"][0]["bonus"] = ["inventado"]
@@ -1277,7 +1277,7 @@ def montar_prompt(frases: list[Frase], perfil: Perfil) -> str:
     return f"""Encontre até {MAX_CANDIDATOS} trechos deste podcast que dariam bons Shorts.
 
 TEMA DO NICHO ({perfil.nicho}): {perfil.filtro_tema}
-Marque no_tema=false para trechos fora do tema (o podcast pode ser de outro assunto).
+Marque dentro_do_tema=true se o trecho é sobre o tema; false se não é (o podcast pode ser de outro assunto).
 
 REGRAS
 - Cada trecho vai de frase_inicio a frase_fim (índices F da transcrição), com {perfil.duracao_min:.0f}
@@ -1313,14 +1313,14 @@ def schema_candidatos(perfil: Perfil) -> dict[str, Any]:
     nota = {"type": "integer", "minimum": 1, "maximum": 5}
     item = {
         "type": "object", "additionalProperties": False,
-        "required": ["frase_inicio", "frase_fim", "notas", "no_tema", "bonus", "penalidades",
+        "required": ["frase_inicio", "frase_fim", "notas", "dentro_do_tema", "bonus", "penalidades",
                      "justificativa", "titulo"],
         "properties": {
             "frase_inicio": {"type": "integer", "minimum": 0},
             "frase_fim": {"type": "integer", "minimum": 0},
             "notas": {"type": "object", "additionalProperties": False, "required": list(CRITERIOS),
                       "properties": {c: nota for c in CRITERIOS}},
-            "no_tema": {"type": "boolean"},
+            "dentro_do_tema": {"type": "boolean"},
             "bonus": _lista_fechada(perfil.bonus),
             "penalidades": _lista_fechada(perfil.penalidade),
             "justificativa": {"type": "string"},
@@ -1372,10 +1372,10 @@ FRASES = [Frase(0, "Nenhuma força aérea luta contra eles.", 0, 10),
           Frase(3, "Juro de 0,7% na Europa.", 100, 130)]
 
 
-def bruto(ini: int, fim: int, notas: int = 4, no_tema: bool = True,
+def bruto(ini: int, fim: int, notas: int = 4, dentro_do_tema: bool = True,
           bonus: list[str] | None = None, pen: list[str] | None = None) -> dict:  # type: ignore[type-arg]
     return {"frase_inicio": ini, "frase_fim": fim, "notas": dict.fromkeys(CRITERIOS, notas),
-            "no_tema": no_tema, "bonus": bonus or [], "penalidades": pen or [],
+            "dentro_do_tema": dentro_do_tema, "bonus": bonus or [], "penalidades": pen or [],
             "justificativa": "j", "titulo": "t"}
 
 
@@ -1408,7 +1408,7 @@ def test_converter_aceita_ordena_e_aplica_bonus_penalidade() -> None:
 def test_converter_descarta_com_motivo_visivel() -> None:
     aceitos, descartes = converter({"candidatos": [
         bruto(1, 2),                 # começa com "Mas"
-        bruto(0, 2, no_tema=False),  # fora do tema
+        bruto(0, 2, dentro_do_tema=False),  # fora do tema
         bruto(2, 9),                 # índice inexistente
         bruto(2, 1),                 # fim antes do início
     ]}, FRASES, PERFIL, [0.1] * 400)
@@ -1462,7 +1462,7 @@ def _motivo_descarte(b: dict[str, Any], frases: list[Frase], perfil: Perfil) -> 
     ini, fim = b["frase_inicio"], b["frase_fim"]
     if not 0 <= ini <= fim < len(frases):
         return f"índices inválidos {ini}-{fim}"
-    if not b["no_tema"]:
+    if not b["dentro_do_tema"]:
         return "fora do tema"
     if comeca_no_meio(frases[ini].texto):
         return f"começa no meio: '{frases[ini].texto}'"
@@ -1517,7 +1517,7 @@ def test_detectar_passa_prompt_e_schema_ao_llm_e_converte() -> None:
     def llm_falso(prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
         recebido.update(prompt=prompt, schema=schema, sistema=sistema, modelo=modelo)
         return {"candidatos": [{"frase_inicio": 0, "frase_fim": 1, "notas": dict.fromkeys(CRITERIOS, 5),
-                                "no_tema": True, "bonus": [], "penalidades": [],
+                                "dentro_do_tema": True, "bonus": [], "penalidades": [],
                                 "justificativa": "j", "titulo": "t"}]}
 
     aceitos, descartes = detectar(FRASES, [0.1] * 100, PERFIL, modelo="opus", chamar_llm=llm_falso)
