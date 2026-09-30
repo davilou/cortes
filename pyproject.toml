@@ -1,0 +1,41 @@
+[project]
+name = "cortes"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+  "openai-whisper",   # transcrição com tempo por palavra (testado na pesquisa)
+  "numpy",            # energia do áudio
+  "pyyaml",           # perfil de nicho
+  "jsonschema",       # valida a saída do LLM
+  "yt-dlp",           # download do episódio
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy", "types-PyYAML", "types-jsonschema"]
+
+[project.scripts]
+cortes = "cortes.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+strict = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["whisper"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
