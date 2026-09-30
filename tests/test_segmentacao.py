@@ -23,3 +23,9 @@ def test_virgula_nao_corta() -> None:
 
 def test_ultima_frase_sem_pontuacao_fecha() -> None:
     assert frases([p("fim", 0, .2)]) == [Frase(0, "fim", 0, .2)]
+
+
+def test_fechamento_apos_pontuacao_fecha_frase() -> None:
+    ws = [p("Ele", 0, .2), p("disse:", .2, .4), p('"bateu."', .4, .8),
+          p("Depois", .85, 1.0), p("saiu.", 1.0, 1.2)]
+    assert [f.texto for f in frases(ws, pausa_s=0.8)] == ['Ele disse: "bateu."', "Depois saiu."]

@@ -13,6 +13,8 @@ from cortes.regra_inicio import comeca_no_meio
     "Aí ele pegou e vendeu.",
     "— Mas não é bem assim.",
     "“Mas ninguém fala disso.”",              # aspas curvas da transcrição
+    "Pois é, aconteceu.",                     # conectivo seguido de vírgula
+    "Mas, veja bem.",                         # conectivo seguido de vírgula
 ])
 def test_detecta_continuacao(texto: str) -> None:
     assert comeca_no_meio(texto) is True
@@ -27,6 +29,8 @@ def test_detecta_continuacao(texto: str) -> None:
     "Maria vendeu tudo.",                              # "Ma..." não é "mas"
     "Então, eu vendi a minha casa.",                   # "então" abre história
     "Empresário que quebra duas vezes",                # "E..." dentro da palavra
+    "E-mail chegou ontem cedo",                        # hífen: não é o conectivo "e"
+    "E-commerce cresceu muito esse ano",               # hífen: não é o conectivo "e"
 ])
 def test_aceita_inicio_autonomo(texto: str) -> None:
     assert comeca_no_meio(texto) is False
