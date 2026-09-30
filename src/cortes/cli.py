@@ -1,5 +1,7 @@
 """`cortes detectar URL --nicho financas`: cada etapa grava seu arquivo e é pulada se já existe."""
 import argparse
+import io
+import sys
 from dataclasses import asdict
 from pathlib import Path
 
@@ -43,6 +45,8 @@ def rodar_detectar(url: str, nicho: str, modelo: str) -> Path:
 
 
 def main() -> None:
+    if isinstance(sys.stdout, io.TextIOWrapper):   # console cp1252 do Windows quebra com "→" e acentos
+        sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(prog="cortes")
     sub = ap.add_subparsers(dest="comando", required=True)
     det = sub.add_parser("detectar", help="baixa, transcreve e acha candidatos a corte")

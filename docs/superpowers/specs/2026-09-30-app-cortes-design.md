@@ -79,8 +79,12 @@ rubrica:            # pesos somam 1; cada critério é nota 1-5 dada pelo LLM
   espanto: 0.20
   historia_ou_virada: 0.10
   fechamento: 0.15
-bonus: [numero_ou_dado, dinheiro_alheio_quanto_ganha, humor, personagem_famoso_citado, conversa_de_estudio]
-penalidade: [utilidade_sem_surpresa, motivacional_sem_espanto, palestra_ou_palco]
+bonus:              # tag: descrição que o LLM lê (sem descrição ele adivinha o sentido)
+  numero_na_primeira_frase: "a primeira frase do trecho traz um número ou valor concreto"
+  dinheiro_alheio_quanto_ganha: "revela quanto alguém ganha, cobra, gasta ou tem"
+  humor: "o trecho faz rir (piada, reação engraçada, situação cômica)"
+  personagem_famoso_citado: "cita pelo nome um político, bilionário ou celebridade"
+penalidade: {}      # mesmo formato; vazia em finanças (utilidade/motivacional já pesam via 'espanto')
 duracao_s: {min: 20, max: 90}
 exemplos_bons: exemplos/bons.jsonl    # trechos aprovados (cresce com a curadoria)
 exemplos_ruins: exemplos/ruins.jsonl  # rejeitados + motivo
@@ -185,6 +189,7 @@ humor; em finanças só vira sinal auxiliar). Picos de energia marcam candidatos
 2. **Regra dura de início:** um candidato não pode começar em frase que dependa de
    contexto anterior (conectivo inicial — "mas", "também", "e aí", "então" —, pronome
    sem referente no trecho). Implementada em código + confirmada pelo LLM.
+   “Então” fica de fora da regra dura de propósito: em PT-BR falado costuma abrir história ("Então, eu vendi a casa").
 3. **Pontuação** via `llm` (§7): uma chamada por episódio com a transcrição inteira
    segmentada, o perfil e os exemplos bons/ruins; devolve até 20 candidatos com nota
    por critério da rubrica, `filtro_tema` (sim/não — permite cortar podcast genérico),

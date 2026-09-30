@@ -7,6 +7,7 @@ from typing import Any
 import yaml
 
 CRITERIOS = ("gancho_3s", "autocontido", "espanto", "historia_ou_virada", "fechamento")
+CAMPOS = ("nicho", "filtro_tema", "rubrica", "bonus", "penalidade", "duracao_s")
 
 
 @dataclass(frozen=True)
@@ -14,8 +15,8 @@ class Perfil:
     nicho: str
     filtro_tema: str
     rubrica: dict[str, float]
-    bonus: list[str]
-    penalidade: list[str]
+    bonus: dict[str, str]        # tag → descrição que o LLM lê
+    penalidade: dict[str, str]
     duracao_min: float
     duracao_max: float
     exemplos_bons: list[dict[str, Any]]
@@ -27,8 +28,21 @@ def _jsonl(caminho: Path) -> list[dict[str, Any]]:
     return [json.loads(linha) for linha in linhas if linha.strip()]
 
 
+def _tags(d: dict[str, Any], campo: str) -> dict[str, str]:
+    tags = d[campo]
+    if not isinstance(tags, dict):
+        raise ValueError(f"'{campo}' deve ser um mapa {{tag: descrição}}, veio {type(tags).__name__}")
+    return {str(k): str(v) for k, v in tags.items()}
+
+
 def carregar_perfil(pasta_nicho: Path) -> Perfil:
     d = yaml.safe_load((pasta_nicho / "perfil.yaml").read_text(encoding="utf-8"))
+    for k in CAMPOS:
+        if k not in d:
+            raise ValueError(f"perfil.yaml sem o campo '{k}'")
+    bonus, penalidade = _tags(d, "bonus"), _tags(d, "penalidade")
+    if repetidas := sorted(set(bonus) & set(penalidade)):
+        raise ValueError(f"tags em bonus e penalidade ao mesmo tempo: {repetidas}")
     rubrica = {k: float(v) for k, v in d["rubrica"].items()}
     if set(rubrica) != set(CRITERIOS):
         raise ValueError(f"critérios da rubrica devem ser {CRITERIOS}, vieram {sorted(rubrica)}")
@@ -39,7 +53,7 @@ def carregar_perfil(pasta_nicho: Path) -> Perfil:
         raise ValueError(f"duração inválida: {dur}")
     return Perfil(
         nicho=d["nicho"], filtro_tema=d["filtro_tema"], rubrica=rubrica,
-        bonus=list(d["bonus"]), penalidade=list(d["penalidade"]),
+        bonus=bonus, penalidade=penalidade,
         duracao_min=float(dur["min"]), duracao_max=float(dur["max"]),
         exemplos_bons=_jsonl(pasta_nicho / "exemplos" / "bons.jsonl"),
         exemplos_ruins=_jsonl(pasta_nicho / "exemplos" / "ruins.jsonl"),
