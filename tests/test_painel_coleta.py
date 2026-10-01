@@ -1,3 +1,4 @@
+import sys
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -7,6 +8,7 @@ import pytest
 from cortes.painel.coleta import (
     ErroColeta,
     Resultado,
+    _executar,
     abrir_login,
     coletar_todas,
     comando_numeros,
@@ -54,7 +56,14 @@ def test_comando_pede_desde_sempre_e_metricas() -> None:
 
 
 def test_zip_da_saida() -> None:
-    assert zip_da_saida("[1] x\n[2] pronto: C:/a b/Conteúdo.zip\n") == Path("C:/a b/Conteúdo.zip")
+    caminho = r"C:\Users\x\AppData\Local\Temp\tmpab c\Conteúdo.zip"
+    saida = (
+        "[09:12:00] canal UC123\n"
+        "[09:12:05] pedindo: VIDEO x views… · desde sempre\n"
+        f"[09:12:25] baixado: {caminho} (12.3 kB)\n"
+        f"[09:12:30] pronto: {caminho}\n"
+    )
+    assert zip_da_saida(saida) == Path(caminho)
     with pytest.raises(ErroColeta, match="não informou"):
         zip_da_saida("[1] nada aqui")
 
@@ -64,7 +73,7 @@ def test_falha_numa_conta_nao_para_as_outras(tmp_path: Path) -> None:
     res = coletar_todas([GRANA, RISO], tmp_path, tmp_path / "retratos", lambda: AGORA,
                         executor_falso(falha_em="grana"), vistos.append)
     assert res == vistos
-    assert res[0] == Resultado("grana", False, "login expirado")
+    assert res[0] == Resultado("grana", False, "conta 'grana': login expirado")
     assert res[1] == Resultado("riso", True, "1 vídeos")
     assert set(ler_retratos(tmp_path / "retratos")) == {"riso"}
 
@@ -78,6 +87,12 @@ def test_zip_corrompido_nao_escapa_e_cita_conta_e_caminho(tmp_path: Path) -> Non
     assert "grana" in res[0].mensagem
     assert "Conteúdo.zip" in res[0].mensagem
     assert ler_retratos(tmp_path / "retratos") == {}
+
+
+def test_verificar_skill_sem_node_no_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    with pytest.raises(ErroPainel, match="node não encontrado"):
+        verificar_skill(tmp_path)
 
 
 def test_verificar_skill(tmp_path: Path) -> None:
@@ -95,3 +110,22 @@ def test_abrir_login() -> None:
     abertos: list[tuple[list[str], Path]] = []
     abrir_login(GRANA, Path("skill"), lambda args, cwd: abertos.append((args, cwd)))
     assert abertos == [(["node", "src/cli.mjs", "login", "--perfil", "grana"], Path("skill"))]
+
+
+def test_executar_devolve_stdout_no_sucesso(tmp_path: Path) -> None:
+    saida = _executar([sys.executable, "-c", "print('ok')"], tmp_path)
+    assert saida.strip() == "ok"
+
+
+def test_executar_codigo_diferente_de_zero_vira_errocoleta(tmp_path: Path) -> None:
+    script = "import sys; sys.stderr.write('deu tilt'); sys.exit(1)"
+    with pytest.raises(ErroColeta, match="deu tilt"):
+        _executar([sys.executable, "-c", script], tmp_path)
+
+
+def test_executar_timeout_mata_a_arvore_e_nao_trava(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("cortes.painel.coleta.TIMEOUT_S", 1)
+    with pytest.raises(ErroColeta, match="não terminou"):
+        _executar([sys.executable, "-c", "import time; time.sleep(5)"], tmp_path)
