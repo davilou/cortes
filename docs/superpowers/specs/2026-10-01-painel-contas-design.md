@@ -82,7 +82,7 @@ formatos:
 ### 3.4 Retrato
 
 Export do Studio de uma conta num dia, período **"desde sempre"** (total acumulado por vídeo),
-convertido pelo `ler_csv.py` da skill e gravado como:
+convertido pelo parser próprio `src/cortes/painel/studio.py` e gravado como:
 
 ```json
 {"conta": "grana", "coletado_em": "2026-10-10T09:12:00", "videos": [

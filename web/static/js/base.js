@@ -15,12 +15,6 @@ const handleDe = id => E.contas.find(c => c.id === id)?.handle ?? id;
 const nomeFormato = id => E.formatos[id]?.nome ?? id;
 const dataHora = iso => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
-function mediana(xs) {
-  if (!xs.length) return null;
-  const a = [...xs].sort((p, q) => p - q), m = a.length >> 1;
-  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
-}
-
 async function api(caminho, opcoes = {}) {
   const r = await fetch(caminho, { headers: { "Content-Type": "application/json" }, ...opcoes });
   const corpo = await r.json().catch(() => ({}));

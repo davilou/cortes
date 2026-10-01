@@ -3,10 +3,9 @@
 
 function cartaoConta(c) {
   const falhou = c.coleta && !c.coleta.ok;
-  const medidos = S.filter(l => l.conta === c.id && l.medida.views_7d != null).map(l => l.medida.views_7d);
-  // mediana 0 é "sem base" (metodo.py: _base trata mediana <= 0 como sem base, pra não dividir por zero).
-  const med = medidos.length >= 3 ? mediana(medidos) : null;
-  const base = med != null && med > 0 ? mil(med) : medidos.length >= 3 ? "sem base" : `sem base · ${medidos.length}/3`;
+  // mediana_7d/medidos vêm prontos do servidor (metodo.bases): mesma regra que o relativo usa,
+  // sem recalcular aqui (e sem o viés de só olhar os Shorts já ligados que S filtraria).
+  const base = c.mediana_7d != null ? mil(c.mediana_7d) : `sem base · ${c.medidos}/3`;
   return `<div class="card conta-card">
     <div class="topo"><div><h2>${esc(c.nome)}</h2><p class="sub">${esc(c.handle)} · ${esc(c.nicho)}</p></div>
       <i class="estado ${falhou || !c.ultimo_retrato ? "vencido" : ""}"></i></div>

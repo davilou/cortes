@@ -78,10 +78,15 @@ h1 em { color: var(--muted); }
 .strip .med { top: 2px; bottom: 2px; width: 3px; border-radius: 1px; background: var(--text); transform: translateX(-50%); }
 .strip .pt-dot { width: 8.4px; height: 8.4px; border-radius: 50%; transform: translate(-50%, -50%); }
 .strip .pt-dot.up { background: var(--up); opacity: .85; } .strip .pt-dot.down { background: var(--down); opacity: .85; }
+/* estimado (views_7d interpolado com folga maior, metodo.views_7d): contorno vazado em vez de
+   preenchido, pra não parecer uma medida direta igual às outras. */
+.strip .pt-dot.est { background: transparent; border: 1.6px solid; opacity: 1; }
+.strip .pt-dot.up.est { border-color: var(--up); } .strip .pt-dot.down.est { border-color: var(--down); }
 /* ponta: marcador triangular para ponto clampado (fora de 0,1×–10×) — o clamping não some sem aviso */
 .strip .ponta { width: 0; height: 0; transform: translate(-50%, -50%); border: 5px solid transparent; }
 .strip .ponta.esq { border-right: 7px solid var(--down); border-left-width: 0; }
 .strip .ponta.dir { border-left: 7px solid var(--up); border-right-width: 0; }
+.strip .ponta.est { opacity: .5; }
 
 /* matriz e painel do grupo */
 .baixo { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; margin-top: 22px; }

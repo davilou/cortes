@@ -16,16 +16,20 @@ function eixo() {
 
 // Pontos fora de 0,1×–10× são clampados para caber na faixa; em vez de escondê-los no mesmo
 // lugar que um valor dentro da faixa, marca com uma ponta triangular na borda — clamping visível.
-function ponto(v, i) {
-  const esquerda = pctEixo(v), topo = 17 + ((i % 3) - 1) * 5, titulo = esc(fx(v));
-  if (v < .1) return `<i class="ponta esq down" style="left:${esquerda}%;top:${topo}px" title="${titulo}"></i>`;
-  if (v > 10) return `<i class="ponta dir up" style="left:${esquerda}%;top:${topo}px" title="${titulo}"></i>`;
-  return `<i class="pt-dot ${v >= 1 ? "up" : "down"}" style="left:${esquerda}%;top:${topo}px" title="${titulo}"></i>`;
+// Estimado (views_7d interpolado com folga maior que o normal, metodo.views_7d) vem vazado —
+// contorno em vez de preenchido — pra não se misturar visualmente com uma medida direta.
+function ponto(v, estimado, i) {
+  const esquerda = pctEixo(v), topo = 17 + ((i % 3) - 1) * 5;
+  const titulo = esc((estimado ? "≈ estimado: " : "") + fx(v));
+  const est = estimado ? " est" : "";
+  if (v < .1) return `<i class="ponta esq down${est}" style="left:${esquerda}%;top:${topo}px" title="${titulo}"></i>`;
+  if (v > 10) return `<i class="ponta dir up${est}" style="left:${esquerda}%;top:${topo}px" title="${titulo}"></i>`;
+  return `<i class="pt-dot ${v >= 1 ? "up" : "down"}${est}" style="left:${esquerda}%;top:${topo}px" title="${titulo}"></i>`;
 }
 
-function strip(rels, med) {
+function strip(rels, estimados, med) {
   const grade = [.2, .5, 1, 2, 5].map(t => `<i class="grade" style="left:${pctEixo(t)}%"></i>`).join("");
-  const pontos = rels.map((v, i) => ponto(v, i)).join("");
+  const pontos = rels.map((v, i) => ponto(v, estimados[i], i)).join("");
   return `<div class="strip">${grade}<i class="base" style="left:${pctEixo(1)}%"></i>${pontos}
     <i class="med" style="left:${pctEixo(med)}%"></i></div>`;
 }
@@ -49,11 +53,13 @@ function chavesDe(l) {
 function linhaGrupo(g) {
   const sel = g.chave === selecionado;
   const insc = g.insc_por_mil == null ? "—" : g.insc_por_mil.toFixed(1).replace(".", ",");
+  const notaEst = g.n_estimados > 0 ? `${g.n_estimados} estimado${g.n_estimados > 1 ? "s" : ""}` : "";
+  const sub = [subGrupo(g.chave), notaEst].filter(Boolean).join(" · ");
   return `<div class="linha ${sel ? "sel" : ""}" data-chave="${esc(g.chave)}" tabindex="0" role="button" aria-pressed="${sel}">
-    <div class="nome">${esc(nomeGrupo(g.chave))}<small>${esc(subGrupo(g.chave))}</small>${g.pista ? '<span class="selo">pista · n&lt;5</span>' : ""}</div>
+    <div class="nome">${esc(nomeGrupo(g.chave))}${sub ? `<small>${esc(sub)}</small>` : ""}${g.pista ? '<span class="selo">pista · n&lt;5</span>' : ""}</div>
     <div class="num">${g.n}</div>
     <div class="rel ${g.rel_mediana >= 1 ? "up" : "down"}">${fx(g.rel_mediana)}</div>
-    <div>${strip(g.rels, g.rel_mediana)}</div>
+    <div>${strip(g.rels, g.estimados, g.rel_mediana)}</div>
     <div class="num">${pct(g.pct_mediana)}</div>
     <div class="num">${insc}</div></div>`;
 }
@@ -62,7 +68,7 @@ function tabelaGrupos(C) {
   if (!C.grupos.length) return vazio("Nenhum Short medido ainda", "Ligue os Shorts na tela Shorts. Cada um entra aqui 7 dias depois de publicado, quando a conta tiver 3 Shorts medidos.");
   return `<div class="legenda"><span><i class="pt" style="background:var(--up)"></i>acima da base da conta</span>
     <span><i class="pt" style="background:var(--down)"></i>abaixo</span><span>│ tracejado = 1× (mediana da conta)</span>
-    <span>▮ traço claro = mediana do grupo</span></div>
+    <span>▮ traço claro = mediana do grupo</span><span>○ estimado</span></div>
     <section class="grupos"><div class="linha cab"><span>${esc(dim)}</span><span class="num">n</span><span class="num">Mediana</span>
     <span>${eixo()}</span><span class="num">assist.</span><span class="num">insc/1k</span></div>${C.grupos.map(linhaGrupo).join("")}</section>`;
 }
@@ -104,9 +110,10 @@ function blocoMatriz(C) {
 
 function cartaoShort(l, matura = false) {
   const up = l.rel != null && l.rel >= 1;
+  const estimado = l.medida.estado === "estimado";
   return `<a class="thumb ${matura ? "matura" : up ? "up" : ""}" href="https://youtube.com/shorts/${esc(l.video_id)}" target="_blank" rel="noopener">
     <img src="${thumb(l.video_id)}" alt="" loading="lazy"><div class="t">${esc(l.titulo)}</div>
-    <div><div class="x ${up ? "up" : "down"}">${matura ? "" : fx(l.rel)}</div>
+    <div><div class="x ${up ? "up" : "down"}">${matura ? "" : (estimado ? "≈" : "") + fx(l.rel)}</div>
     <div class="c">${matura ? "maturando · " : ""}${esc(handleDe(l.conta))}</div></div></a>`;
 }
 

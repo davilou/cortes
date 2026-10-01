@@ -5,10 +5,24 @@ function idade(l) {
   return Math.floor((Date.now() - new Date(l.publicado_em + "T00:00")) / 864e5) + "d";
 }
 
-function views7d(l) {
+const FADA = new Set(["maturando", "sem_dado"]);   // mesmo estilo esmaecido nas duas linhas
+
+function celulaViews7d(l) {
   const m = l.medida;
-  if (m.estado === "maturando") return "maturando";
-  return mil(m.views_7d) + (m.estado === "estimado" ? " ≈" : "");
+  if (m.estado === "maturando") return `<div class="num" title="maturando">maturando</div>`;
+  if (m.estado === "sem_dado") {
+    return `<div class="num muted" title="o primeiro retrato chegou mais de 7 dias depois do dia 7 `
+      + `— fica fora da comparação">sem dado</div>`;
+  }
+  return `<div class="num" title="${esc(m.estado)}">${mil(m.views_7d)}${m.estado === "estimado" ? " ≈" : ""}</div>`;
+}
+
+function celulaRelativo(l) {
+  if (l.rel != null) return `<div class="num ${l.rel >= 1 ? "up" : "down"}">${fx(l.rel)}</div>`;
+  if (l.medida.estado === "medido" || l.medida.estado === "estimado") {
+    return `<div class="num muted" title="a conta tem menos de 3 Shorts medidos">sem base</div>`;
+  }
+  return `<div class="num">—</div>`;
 }
 
 function chipsEtiquetas(l) {
@@ -21,13 +35,13 @@ function tabelaShorts(ls) {
   return `<section class="grupos">
     <div class="linha-s cab"><span></span><span>Título</span><span>Conta</span><span class="num">Idade</span>
       <span class="num">Views 7d</span><span class="num">Relativo</span><span class="num">Assist.</span><span>Etiquetas</span></div>
-    ${ls.map(l => `<div class="linha-s ${l.medida.estado === "maturando" ? "matura" : ""}">
+    ${ls.map(l => `<div class="linha-s ${FADA.has(l.medida.estado) ? "matura" : ""}">
       <img class="mini" src="${thumb(l.video_id)}" alt="" loading="lazy">
       <div class="nome" title="${esc(l.titulo)}">${esc(l.titulo)}</div>
       <div class="muted">${esc(handleDe(l.conta))}</div>
       <div class="num">${idade(l)}</div>
-      <div class="num" title="${l.medida.estado}">${views7d(l)}</div>
-      <div class="num ${l.rel == null ? "" : l.rel >= 1 ? "up" : "down"}">${fx(l.rel)}</div>
+      ${celulaViews7d(l)}
+      ${celulaRelativo(l)}
       <div class="num">${pct(l.pct_media)}</div>
       <div>${l.etiquetas ? chipsEtiquetas(l) : `<button class="botao" data-ligar="${esc(l.video_id)}">Ligar</button>`}</div>
     </div>`).join("")}</section>`;
