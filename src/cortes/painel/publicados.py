@@ -1,11 +1,14 @@
 """publicados.jsonl: liga cada Short no YouTube ao corte que o gerou (spec painel §3.3)."""
 import json
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 from cortes.painel.dados import ErroPainel, Vocabulario
+
+_VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 
 
 @dataclass(frozen=True)
@@ -25,6 +28,12 @@ class Publicado:
 
 
 def validar(p: Publicado, voc: Vocabulario) -> None:
+    """Falha alto para dado fora do vocabulário.
+
+    Temas vazio é permitido (o Short só fica fora dos grupos por tema).
+    """
+    if not p.video_id or not _VIDEO_ID.fullmatch(p.video_id):
+        raise ErroPainel(f"video_id inválido: {p.video_id!r}")
     if p.conta not in voc.contas:
         raise ErroPainel(f"conta '{p.conta}' não existe em contas.yaml")
     if p.etiquetas.formato not in voc.formatos:
@@ -44,12 +53,26 @@ def _para_dict(p: Publicado) -> dict[str, Any]:
             "corte": p.corte, "etiquetas": etiquetas}
 
 
+def _texto(d: Any, campo: str) -> str:
+    v = d[campo]
+    if not isinstance(v, str):
+        raise ErroPainel(f"campo '{campo}' não é texto")
+    return v
+
+
+def _lista_textos(d: Any, campo: str) -> tuple[str, ...]:
+    v = d[campo]
+    if not isinstance(v, list) or not all(isinstance(t, str) for t in v):
+        raise ErroPainel(f"campo '{campo}' deve ser lista de textos")
+    return tuple(v)
+
+
 def _de_dict(d: Any) -> Publicado:
     try:
         e = d["etiquetas"]
-        return Publicado(str(d["video_id"]), str(d["conta"]), date.fromisoformat(d["publicado_em"]),
-                         str(d["corte"]),
-                         Etiquetas(str(e["formato"]), tuple(str(t) for t in e["temas"]), str(e["podcast"])))
+        return Publicado(_texto(d, "video_id"), _texto(d, "conta"), date.fromisoformat(d["publicado_em"]),
+                         _texto(d, "corte"),
+                         Etiquetas(_texto(e, "formato"), _lista_textos(e, "temas"), _texto(e, "podcast")))
     except (KeyError, TypeError, ValueError) as ex:
         raise ErroPainel(f"linha inválida ({ex!r})") from ex
 

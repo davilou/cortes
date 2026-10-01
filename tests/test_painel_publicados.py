@@ -56,3 +56,52 @@ def test_linha_quebrada_diz_o_numero(tmp_path: Path) -> None:
     arq.write_text("{}\n", encoding="utf-8")
     with pytest.raises(ErroPainel, match=":1:"):
         ler_publicados(arq, VOC)
+
+
+def test_conta_fora_do_vocabulario() -> None:
+    with pytest.raises(ErroPainel, match="conta 'inexistente'"):
+        ligar([], Publicado("abcdefghijk", "inexistente", date(2026, 10, 3), "testes/f7",
+                             Etiquetas("f7", (), "PrimoCast")), VOC)
+
+
+def test_podcast_vazio() -> None:
+    with pytest.raises(ErroPainel, match="podcast vazio"):
+        ligar([], Publicado("abcdefghijk", "grana", date(2026, 10, 3), "testes/f7",
+                             Etiquetas("f7", (), "")), VOC)
+
+
+def test_corte_vazio() -> None:
+    with pytest.raises(ErroPainel, match="corte vazio"):
+        ligar([], Publicado("abcdefghijk", "grana", date(2026, 10, 3), "",
+                             Etiquetas("f7", (), "PrimoCast")), VOC)
+
+
+def test_video_id_invalido() -> None:
+    with pytest.raises(ErroPainel, match="video_id inválido"):
+        ligar([], pub(video_id="curto"), VOC)
+
+
+def test_linha_nao_e_json(tmp_path: Path) -> None:
+    arq = tmp_path / "publicados.jsonl"
+    arq.write_text("isso não é json\n", encoding="utf-8")
+    with pytest.raises(ErroPainel, match=":1:"):
+        ler_publicados(arq, VOC)
+
+
+def test_podcast_tipo_errado(tmp_path: Path) -> None:
+    arq = tmp_path / "publicados.jsonl"
+    linha = ('{"video_id": "abcdefghijk", "conta": "grana", "publicado_em": "2026-10-03", '
+             '"corte": "testes/f7", "etiquetas": {"formato": "f7", "temas": [], "podcast": null}}\n')
+    arq.write_text(linha, encoding="utf-8")
+    with pytest.raises(ErroPainel, match="podcast"):
+        ler_publicados(arq, VOC)
+
+
+def test_temas_tipo_errado(tmp_path: Path) -> None:
+    arq = tmp_path / "publicados.jsonl"
+    linha = ('{"video_id": "abcdefghijk", "conta": "grana", "publicado_em": "2026-10-03", '
+             '"corte": "testes/f7", "etiquetas": {"formato": "f7", "temas": "humor", '
+             '"podcast": "PrimoCast"}}\n')
+    arq.write_text(linha, encoding="utf-8")
+    with pytest.raises(ErroPainel, match="temas"):
+        ler_publicados(arq, VOC)
