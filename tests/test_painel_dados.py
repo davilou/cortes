@@ -70,6 +70,13 @@ def test_id_fora_do_padrao(tmp_path: Path) -> None:
         carregar_contas(escrever(tmp_path, "c.yaml", texto), tmp_path / "nichos")
 
 
+def test_perfil_studio_fora_do_padrao(tmp_path: Path) -> None:
+    criar_nicho(tmp_path / "nichos", "financas")
+    texto = "contas:\n" + CONTA.replace("perfil_studio: grana", "perfil_studio: ../Grana x")
+    with pytest.raises(ErroPainel, match="perfil_studio '../Grana x' fora do padrão"):
+        carregar_contas(escrever(tmp_path, "c.yaml", texto), tmp_path / "nichos")
+
+
 def test_yaml_invalido(tmp_path: Path) -> None:
     arq = escrever(tmp_path, "c.yaml", "contas:\n  - {id: grana, handle: @x}\n")
     with pytest.raises(ErroPainel, match=re.escape(str(arq))):

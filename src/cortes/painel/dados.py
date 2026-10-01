@@ -86,6 +86,9 @@ def _conta(arquivo: Path, i: int, c: Any, pasta_nichos: Path) -> Conta:
             raise ErroPainel(f"{arquivo}: conta #{i} campo '{campo}' deve ser texto não vazio")
     if not _ID_CONTA.fullmatch(c["id"]):
         raise ErroPainel(f"{arquivo}: id '{c['id']}' fora do padrão [a-z0-9-]+")
+    if not _ID_CONTA.fullmatch(c["perfil_studio"]):   # vira argumento de CLI e nome de pasta na skill
+        raise ErroPainel(f"{arquivo}: conta '{c['id']}' campo perfil_studio '{c['perfil_studio']}' "
+                         "fora do padrão [a-z0-9-]+")
     if not (pasta_nichos / c["nicho"] / "perfil.yaml").exists():
         raise ErroPainel(f"{arquivo}: conta '{c['id']}' usa o nicho '{c['nicho']}', que não existe "
                          f"em {pasta_nichos}")

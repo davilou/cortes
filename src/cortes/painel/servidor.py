@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -22,6 +23,8 @@ from cortes.painel.ligacao import listar_cortes, sugerir
 from cortes.painel.metodo import bases, montar_linhas
 from cortes.painel.publicados import Etiquetas, Publicado, gravar_publicados, ler_publicados, ligar
 from cortes.painel.retratos import ler_retratos
+
+HOSTS_LOCAIS = ("127.0.0.1", "localhost")
 
 
 @dataclass(frozen=True)
@@ -79,15 +82,18 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     carregar_vocabulario(cfg.raiz)       # configuração inválida: não sobe
     coleta.verificar_skill(cfg.skill_dir)
     app = FastAPI(title="Painel de contas")
+    # Só 127.0.0.1/localhost: uma página de fora não alcança a API por DNS rebinding.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(HOSTS_LOCAIS))
     estado = EstadoColeta()
     app.state.coleta = estado
+    escrita = threading.Lock()   # ler-validar-gravar de contas.yaml e publicados.jsonl
 
     @app.exception_handler(ErroPainel)
     async def _erro(_: Request, e: ErroPainel) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(e)})
 
     _rotas_leitura(app, cfg, estado)
-    _rotas_acao(app, cfg, estado, executar, abrir, agora)
+    _rotas_acao(app, cfg, estado, escrita, executar, abrir, agora)
     app.mount("/", StaticFiles(directory=cfg.estatico, html=True), name="web")
     return app
 
@@ -135,8 +141,8 @@ def _rotas_leitura(app: FastAPI, cfg: Config, estado: EstadoColeta) -> None:
                                  "maturando": sum(1 for x in ls if x.medida.estado == "maturando")})
 
 
-def _rotas_acao(app: FastAPI, cfg: Config, estado: EstadoColeta, executar: coleta.Executor,
-                abrir: coleta.Abridor, agora: Callable[[], datetime]) -> None:
+def _rotas_acao(app: FastAPI, cfg: Config, estado: EstadoColeta, escrita: threading.Lock,
+                executar: coleta.Executor, abrir: coleta.Abridor, agora: Callable[[], datetime]) -> None:
     @app.post("/api/atualizar", status_code=202)
     def api_atualizar(pedido: PedidoAtualizar) -> dict[str, bool]:
         voc = carregar_vocabulario(cfg.raiz)
@@ -148,7 +154,8 @@ def _rotas_acao(app: FastAPI, cfg: Config, estado: EstadoColeta, executar: colet
                 raise HTTPException(409, "já existe uma atualização rodando")
             estado.rodando = True
             estado.erro = None
-            estado.resultados.clear()
+            for conta in alvo:   # só as contas desta rodada: a falha das outras continua visível
+                estado.resultados.pop(conta.id, None)
 
         def rodar() -> None:
             try:
@@ -174,12 +181,14 @@ def _rotas_acao(app: FastAPI, cfg: Config, estado: EstadoColeta, executar: colet
 
     @app.post("/api/contas", status_code=201)
     def api_nova_conta(nova: NovaConta) -> dict[str, str]:
-        _acrescentar_conta(cfg, nova)
+        with escrita:
+            _acrescentar_conta(cfg, nova)
         return {"id": nova.id}
 
     @app.post("/api/ligar")
     def api_ligar(lig: Ligacao) -> Any:
-        return jsonable_encoder(_ligar(cfg, lig))
+        with escrita:
+            return jsonable_encoder(_ligar(cfg, lig))
 
 
 def _cabecalho(texto: str) -> str:

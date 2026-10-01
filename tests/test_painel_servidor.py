@@ -76,6 +76,44 @@ def test_estado(cfg: Config) -> None:
     assert e["contas"][0]["mediana_7d"] == pytest.approx(200 * 7 / 8) and e["contas"][0]["medidos"] == 3
 
 
+def test_host_de_fora_e_recusado(cfg: Config) -> None:
+    app = criar_app(cfg, executar=falhar, abrir=lambda args, cwd: None)
+    assert TestClient(app, base_url="http://evil.example").get("/api/estado").status_code == 400
+    assert TestClient(app, base_url="http://localhost:8790").get("/api/estado").status_code == 200
+
+
+def test_atualizar_uma_conta_preserva_falha_da_outra(cfg: Config) -> None:
+    cfg.contas_yaml.write_text(
+        CONTAS + '  - {id: bolso, nome: Bolso, handle: "@bolso", nicho: financas, perfil_studio: bolso}\n',
+        encoding="utf-8")
+    app = criar_app(cfg, executar=falhar, abrir=lambda args, cwd: None)
+    c = local(app)
+    for conta in ("grana", "bolso"):
+        assert c.post("/api/atualizar", json={"conta": conta}).status_code == 202
+        app.state.coleta.fio.join(timeout=5)
+    coletas = {x["id"]: x["coleta"] for x in c.get("/api/estado").json()["contas"]}
+    assert coletas["grana"]["ok"] is False and "grana" in coletas["grana"]["mensagem"]
+    assert coletas["bolso"]["ok"] is False
+
+
+def test_novas_contas_em_paralelo_nao_se_perdem(cfg: Config) -> None:
+    c = cliente(cfg)
+    ids = [f"conta-{i}" for i in range(8)]
+    status: list[int] = []
+
+    def criar(cid: str) -> None:
+        status.append(c.post("/api/contas", json={"id": cid, "nome": cid, "handle": f"@{cid}",
+                                                  "nicho": "financas", "perfil_studio": cid}).status_code)
+
+    fios = [threading.Thread(target=criar, args=(cid,)) for cid in ids]
+    for f in fios:
+        f.start()
+    for f in fios:
+        f.join(timeout=10)
+    assert status == [201] * len(ids)
+    assert {x["id"] for x in c.get("/api/estado").json()["contas"]} == {"grana", *ids}
+
+
 def test_ligar_e_comparar(cfg: Config) -> None:
     c = cliente(cfg)
     assert c.post("/api/ligar", json=LIGACAO).status_code == 200

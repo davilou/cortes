@@ -10,6 +10,7 @@ import uvicorn
 from cortes import ingestao, sinais, transcricao
 from cortes.detector import detectar
 from cortes.episodio import id_do_video, ler_json, pasta, salvar_json
+from cortes.painel.dados import ErroPainel
 from cortes.painel.servidor import Config, criar_app
 from cortes.perfil import carregar_perfil
 from cortes.segmentacao import frases
@@ -51,7 +52,10 @@ def rodar_detectar(url: str, nicho: str, modelo: str) -> Path:
 
 
 def rodar_painel(porta: int, skill: Path, raiz: Path) -> None:
-    app = criar_app(Config(raiz=raiz, skill_dir=skill, estatico=ESTATICO))
+    try:
+        app = criar_app(Config(raiz=raiz, skill_dir=skill, estatico=ESTATICO))
+    except ErroPainel as e:   # configuração inválida: a mensagem já diz arquivo e campo
+        sys.exit(f"erro: {e}")
     print(f"painel em http://127.0.0.1:{porta}", flush=True)
     uvicorn.run(app, host="127.0.0.1", port=porta)
 
