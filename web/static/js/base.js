@@ -74,8 +74,11 @@ function trilho() {
   }
 }
 
+let ultimoErroColeta = null;   // evita repetir o aviso a cada poll de 3s enquanto o erro persiste
+
 async function carregar() {
   [E, S] = await Promise.all([api("/api/estado"), api("/api/shorts")]);
   trilho();
-  if (E.erro_coleta) avisar(E.erro_coleta);
+  if (E.erro_coleta && E.erro_coleta !== ultimoErroColeta) avisar(E.erro_coleta);
+  ultimoErroColeta = E.erro_coleta;
 }
