@@ -57,6 +57,33 @@ def test_celula_nao_numerica_diz_video_e_campo() -> None:
         ler_tabela(texto)
 
 
+def test_linha_curta_falha_com_contexto() -> None:
+    texto = CABECALHO + "curto1,Titulo\n"
+    with pytest.raises(ErroPainel, match=r"linha 2: 2 colunas, o cabeçalho tem 11"):
+        ler_tabela(texto)
+
+
+def test_valor_fracionario_falha_com_contexto() -> None:
+    texto = CABECALHO + 'novovideo00,Novo,"Oct 1, 2026",30,12.9,0,,0:00:10,50,0,1\n'
+    with pytest.raises(ErroPainel, match="novovideo00.*views"):
+        ler_tabela(texto)
+
+
+def test_id_vazio_falha() -> None:
+    texto = CABECALHO + ',Novo,"Oct 1, 2026",30,10,0,,0:00:10,50,0,1\n'
+    with pytest.raises(ErroPainel, match="linha 2.*vazio"):
+        ler_tabela(texto)
+
+
+def test_cabecalho_em_ingles() -> None:
+    cabecalho_en = ("Content,Video title,Video publish time,Duration,Views,"
+                    "Average view duration,Average percentage viewed (%),Subscribers\n")
+    texto = cabecalho_en + 'abc123,Hello World,"Sep 5, 2026",20,100,0:00:15,75.5,3\n'
+    v = ler_tabela(texto)[0]
+    assert v.video_id == "abc123" and v.publicado_em == date(2026, 9, 5)
+    assert v.views == 100 and v.duracao_media_s == 15 and v.pct_media == 75.5 and v.inscritos == 3
+
+
 def test_texto_do_zip(tmp_path: Path) -> None:
     arq = tmp_path / "export.zip"
     with zipfile.ZipFile(arq, "w") as z:

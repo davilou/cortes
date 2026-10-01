@@ -5,6 +5,7 @@ com cabeçalho em português (conferido em export real de 2026-08).
 """
 import csv
 import io
+import math
 import zipfile
 from datetime import date
 from pathlib import Path
@@ -53,7 +54,10 @@ def _numero(video_id: str, campo: str, texto: str) -> float:
 
 
 def _inteiro(video_id: str, campo: str, texto: str) -> int:
-    return int(_numero(video_id, campo, texto))
+    n = _numero(video_id, campo, texto)
+    if not math.isfinite(n) or n != int(n):
+        raise ErroPainel(f"vídeo {video_id}: campo '{campo}' não é inteiro ('{texto}')")
+    return int(n)
 
 
 def _segundos(video_id: str, texto: str) -> float:
@@ -89,12 +93,20 @@ def ler_tabela(texto: str) -> list[VideoRetrato]:
     linhas = list(csv.reader(io.StringIO(texto)))
     if not linhas:
         raise ErroPainel("export do Studio vazio")
-    idx = _indices(linhas[0])
+    cabecalho = [c.lstrip("﻿").strip() for c in linhas[0]]
+    idx = _indices(cabecalho)
     videos: list[VideoRetrato] = []
-    for linha in linhas[1:]:
-        if not linha or linha[0].strip() in ("", "Total", "Totals"):
+    for n, linha in enumerate(linhas[1:], start=2):
+        if not any(c.strip() for c in linha):
             continue
-        videos.append(_video({campo: linha[i].strip() for campo, i in idx.items()}))
+        if linha[0].strip() in ("Total", "Totals"):
+            continue
+        if len(linha) < len(cabecalho):
+            raise ErroPainel(f"linha {n}: {len(linha)} colunas, o cabeçalho tem {len(cabecalho)}")
+        cel = {campo: linha[i].strip() for campo, i in idx.items()}
+        if not cel["video_id"]:
+            raise ErroPainel(f"linha {n}: id do vídeo vazio")
+        videos.append(_video(cel))
     return videos
 
 
