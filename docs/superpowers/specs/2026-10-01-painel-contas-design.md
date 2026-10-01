@@ -133,7 +133,8 @@ de cada retrato da conta em que o vídeo aparece.
 
 ### 5.2 Relativo à conta
 
-`rel = views_7d / mediana(views_7d dos Shorts medidos da mesma conta)`. Conta com menos de 3
+`rel = views_7d / mediana(views_7d dos Shorts medidos da mesma conta)` — a base usa **todos** os
+Shorts medidos da conta, ligados ou não (mais dado para a referência); só a comparação exige ligação. Conta com menos de 3
 Shorts medidos não tem base: seus Shorts aparecem sem `rel` e com o aviso "conta sem base".
 
 ### 5.3 Grupos
