@@ -87,9 +87,13 @@ convertido pelo `ler_csv.py` da skill e gravado como:
 ```json
 {"conta": "grana", "coletado_em": "2026-10-10T09:12:00", "videos": [
   {"video_id": "...", "titulo": "...", "publicado_em": "2026-10-03", "duracao_s": 26,
-   "views": 1830, "pct_media": 87.4, "duracao_media_s": 22.7, "inscritos": 3,
-   "likes": 51, "comentarios": 4, "compartilhamentos": 9}]}
+   "views": 1830, "pct_media": 87.4, "duracao_media_s": 22.7, "inscritos": 3}]}
 ```
+
+Métricas pedidas ao export: `views,duracao_media,pct_media,inscritos` (as que o método usa).
+Formato real do CSV conferido num export de 2026-08: data de publicação em inglês
+(`"Aug 11, 2026"`) mesmo com cabeçalho em português; decimal com ponto; duração média `h:mm:ss`.
+Célula vazia só é aceita (como 0) em vídeo com 0 views; em qualquer outro caso é erro.
 
 Coluna obrigatória ausente no CSV → erro que nomeia conta e coluna. Um retrato por conta por
 dia; atualizar de novo no mesmo dia sobrescreve o do dia.
@@ -105,9 +109,10 @@ dia; atualizar de novo no mesmo dia sobrescreve o do dia.
    `youtu.be/<id>`, `watch?v=<id>`; outra forma → erro), confere que o vídeo existe no último
    retrato da conta escolhida (senão recusa e diz para atualizar), e **sugere o corte** pelo
    título mais parecido entre as pastas de corte conhecidas (`testes/*/` e
-   `episodios/*/cortes/*/`). As etiquetas vêm pré-preenchidas: `podcast` do `meta.json` do
-   episódio, `temas` das tags do candidato em `candidatos.json`, `formato` do template. Davi
-   confirma ou corrige.
+   `episodios/*/cortes/*/`). Pré-preenchimento das etiquetas: `formato` pelo prefixo da pasta
+   (`f7-...` → `f7`), `podcast` pelo campo `canal` do `meta.json` quando o corte está em
+   `episodios/<id>/cortes/`. `temas` são escolhidos na tela: hoje nenhum arquivo liga a pasta do
+   corte ao candidato do detector (isso nasce com a curadoria). Davi confirma ou corrige.
 3. **Comparar.** Funções puras sobre `publicados.jsonl` + retratos (§5).
 
 O caminho da skill `youtube-analytics` vem de configuração; se não existir, o servidor falha
@@ -152,8 +157,8 @@ Linguagem visual do mockup, igual nas três telas.
   **ardósia** (abaixo) — legível para daltonismo, sem o verde/vermelho de corretora; amarelo só
   para aviso (pista, login vencido, confusão).
 - **Tipografia:** Instrument Serif (títulos e números de destaque), Instrument Sans (interface),
-  JetBrains Mono (números tabulares). Fontes servidas localmente em `web/static/fonts/` (licença
-  OFL).
+  JetBrains Mono (números tabulares), pelo Google Fonts (a coleta já exige internet; sem
+  arquivo de fonte no repositório).
 - **Gráficos:** SVG desenhado à mão em JS, sem biblioteca. Escala log de 0,1× a 10× (metade e
   dobro com o mesmo passo).
 - **Miniaturas 9:16** dos Shorts como unidade visual, com o `rel` sobreposto; imagem vinda do
@@ -185,13 +190,19 @@ Largura de celular: trilho some, tabela mostra só nome e mediana, matriz e mini
 
 ```
 src/cortes/painel/
-  dados.py      # ler/validar contas.yaml, formatos.yaml, publicados.jsonl, retratos (tipos explícitos)
-  metodo.py     # puro: views_7d, rel, grupos, matriz, confusão
-  ligacao.py    # puro: extrair video_id, sugerir corte por título, pré-preencher etiquetas
-  coleta.py     # fino: roda o export da skill por conta (executor injetável), grava retrato
-  servidor.py   # FastAPI: rotas JSON finas + arquivos estáticos
-web/static/     # index.html, painel.css, painel.js (uma página, três telas), fonts/
+  dados.py        # contas.yaml, formatos.yaml, vocabulário de temas (dos perfis de nicho)
+  publicados.py   # publicados.jsonl: ler, validar, ligar, gravar
+  retratos.py     # tipos do retrato; ler e gravar retratos/<conta>/<dia>.json
+  studio.py       # puro: CSV do export do Studio → vídeos do retrato
+  metodo.py       # puro: views_7d, relativo à conta, linhas da tela Shorts
+  comparacao.py   # puro: grupos, matriz, confusão
+  ligacao.py      # puro: cortes conhecidos, sugestão por título, etiquetas pré-preenchidas
+  coleta.py       # fino: roda o export da skill por conta (executor injetável), grava retrato
+  servidor.py     # FastAPI: rotas JSON finas + arquivos estáticos
+web/static/       # index.html, painel.css, painel.js (uma página, três telas)
 ```
+
+`video_id` do link reaproveita `cortes.episodio.id_do_video` (já testado com as formas de link).
 
 CLI: `cortes painel` sobe o servidor em `127.0.0.1` e imprime o endereço.
 
