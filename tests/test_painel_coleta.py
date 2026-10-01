@@ -95,7 +95,8 @@ def test_verificar_skill_sem_node_no_path(tmp_path: Path, monkeypatch: pytest.Mo
         verificar_skill(tmp_path)
 
 
-def test_verificar_skill(tmp_path: Path) -> None:
+def test_verificar_skill(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("shutil.which", lambda _: "C:/fake/node.exe")
     with pytest.raises(ErroPainel, match="cli.mjs"):
         verificar_skill(tmp_path)
     (tmp_path / "src").mkdir()

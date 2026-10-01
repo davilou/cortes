@@ -66,7 +66,9 @@ def _encerrar_arvore(p: subprocess.Popen[str]) -> None:
     """mata a árvore inteira: no Windows o timeout do Popen só mata o `node`, e o Chrome que
     a skill abriu (via Playwright) sobrevive e deixa o profile travado para a próxima coleta."""
     if os.name == "nt":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
+        r = subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
+        if r.returncode != 0:
+            p.kill()
     else:
         p.kill()
     try:
