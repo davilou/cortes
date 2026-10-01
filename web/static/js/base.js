@@ -60,6 +60,7 @@ function trilho() {
     b.disabled = E.rodando || !E.contas.length;
     b.textContent = E.rodando ? "atualizando…" : rotulo;
   }
+  $$("[data-atualizar]").forEach(b => { b.disabled = E.rodando; });
   const sem = S.filter(l => !l.etiquetas).length;
   for (const sel of ["#sem-ligacao", "#sem-ligacao-m"]) {
     const el = $(sel);
