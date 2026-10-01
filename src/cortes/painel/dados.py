@@ -44,7 +44,8 @@ class _SemRepetidas(yaml.SafeLoader):
 
 
 def _mapa(loader: yaml.Loader | yaml.SafeLoader, node: yaml.Node, deep: bool = False) -> dict[Any, Any]:
-    assert isinstance(node, yaml.MappingNode)
+    if not isinstance(node, yaml.MappingNode):
+        raise ErroPainel(f"esperava um mapa YAML, veio {type(node).__name__}")
     chaves = [loader.construct_object(k, deep=True) for k, _ in node.value]
     if repetidas := sorted({str(k) for k in chaves if chaves.count(k) > 1}):
         raise ErroPainel(f"chave repetida: {repetidas}")
@@ -57,7 +58,7 @@ _SemRepetidas.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _m
 def _ler_yaml(arquivo: Path, chave: str) -> Any:
     try:
         dados = yaml.load(arquivo.read_text(encoding="utf-8"), Loader=_SemRepetidas)
-    except ErroPainel as e:
+    except (ErroPainel, yaml.YAMLError, OSError) as e:
         raise ErroPainel(f"{arquivo}: {e}") from e
     if not isinstance(dados, dict) or chave not in dados:
         raise ErroPainel(f"{arquivo}: falta a chave '{chave}'")
@@ -68,9 +69,11 @@ def _conta(arquivo: Path, i: int, c: Any, pasta_nichos: Path) -> Conta:
     if not isinstance(c, dict):
         raise ErroPainel(f"{arquivo}: conta #{i} não é um mapa")
     for campo in CAMPOS_CONTA:
-        if not isinstance(c.get(campo), str) or not c[campo].strip():
+        if campo not in c:
             raise ErroPainel(f"{arquivo}: conta #{i} sem o campo '{campo}'")
-    if not _ID_CONTA.match(c["id"]):
+        if not isinstance(c[campo], str) or not c[campo].strip():
+            raise ErroPainel(f"{arquivo}: conta #{i} campo '{campo}' deve ser texto não vazio")
+    if not _ID_CONTA.fullmatch(c["id"]):
         raise ErroPainel(f"{arquivo}: id '{c['id']}' fora do padrão [a-z0-9-]+")
     if not (pasta_nichos / c["nicho"] / "perfil.yaml").exists():
         raise ErroPainel(f"{arquivo}: conta '{c['id']}' usa o nicho '{c['nicho']}', que não existe "
@@ -97,17 +100,32 @@ def carregar_formatos(arquivo: Path) -> dict[str, Formato]:
         raise ErroPainel(f"{arquivo}: 'formatos' deve ser um mapa {{id: {{nome, obs}}}}")
     formatos: dict[str, Formato] = {}
     for fid, f in mapa.items():
-        if not isinstance(f, dict) or not isinstance(f.get("nome"), str):
-            raise ErroPainel(f"{arquivo}: formato '{fid}' sem 'nome'")
-        formatos[str(fid)] = Formato(str(fid), f["nome"], str(f.get("obs", "")))
+        if not isinstance(fid, str):
+            raise ErroPainel(f"{arquivo}: id de formato {fid!r} deve ser texto")
+        formatos[fid] = _formato(arquivo, fid, f)
     return formatos
+
+
+def _formato(arquivo: Path, fid: str, f: Any) -> Formato:
+    if not isinstance(f, dict) or not isinstance(f.get("nome"), str) or not f["nome"].strip():
+        raise ErroPainel(f"{arquivo}: formato '{fid}' sem 'nome'")
+    obs = f.get("obs", "")
+    if not isinstance(obs, str):
+        raise ErroPainel(f"{arquivo}: formato '{fid}' campo 'obs' deve ser texto")
+    return Formato(fid, f["nome"], obs)
 
 
 def carregar_temas(pasta_nichos: Path) -> frozenset[str]:
     """Temas = tags de bônus e penalidade de todos os perfis: o mesmo vocabulário do detector."""
+    arquivos = sorted(pasta_nichos.glob("*/perfil.yaml"))
+    if not arquivos:
+        raise ErroPainel(f"{pasta_nichos}: nenhum perfil de nicho encontrado")
     temas: set[str] = set()
-    for arq in sorted(pasta_nichos.glob("*/perfil.yaml")):
-        perfil = carregar_perfil(arq.parent)
+    for arq in arquivos:
+        try:
+            perfil = carregar_perfil(arq.parent)
+        except (ValueError, OSError) as e:
+            raise ErroPainel(f"{arq}: {e}") from e
         temas |= set(perfil.bonus) | set(perfil.penalidade)
     return frozenset(temas)
 

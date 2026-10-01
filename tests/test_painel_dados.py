@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -69,6 +70,18 @@ def test_id_fora_do_padrao(tmp_path: Path) -> None:
         carregar_contas(escrever(tmp_path, "c.yaml", texto), tmp_path / "nichos")
 
 
+def test_yaml_invalido(tmp_path: Path) -> None:
+    arq = escrever(tmp_path, "c.yaml", "contas:\n  - {id: grana, handle: @x}\n")
+    with pytest.raises(ErroPainel, match=re.escape(str(arq))):
+        carregar_contas(arq, tmp_path)
+
+
+def test_arquivo_inexistente(tmp_path: Path) -> None:
+    arq = tmp_path / "nao_existe.yaml"
+    with pytest.raises(ErroPainel, match=re.escape(str(arq))):
+        carregar_contas(arq, tmp_path)
+
+
 def test_formatos(tmp_path: Path) -> None:
     f = carregar_formatos(escrever(tmp_path, "f.yaml", "formatos:\n  f1: {nome: Falante}\n"))
     assert f["f1"].nome == "Falante" and f["f1"].obs == ""
@@ -85,10 +98,33 @@ def test_formato_sem_nome(tmp_path: Path) -> None:
         carregar_formatos(escrever(tmp_path, "f.yaml", "formatos:\n  f1: {obs: x}\n"))
 
 
+def test_formato_id_nao_texto(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="deve ser texto"):
+        carregar_formatos(escrever(tmp_path, "f.yaml", "formatos:\n  1: {nome: X}\n"))
+
+
+def test_formato_obs_nao_texto(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="'obs' deve ser texto"):
+        carregar_formatos(escrever(tmp_path, "f.yaml", "formatos:\n  f1: {nome: X, obs: null}\n"))
+
+
 def test_temas_unem_bonus_e_penalidade_dos_nichos(tmp_path: Path) -> None:
     criar_nicho(tmp_path, "financas")
     criar_nicho(tmp_path, "humor", PERFIL.replace('humor: "faz rir"', 'trocadilho: "jogo de palavras"'))
     assert carregar_temas(tmp_path) == {"humor", "numero_na_primeira_frase", "palestra", "trocadilho"}
+
+
+def test_temas_sem_perfis(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="nenhum perfil de nicho encontrado"):
+        carregar_temas(tmp_path)
+
+
+def test_temas_perfil_invalido(tmp_path: Path) -> None:
+    pasta = tmp_path / "financas"
+    pasta.mkdir()
+    (pasta / "perfil.yaml").write_text("nicho: financas\n", encoding="utf-8")
+    with pytest.raises(ErroPainel, match=re.escape(str(pasta / "perfil.yaml"))):
+        carregar_temas(tmp_path)
 
 
 def test_vocabulario_da_raiz(tmp_path: Path) -> None:
