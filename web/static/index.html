@@ -10,12 +10,22 @@
 </head>
 <body>
 <div class="app">
+  <header class="barra-mobile">
+    <div class="marca">cortes<b>.</b></div>
+    <div class="links-mobile">
+      <a href="#contas" data-tela="contas">Contas</a>
+      <a href="#shorts" data-tela="shorts">Shorts <span class="cont" id="sem-ligacao-m" hidden></span></a>
+      <a href="#comparar" data-tela="comparar">Comparar</a>
+    </div>
+    <button class="atualizar" id="atualizar-todas-m">↻ Atualizar</button>
+  </header>
   <nav>
     <div class="marca">cortes<b>.</b></div>
     <a href="#contas" data-tela="contas">Contas</a>
     <a href="#shorts" data-tela="shorts">Shorts <span class="cont" id="sem-ligacao" hidden></span></a>
     <a href="#comparar" data-tela="comparar">Comparar</a>
     <div class="contas" id="trilho-contas"></div>
+    <div class="erro-coleta" id="erro-coleta" hidden></div>
     <button class="atualizar" id="atualizar-todas">↻ Atualizar todas</button>
   </nav>
   <main id="tela"></main>

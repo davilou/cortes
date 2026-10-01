@@ -1,18 +1,24 @@
 "use strict";
 // Roteador por hash e acompanhamento da coleta. Carregado por último.
+// desenhar.n é o contador de renderização: cada chamada pega o número seguinte e as telas
+// (ex. telaComparar) recebem esse número para conferir, depois do await, se ainda são a
+// renderização mais recente — uma resposta antiga que chega depois de uma mais nova não
+// deve pintar a tela com o dado velho.
 async function desenhar() {
+  const meu = ++desenhar.n;
   const nome = TELAS[location.hash.slice(1)] ? location.hash.slice(1) : "comparar";
-  $$("nav a").forEach(a => a.classList.toggle("ativo", a.dataset.tela === nome));
+  $$("[data-tela]").forEach(a => a.classList.toggle("ativo", a.dataset.tela === nome));
   try {
-    await TELAS[nome]();
+    await TELAS[nome](meu);
   } catch (e) {
-    avisar(e.message);
+    if (meu === desenhar.n) avisar(e.message);
   }
 }
+desenhar.n = 0;
 
 async function acompanhar() {
   await carregar();
-  if (E.rodando) setTimeout(acompanhar, 3000);
+  if (E.rodando) setTimeout(() => acompanhar().catch(e => avisar(e.message)), 3000);
   else desenhar();
 }
 
@@ -27,4 +33,8 @@ async function atualizar(conta) {
 
 window.addEventListener("hashchange", desenhar);
 $("#atualizar-todas").onclick = () => atualizar(null);
-carregar().then(() => (E.rodando ? acompanhar() : desenhar())).catch(e => avisar(e.message));
+$("#atualizar-todas-m").onclick = () => atualizar(null);
+carregar().then(() => {
+  if (E.rodando) { desenhar(); acompanhar().catch(e => avisar(e.message)); }
+  else desenhar();
+}).catch(e => avisar(e.message));

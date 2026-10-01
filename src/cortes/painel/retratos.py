@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from cortes.episodio import ler_json, salvar_json
-from cortes.painel.dados import ErroPainel
+from cortes.painel.dados import VIDEO_ID, ErroPainel
 
 
 @dataclass(frozen=True)
@@ -67,8 +67,11 @@ def _inteiro(d: Any, campo: str) -> int:
 def _video(v: Any) -> VideoRetrato:
     if not isinstance(v, dict):
         raise ErroPainel("vídeo não é um mapa")
+    vid = _texto(v, "video_id")
+    if not VIDEO_ID.fullmatch(vid):
+        raise ErroPainel(f"video_id inválido: {vid!r}")
     return VideoRetrato(
-        video_id=_texto(v, "video_id"),
+        video_id=vid,
         titulo=_texto(v, "titulo"),
         publicado_em=date.fromisoformat(_texto(v, "publicado_em")),
         duracao_s=_numero(v, "duracao_s"),

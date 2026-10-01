@@ -1,14 +1,11 @@
 """publicados.jsonl: liga cada Short no YouTube ao corte que o gerou (spec painel §3.3)."""
 import json
-import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
 
-from cortes.painel.dados import ErroPainel, Vocabulario
-
-_VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
+from cortes.painel.dados import VIDEO_ID, ErroPainel, Vocabulario
 
 
 @dataclass(frozen=True)
@@ -32,7 +29,7 @@ def validar(p: Publicado, voc: Vocabulario) -> None:
 
     Temas vazio é permitido (o Short só fica fora dos grupos por tema).
     """
-    if not p.video_id or not _VIDEO_ID.fullmatch(p.video_id):
+    if not p.video_id or not VIDEO_ID.fullmatch(p.video_id):
         raise ErroPainel(f"video_id inválido: {p.video_id!r}")
     if p.conta not in voc.contas:
         raise ErroPainel(f"conta '{p.conta}' não existe em contas.yaml")

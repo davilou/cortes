@@ -67,6 +67,20 @@ def test_dia_nao_casa_com_o_nome_do_arquivo(tmp_path: Path) -> None:
         ler_retratos(tmp_path)
 
 
+def test_video_id_invalido_no_retrato(tmp_path: Path) -> None:
+    (tmp_path / "grana").mkdir()
+    arquivo = tmp_path / "grana" / "2026-10-10.json"
+    arquivo.write_text(
+        '{"conta": "grana", "coletado_em": "2026-10-10T09:12:00", "videos": '
+        '[{"video_id": "curto", "titulo": "Título", "publicado_em": "2026-10-03", '
+        '"duracao_s": 26.0, "views": 10, "pct_media": 87.4, "duracao_media_s": 22.7, '
+        '"inscritos": 3}]}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ErroPainel, match="retrato inválido"):
+        ler_retratos(tmp_path)
+
+
 def test_video_com_campo_de_tipo_errado(tmp_path: Path) -> None:
     (tmp_path / "grana").mkdir()
     arquivo = tmp_path / "grana" / "2026-10-10.json"

@@ -11,6 +11,10 @@ from cortes.perfil import carregar_perfil
 _ID_CONTA = re.compile(r"^[a-z0-9-]+$")
 CAMPOS_CONTA = ("id", "nome", "handle", "nicho", "perfil_studio")
 
+# id de vídeo do YouTube: sempre 11 caracteres. Compartilhado por publicados.py (ligação),
+# studio.py (linha do CSV do Studio) e retratos.py (vídeo de um retrato salvo).
+VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
+
 
 class ErroPainel(ValueError):
     """Configuração ou dado inválido. A mensagem diz o arquivo e o campo."""

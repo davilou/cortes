@@ -4,30 +4,40 @@ let dim = "formato";
 let selecionado = null;
 const TITULOS = { formato: "por formato", conta: "por conta", tema: "por tema", podcast: "por podcast" };
 
-// escala log de 0,1× a 10×: "metade" e "dobro" ficam à mesma distância de 1×
-const px = (v, w) => (Math.log10(Math.min(10, Math.max(.1, v))) + 1) / 2 * w;
+// escala log de 0,1× a 10×: "metade" e "dobro" ficam à mesma distância de 1×. Devolve 0–100,
+// pensado para "left:N%" — porcentagem não distorce (ao contrário de um viewBox de SVG com
+// preserveAspectRatio="none" numa largura que não bate com o pixel real da célula).
+const pctEixo = v => (Math.log10(Math.min(10, Math.max(.1, v))) + 1) / 2 * 100;
 
 function eixo() {
   const marcas = [[.2, "0,2×"], [.5, "0,5×"], [1, "1×"], [2, "2×"], [5, "5×"]];
-  return `<svg class="strip" style="height:14px" viewBox="0 0 400 14" preserveAspectRatio="none">${marcas.map(([t, r]) =>
-    `<text x="${px(t, 400)}" y="11" text-anchor="middle">${r}</text>`).join("")}</svg>`;
+  return `<div class="eixo">${marcas.map(([t, r]) => `<span style="left:${pctEixo(t)}%">${r}</span>`).join("")}</div>`;
+}
+
+// Pontos fora de 0,1×–10× são clampados para caber na faixa; em vez de escondê-los no mesmo
+// lugar que um valor dentro da faixa, marca com uma ponta triangular na borda — clamping visível.
+function ponto(v, i) {
+  const esquerda = pctEixo(v), topo = 17 + ((i % 3) - 1) * 5, titulo = esc(fx(v));
+  if (v < .1) return `<i class="ponta esq down" style="left:${esquerda}%;top:${topo}px" title="${titulo}"></i>`;
+  if (v > 10) return `<i class="ponta dir up" style="left:${esquerda}%;top:${topo}px" title="${titulo}"></i>`;
+  return `<i class="pt-dot ${v >= 1 ? "up" : "down"}" style="left:${esquerda}%;top:${topo}px" title="${titulo}"></i>`;
 }
 
 function strip(rels, med) {
-  const W = 400, H = 34;
-  const grade = [.2, .5, 1, 2, 5].map(t => `<line class="grade" x1="${px(t, W)}" x2="${px(t, W)}" y1="4" y2="30"/>`).join("");
-  const pontos = rels.map((v, i) =>
-    `<circle class="${v >= 1 ? "up" : "down"}" cx="${px(v, W)}" cy="${17 + ((i % 3) - 1) * 5}" r="4.2"/>`).join("");
-  return `<svg class="strip" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${grade}
-    <line class="base" x1="${px(1, W)}" x2="${px(1, W)}" y1="0" y2="${H}"/>${pontos}
-    <rect class="med" x="${px(med, W) - 1.5}" y="2" width="3" height="30" rx="1"/></svg>`;
+  const grade = [.2, .5, 1, 2, 5].map(t => `<i class="grade" style="left:${pctEixo(t)}%"></i>`).join("");
+  const pontos = rels.map((v, i) => ponto(v, i)).join("");
+  return `<div class="strip">${grade}<i class="base" style="left:${pctEixo(1)}%"></i>${pontos}
+    <i class="med" style="left:${pctEixo(med)}%"></i></div>`;
 }
 
 function nomeGrupo(k) {
   return dim === "formato" ? nomeFormato(k) : dim === "conta" ? handleDe(k) : k;
 }
 function subGrupo(k) {
-  if (dim === "formato") return `${k} · ${E.formatos[k]?.obs ?? ""}`;
+  if (dim === "formato") {
+    const obs = E.formatos[k]?.obs;
+    return obs ? `${k} · ${obs}` : k;
+  }
   if (dim === "conta") return E.contas.find(c => c.id === k)?.nicho ?? "";
   return "";
 }
@@ -37,8 +47,9 @@ function chavesDe(l) {
 }
 
 function linhaGrupo(g) {
+  const sel = g.chave === selecionado;
   const insc = g.insc_por_mil == null ? "—" : g.insc_por_mil.toFixed(1).replace(".", ",");
-  return `<div class="linha ${g.chave === selecionado ? "sel" : ""}" data-chave="${esc(g.chave)}">
+  return `<div class="linha ${sel ? "sel" : ""}" data-chave="${esc(g.chave)}" tabindex="0" role="button" aria-pressed="${sel}">
     <div class="nome">${esc(nomeGrupo(g.chave))}<small>${esc(subGrupo(g.chave))}</small>${g.pista ? '<span class="selo">pista · n&lt;5</span>' : ""}</div>
     <div class="num">${g.n}</div>
     <div class="rel ${g.rel_mediana >= 1 ? "up" : "down"}">${fx(g.rel_mediana)}</div>
@@ -88,12 +99,12 @@ function blocoMatriz(C) {
              : `<td class="vazia">falta</td>`;
   }).join("")}</tr>`).join("");
   return `<h2>Formato × conta</h2><p class="sub">Mediana relativa por célula · n no canto · hachura = teste que falta</p>
-    <table class="matriz"><tr><th></th>${E.contas.map(c => `<th>${esc(c.handle)}</th>`).join("")}</tr>${linhas}</table>${notaConfusao(C)}`;
+    <div class="matriz-rolagem"><table class="matriz"><tr><th></th>${E.contas.map(c => `<th>${esc(c.handle)}</th>`).join("")}</tr>${linhas}</table></div>${notaConfusao(C)}`;
 }
 
 function cartaoShort(l, matura = false) {
   const up = l.rel != null && l.rel >= 1;
-  return `<a class="thumb ${matura ? "matura" : up ? "up" : ""}" href="https://youtube.com/shorts/${l.video_id}" target="_blank" rel="noopener">
+  return `<a class="thumb ${matura ? "matura" : up ? "up" : ""}" href="https://youtube.com/shorts/${esc(l.video_id)}" target="_blank" rel="noopener">
     <img src="${thumb(l.video_id)}" alt="" loading="lazy"><div class="t">${esc(l.titulo)}</div>
     <div><div class="x ${up ? "up" : "down"}">${matura ? "" : fx(l.rel)}</div>
     <div class="c">${matura ? "maturando · " : ""}${esc(handleDe(l.conta))}</div></div></a>`;
@@ -110,16 +121,23 @@ function blocoGrupo(C) {
     <div class="shorts">${medidos.map(l => cartaoShort(l)).join("")}${maturando.map(l => cartaoShort(l, true)).join("")}</div>`;
 }
 
-async function telaComparar() {
+async function telaComparar(meu) {
   const C = await api(`/api/comparar?dim=${dim}`);
+  if (meu !== desenhar.n) return;   // uma renderização mais nova já começou: não pisa nela
   if (!C.grupos.some(g => g.chave === selecionado)) selecionado = C.grupos[0]?.chave ?? null;
   const aviso = dim === "tema" ? " · um Short entra em todos os seus temas: os grupos não somam o total" : "";
   $("#tela").innerHTML = `<header><div><h1>O que está funcionando <em>— ${TITULOS[dim]}</em></h1>
     <p class="sub">Views aos 7 dias ÷ mediana da própria conta · ${C.medidos} Shorts medidos · ${C.maturando} em maturação${aviso}</p></div>
-    <div class="seg">${Object.keys(TITULOS).map(d => `<button data-dim="${d}" class="${d === dim ? "ativo" : ""}">${d[0].toUpperCase() + d.slice(1)}</button>`).join("")}</div></header>
+    <div class="seg">${Object.keys(TITULOS).map(d => `<button data-dim="${d}" class="${d === dim ? "ativo" : ""}" aria-pressed="${d === dim}">${d[0].toUpperCase() + d.slice(1)}</button>`).join("")}</div></header>
     ${tabelaGrupos(C)}
     <div class="baixo"><div class="card">${blocoMatriz(C)}</div><div class="card">${blocoGrupo(C)}</div></div>`;
   $$(".seg button").forEach(b => { b.onclick = () => { dim = b.dataset.dim; selecionado = null; desenhar(); }; });
-  $$(".linha[data-chave]").forEach(el => { el.onclick = () => { selecionado = el.dataset.chave; desenhar(); }; });
+  $$(".linha[data-chave]").forEach(el => {
+    const escolher = () => { selecionado = el.dataset.chave; desenhar(); };
+    el.onclick = escolher;
+    el.onkeydown = e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); escolher(); }
+    };
+  });
 }
 TELAS.comparar = telaComparar;

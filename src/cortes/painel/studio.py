@@ -10,7 +10,7 @@ import zipfile
 from datetime import date
 from pathlib import Path
 
-from cortes.painel.dados import ErroPainel
+from cortes.painel.dados import VIDEO_ID, ErroPainel
 from cortes.painel.retratos import VideoRetrato
 
 # (campo, nomes aceitos, casamento exato?). "Duração" é exato: "Duração média…" começa igual.
@@ -67,8 +67,12 @@ def _segundos(video_id: str, texto: str) -> float:
     return total
 
 
-def _video(cel: dict[str, str]) -> VideoRetrato:
+def _video(n: int, cel: dict[str, str]) -> VideoRetrato:
     vid = cel["video_id"]
+    if not vid:
+        raise ErroPainel(f"linha {n}: id do vídeo vazio")
+    if not VIDEO_ID.fullmatch(vid):
+        raise ErroPainel(f"linha {n}: id do vídeo fora do padrão de 11 caracteres: {vid!r}")
     if not cel["views"]:
         raise ErroPainel(f"vídeo {vid}: views vazio")
     views = _inteiro(vid, "views", cel["views"])
@@ -104,9 +108,7 @@ def ler_tabela(texto: str) -> list[VideoRetrato]:
         if len(linha) < len(cabecalho):
             raise ErroPainel(f"linha {n}: {len(linha)} colunas, o cabeçalho tem {len(cabecalho)}")
         cel = {campo: linha[i].strip() for campo, i in idx.items()}
-        if not cel["video_id"]:
-            raise ErroPainel(f"linha {n}: id do vídeo vazio")
-        videos.append(_video(cel))
+        videos.append(_video(n, cel))
     return videos
 
 

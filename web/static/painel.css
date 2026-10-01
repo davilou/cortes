@@ -10,6 +10,7 @@ body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
 button, input, select { font: inherit; color: inherit; }
 .app { display: grid; grid-template-columns: 208px 1fr; min-height: 100vh; }
 .up { color: var(--up); } .down { color: var(--down); } .muted { color: var(--muted); }
+.barra-mobile { display: none; }
 
 /* trilho */
 nav { border-right: 1px solid var(--line-soft); padding: 22px 14px; display: flex; flex-direction: column; gap: 4px;
@@ -26,6 +27,8 @@ nav a.ativo { background: var(--raised); color: var(--text); }
 .conta i, i.estado { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; }
 .conta i.vencido, i.estado.vencido { background: var(--warn); }
 .conta small { color: var(--faint); font: 11px var(--mono); }
+.erro-coleta { margin: 10px 10px 0; padding: 8px 10px; border-radius: 7px; background: rgba(232,193,90,.12);
+  border: 1px solid rgba(232,193,90,.4); color: var(--warn); font-size: 11.5px; line-height: 1.35; }
 .atualizar, .botao { padding: 8px 12px; border-radius: 7px; border: 1px solid var(--line); background: none;
   font-weight: 500; font-size: 12.5px; cursor: pointer; }
 .atualizar { margin: 6px 10px 0; }
@@ -62,18 +65,33 @@ h1 em { color: var(--muted); }
 .rel { font: 400 30px/1 var(--serif); text-align: right; font-variant-numeric: tabular-nums; }
 .selo { display: inline-block; margin-top: 4px; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .06em;
   color: var(--warn); border: 1px solid rgba(232,193,90,.35); padding: 1px 6px; border-radius: 4px; }
-svg.strip { width: 100%; height: 34px; overflow: visible; display: block; }
-.strip .grade { stroke: var(--line-soft); } .strip .base { stroke: var(--muted); stroke-dasharray: 2 3; }
-.strip circle.up { fill: var(--up); fill-opacity: .85; } .strip circle.down { fill: var(--down); fill-opacity: .85; }
-.strip .med { fill: var(--text); } .strip text { fill: var(--faint); font: 10px var(--mono); }
+
+/* strip plot: pontos e eixo são HTML posicionado por %, não SVG com preserveAspectRatio="none" —
+   isso evita bolinha virando elipse e texto esticado quando a largura real da célula não bate
+   com um viewBox fixo. */
+.strip { position: relative; width: 100%; height: 34px; }
+.eixo { position: relative; width: 100%; height: 14px; }
+.strip i, .eixo span { position: absolute; }
+.eixo span { top: 0; transform: translateX(-50%); font: 10px var(--mono); color: var(--faint); white-space: nowrap; }
+.strip .grade { top: 4px; bottom: 4px; width: 0; border-left: 1px solid var(--line-soft); transform: translateX(-50%); }
+.strip .base { top: 0; bottom: 0; width: 0; border-left: 1px dashed var(--muted); transform: translateX(-50%); }
+.strip .med { top: 2px; bottom: 2px; width: 3px; border-radius: 1px; background: var(--text); transform: translateX(-50%); }
+.strip .pt-dot { width: 8.4px; height: 8.4px; border-radius: 50%; transform: translate(-50%, -50%); }
+.strip .pt-dot.up { background: var(--up); opacity: .85; } .strip .pt-dot.down { background: var(--down); opacity: .85; }
+/* ponta: marcador triangular para ponto clampado (fora de 0,1×–10×) — o clamping não some sem aviso */
+.strip .ponta { width: 0; height: 0; transform: translate(-50%, -50%); border: 5px solid transparent; }
+.strip .ponta.esq { border-right: 7px solid var(--down); border-left-width: 0; }
+.strip .ponta.dir { border-left: 7px solid var(--up); border-right-width: 0; }
 
 /* matriz e painel do grupo */
 .baixo { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; margin-top: 22px; }
 .card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; padding: 20px; min-width: 0; }
 .card h2 { font: 400 22px/1.1 var(--serif); margin-bottom: 4px; }
 .card > .sub { margin: 0 0 16px; }
+.matriz-rolagem { overflow-x: auto; }
 table.matriz { width: 100%; border-collapse: separate; border-spacing: 4px; }
-.matriz th { font: 500 11px var(--mono); color: var(--faint); text-align: left; padding: 0 4px 4px; }
+.matriz th { font: 500 11px var(--mono); color: var(--faint); text-align: left; padding: 0 4px 4px;
+  overflow-wrap: anywhere; }
 .matriz td { height: 46px; border-radius: 7px; padding: 6px 9px; vertical-align: top; position: relative; }
 .matriz td.rot { font-size: 12.5px; color: var(--muted); padding-left: 2px; vertical-align: middle; width: 128px; }
 .matriz td .v { font: 500 14px var(--mono); }
@@ -103,7 +121,16 @@ table.matriz { width: 100%; border-collapse: separate; border-spacing: 4px; }
 
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; } nav { display: none; }
-  main { padding: 20px 16px; }
+  .barra-mobile { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft); position: sticky; top: 0; background: var(--bg);
+    z-index: 20; flex-wrap: wrap; }
+  .barra-mobile .marca { padding: 0; font-size: 20px; }
+  .links-mobile { display: flex; gap: 10px; overflow-x: auto; flex: 1; min-width: 0; }
+  .links-mobile a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: 12.5px;
+    white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+  .links-mobile a.ativo { color: var(--text); }
+  .barra-mobile .atualizar { margin: 0; padding: 6px 10px; font-size: 11.5px; white-space: nowrap; }
+  main { padding: 20px 16px; max-width: 100%; }
   .linha { grid-template-columns: 1fr 70px; }
   .linha > :nth-child(2), .linha > :nth-child(4), .linha > :nth-child(5), .linha > :nth-child(6) { display: none; }
   .baixo { grid-template-columns: 1fr; }
