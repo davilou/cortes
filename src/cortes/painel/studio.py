@@ -1,0 +1,106 @@
+"""CSV do export do Studio (modo avançado, dimensão VIDEO) → vídeos do retrato.
+
+O cabeçalho vem no idioma da conta; a data de publicação vem em inglês ("Aug 11, 2026") mesmo
+com cabeçalho em português (conferido em export real de 2026-08).
+"""
+import csv
+import io
+import zipfile
+from datetime import date
+from pathlib import Path
+
+from cortes.painel.dados import ErroPainel
+from cortes.painel.retratos import VideoRetrato
+
+# (campo, nomes aceitos, casamento exato?). "Duração" é exato: "Duração média…" começa igual.
+COLUNAS: tuple[tuple[str, tuple[str, ...], bool], ...] = (
+    ("video_id", ("Conteúdo", "Content"), True),
+    ("titulo", ("Título do vídeo", "Video title"), True),
+    ("publicado_em", ("Horário de publicação", "Video publish time"), False),
+    ("duracao_s", ("Duração", "Duration"), True),
+    ("views", ("Visualizações", "Views"), True),
+    ("duracao_media_s", ("Duração média da visualização", "Average view duration"), False),
+    ("pct_media", ("Porcentagem visualizada média", "Average percentage viewed"), False),
+    ("inscritos", ("Inscritos", "Subscribers"), True),
+)
+_MESES = {m: i for i, m in enumerate(
+    ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 1)}
+
+
+def _indices(cabecalho: list[str]) -> dict[str, int]:
+    idx: dict[str, int] = {}
+    for campo, nomes, exato in COLUNAS:
+        achados = [i for i, c in enumerate(cabecalho) if (c in nomes if exato else c.startswith(nomes))]
+        if not achados:
+            raise ErroPainel(f"export do Studio sem a coluna '{nomes[0]}' (colunas: {cabecalho})")
+        idx[campo] = achados[0]
+    return idx
+
+
+def _data(texto: str) -> date:
+    try:
+        mes, dia, ano = texto.replace(",", "").split()
+        return date(int(ano), _MESES[mes[:3]], int(dia))
+    except (ValueError, KeyError) as e:
+        raise ErroPainel(f"data de publicação em formato desconhecido: '{texto}'") from e
+
+
+def _numero(video_id: str, campo: str, texto: str) -> float:
+    try:
+        return float(texto)
+    except ValueError as e:
+        raise ErroPainel(f"vídeo {video_id}: campo '{campo}' não é número ('{texto}')") from e
+
+
+def _inteiro(video_id: str, campo: str, texto: str) -> int:
+    return int(_numero(video_id, campo, texto))
+
+
+def _segundos(video_id: str, texto: str) -> float:
+    total = 0.0
+    for parte in texto.split(":"):
+        total = total * 60 + _numero(video_id, "duracao_media_s", parte)
+    return total
+
+
+def _video(cel: dict[str, str]) -> VideoRetrato:
+    vid = cel["video_id"]
+    if not cel["views"]:
+        raise ErroPainel(f"vídeo {vid}: views vazio")
+    views = _inteiro(vid, "views", cel["views"])
+
+    def valor(campo: str) -> str:
+        if cel[campo]:
+            return cel[campo]
+        if views == 0:
+            return "0"  # vídeo sem view nenhuma: o Studio deixa as médias em branco
+        raise ErroPainel(f"vídeo {vid}: '{campo}' vazio com {views} views")
+
+    return VideoRetrato(
+        video_id=vid, titulo=cel["titulo"], publicado_em=_data(cel["publicado_em"]),
+        duracao_s=_numero(vid, "duracao_s", valor("duracao_s")), views=views,
+        pct_media=_numero(vid, "pct_media", valor("pct_media")),
+        duracao_media_s=_segundos(vid, valor("duracao_media_s")),
+        inscritos=_inteiro(vid, "inscritos", valor("inscritos")),
+    )
+
+
+def ler_tabela(texto: str) -> list[VideoRetrato]:
+    linhas = list(csv.reader(io.StringIO(texto)))
+    if not linhas:
+        raise ErroPainel("export do Studio vazio")
+    idx = _indices(linhas[0])
+    videos: list[VideoRetrato] = []
+    for linha in linhas[1:]:
+        if not linha or linha[0].strip() in ("", "Total", "Totals"):
+            continue
+        videos.append(_video({campo: linha[i].strip() for campo, i in idx.items()}))
+    return videos
+
+
+def texto_do_zip(caminho: Path) -> str:
+    with zipfile.ZipFile(caminho) as z:
+        nome = next((n for n in z.namelist() if n.startswith(("Dados da tabela", "Table data"))), None)
+        if nome is None:
+            raise ErroPainel(f"{caminho}: zip sem a tabela por vídeo ({z.namelist()})")
+        return z.read(nome).decode("utf-8-sig")
