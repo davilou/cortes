@@ -1,0 +1,4 @@
+# Uma entrada por canal. perfil_studio = nome do perfil de login da skill youtube-analytics.
+# Exemplo:
+#   - {id: grana, nome: Grana Cortes, handle: "@grana.cortes", nicho: financas, perfil_studio: grana}
+contas: []

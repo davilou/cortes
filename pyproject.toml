@@ -8,10 +8,12 @@ dependencies = [
   "pyyaml",           # perfil de nicho
   "jsonschema",       # valida a saída do LLM
   "yt-dlp",           # download do episódio
+  "fastapi",          # servidor local do painel (spec painel §7; mesmo servidor da curadoria)
+  "uvicorn",          # roda o FastAPI
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy", "types-PyYAML", "types-jsonschema"]
+dev = ["pytest", "ruff", "mypy", "types-PyYAML", "types-jsonschema", "httpx"]  # httpx: TestClient do FastAPI
 
 [project.scripts]
 cortes = "cortes.cli:main"

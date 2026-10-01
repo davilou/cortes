@@ -1,0 +1,9 @@
+formatos:
+  f1: {nome: Falante puro, obs: controle}
+  f2: {nome: Motion fixo, obs: sem dado direto}
+  f3: {nome: Motion dinâmico, obs: troca de imagem por fala}
+  f4: {nome: B-roll real, obs: risco alto de Content ID}
+  f5: {nome: Gameplay embaixo, obs: R2 sem efeito em finanças}
+  f6: {nome: Estilo Hormozi, obs: contraprova R1+R2}
+  f7: {nome: Conversa com reações, obs: sinal mais forte da R2}
+  f8: {nome: 16:9 desfocado, obs: anti-controle}
