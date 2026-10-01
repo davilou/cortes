@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de Contas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="painel.css">
+</head>
+<body>
+<div class="app">
+  <nav>
+    <div class="marca">cortes<b>.</b></div>
+    <a href="#contas" data-tela="contas">Contas</a>
+    <a href="#shorts" data-tela="shorts">Shorts <span class="cont" id="sem-ligacao" hidden></span></a>
+    <a href="#comparar" data-tela="comparar">Comparar</a>
+    <div class="contas" id="trilho-contas"></div>
+    <button class="atualizar" id="atualizar-todas">↻ Atualizar todas</button>
+  </nav>
+  <main id="tela"></main>
+</div>
+<div class="aviso" id="aviso" role="alert" hidden></div>
+<div id="camada"></div>
+<script src="js/base.js"></script>
+<script src="js/comparar.js"></script>
+<script src="js/inicio.js"></script>
+</body>
+</html>
