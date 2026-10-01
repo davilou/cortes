@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 import pytest
 
+from cortes.painel.dados import ErroPainel
 from cortes.painel.metodo import Medida, montar_linhas, views_7d
 from cortes.painel.publicados import Etiquetas, Publicado
 from cortes.painel.retratos import Retrato, VideoRetrato
@@ -68,3 +69,40 @@ def test_usa_o_ultimo_retrato_para_totais() -> None:
     rs = {"grana": [retrato("grana", 5, [("a", 1, 100)]), retrato("grana", 9, [("a", 1, 300)])]}
     (linha,) = montar_linhas(rs, [])
     assert linha.views == 300 and linha.medida == Medida("medido", 250.0)
+
+
+def test_ordem_dos_retratos_na_lista_nao_muda_o_ultimo_total() -> None:
+    rs = {"grana": [retrato("grana", 9, [("a", 1, 300)]), retrato("grana", 5, [("a", 1, 100)])]}
+    (linha,) = montar_linhas(rs, [])
+    assert linha.views == 300 and linha.medida == Medida("medido", 250.0)
+
+
+def test_ligacao_em_conta_errada_falha_alto() -> None:
+    rs = {"grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])]}
+    p = Publicado("a", "outra", d(1), "testes/f7-x", Etiquetas("f7", ("humor",), "PrimoCast"))
+    with pytest.raises(ErroPainel, match="ligado à conta 'outra'"):
+        montar_linhas(rs, [p])
+
+
+def test_mesmo_video_id_em_duas_contas_falha_alto() -> None:
+    rs = {
+        "grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])],
+        "outra": [retrato("outra", 20, [("a", 1, 100)])],
+    }
+    with pytest.raises(ErroPainel, match="vídeo a"):
+        montar_linhas(rs, [])
+
+
+def test_contas_diferentes_tem_bases_independentes() -> None:
+    rs = {
+        "grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])],
+        "outra": [retrato("outra", 20, [("x", 1, 1000), ("y", 1, 2000), ("z", 1, 4000)])],
+    }
+    linhas = {ln.video_id: ln for ln in montar_linhas(rs, [])}
+    assert linhas["c"].rel == pytest.approx(2.0) and linhas["z"].rel == pytest.approx(2.0)
+
+
+def test_maturando_fica_sem_relativo_mesmo_com_base_na_conta() -> None:
+    rs = {"grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400), ("m", 19, 10)])]}
+    linhas = {ln.video_id: ln for ln in montar_linhas(rs, [])}
+    assert linhas["m"].medida.estado == "maturando" and linhas["m"].rel is None

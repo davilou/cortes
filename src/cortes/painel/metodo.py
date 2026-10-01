@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from statistics import median
 from typing import Literal
 
+from cortes.painel.dados import ErroPainel
 from cortes.painel.publicados import Etiquetas, Publicado
 from cortes.painel.retratos import Retrato, VideoRetrato
 
@@ -52,13 +53,20 @@ def _base(valores: list[float]) -> float | None:
     if len(valores) < BASE_MIN:
         return None
     m = median(valores)
-    return m if m > 0 else None
+    return m if m > 0 else None   # mediana 0 → sem base (evita dividir por zero)
+
+
+def _ligacao(vid: str, conta: str, pub: dict[str, Publicado]) -> Publicado | None:
+    p = pub.get(vid)
+    if p is not None and p.conta != conta:
+        raise ErroPainel(f"vídeo {vid}: ligado à conta '{p.conta}' mas aparece nos retratos de '{conta}'")
+    return p
 
 
 def _linhas_da_conta(conta: str, rs: list[Retrato], pub: dict[str, Publicado]) -> list[Linha]:
     ultimo: dict[str, VideoRetrato] = {}
     pontos: dict[str, list[tuple[date, int]]] = {}
-    for r in rs:
+    for r in sorted(rs, key=lambda retrato: retrato.dia):
         for v in r.videos:
             ultimo[v.video_id] = v
             pontos.setdefault(v.video_id, []).append((r.dia, v.views))
@@ -67,16 +75,28 @@ def _linhas_da_conta(conta: str, rs: list[Retrato], pub: dict[str, Publicado]) -
     linhas = []
     for vid, v in ultimo.items():
         m = medidas[vid]
-        p = pub.get(vid) if vid in pub and pub[vid].conta == conta else None
+        p = _ligacao(vid, conta, pub)
         rel = m.views_7d / base if base is not None and m.views_7d is not None else None
         linhas.append(Linha(vid, conta, v.titulo, v.publicado_em, p.etiquetas if p else None,
                             p.corte if p else None, m, rel, v.views, v.pct_media, v.inscritos))
     return linhas
 
 
+def _validar_contas_unicas(retratos: dict[str, list[Retrato]]) -> None:
+    conta_do: dict[str, str] = {}
+    for conta, rs in retratos.items():
+        for r in rs:
+            for v in r.videos:
+                anterior = conta_do.setdefault(v.video_id, conta)
+                if anterior != conta:
+                    raise ErroPainel(
+                        f"vídeo {v.video_id}: aparece nos retratos de '{anterior}' e de '{conta}'")
+
+
 def montar_linhas(retratos: dict[str, list[Retrato]], publicados: list[Publicado]) -> list[Linha]:
     """Todos os Shorts dos retratos, do mais novo ao mais antigo. A base de cada conta usa todos
     os Shorts medidos dela, ligados ou não."""
+    _validar_contas_unicas(retratos)
     pub = {p.video_id: p for p in publicados}
     linhas = [linha for conta, rs in retratos.items() for linha in _linhas_da_conta(conta, rs, pub)]
     return sorted(linhas, key=lambda linha: linha.publicado_em, reverse=True)
