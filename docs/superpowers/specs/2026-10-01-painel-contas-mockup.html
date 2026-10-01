@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de Contas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0e10; --surface: #15171a; --raised: #1c1f23; --line: #262a30; --line-soft: #1e2126;
+  --text: #ece7df; --muted: #8b9099; --faint: #5b6068;
+  --up: #ff7a2f; --up-soft: rgba(255,122,47,.16); --down: #7d93b8; --down-soft: rgba(125,147,184,.14);
+  --warn: #e8c15a;
+  --mono: "JetBrains Mono", ui-monospace, monospace; --sans: "Instrument Sans", system-ui, sans-serif;
+  --serif: "Instrument Serif", Georgia, serif;
+}
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+.app { display: grid; grid-template-columns: 208px 1fr; min-height: 100vh; }
+
+/* trilho */
+nav { border-right: 1px solid var(--line-soft); padding: 22px 14px; display: flex; flex-direction: column; gap: 4px; }
+.marca { font: italic 26px/1 var(--serif); padding: 0 10px 22px; letter-spacing: -.01em; }
+.marca b { font-style: normal; color: var(--up); }
+nav a { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 7px;
+  color: var(--muted); text-decoration: none; font-weight: 500; }
+nav a.ativo { background: var(--raised); color: var(--text); }
+nav a .cont { font: 500 11px var(--mono); background: var(--up-soft); color: var(--up); padding: 1px 7px; border-radius: 99px; }
+.contas { margin-top: auto; border-top: 1px solid var(--line-soft); padding-top: 14px; display: grid; gap: 9px; }
+.conta { padding: 0 10px; font-size: 12.5px; display: grid; grid-template-columns: 8px 1fr auto; gap: 8px; align-items: center; }
+.conta i { width: 7px; height: 7px; border-radius: 50%; background: #5fbf8a; }
+.conta i.vencido { background: var(--warn); }
+.conta small { color: var(--faint); font: 11px var(--mono); }
+.atualizar { margin: 6px 10px 0; padding: 8px; border-radius: 7px; border: 1px solid var(--line); background: none;
+  color: var(--text); font: 500 12.5px var(--sans); cursor: pointer; }
+.atualizar:hover { border-color: var(--up); }
+
+/* principal */
+main { padding: 28px 36px 60px; max-width: 1240px; }
+header { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 26px; flex-wrap: wrap; }
+h1 { font: 400 40px/1 var(--serif); letter-spacing: -.015em; }
+h1 em { color: var(--muted); }
+.sub { color: var(--muted); margin-top: 8px; font-size: 13px; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 9px; padding: 3px; }
+.seg button { border: 0; background: none; color: var(--muted); font: 500 13px var(--sans); padding: 7px 14px; border-radius: 6px; cursor: pointer; }
+.seg button.ativo { background: var(--raised); color: var(--text); }
+
+.legenda { display: flex; gap: 18px; color: var(--muted); font-size: 12px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+.legenda span { display: inline-flex; gap: 6px; align-items: center; }
+.pt { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* tabela de grupos */
+.grupos { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
+.linha { display: grid; grid-template-columns: 190px 44px 104px 1fr 76px 70px; gap: 18px; align-items: center;
+  padding: 14px 20px; border-top: 1px solid var(--line-soft); cursor: pointer; transition: background .12s; }
+.linha:first-child { border-top: 0; }
+.linha.cab { cursor: default; color: var(--faint); font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 11px 20px; }
+.linha:not(.cab):hover { background: var(--raised); }
+.linha.sel { background: var(--raised); box-shadow: inset 2px 0 0 var(--up); }
+.nome { font-weight: 600; }
+.nome small { display: block; color: var(--faint); font: 400 11.5px var(--sans); margin-top: 1px; }
+.num { font: 500 13px var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.rel { font: 400 30px/1 var(--serif); text-align: right; font-variant-numeric: tabular-nums; }
+.rel.up { color: var(--up); } .rel.down { color: var(--down); }
+.selo { display: inline-block; margin-top: 4px; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--warn); border: 1px solid rgba(232,193,90,.35); padding: 1px 6px; border-radius: 4px; }
+svg.strip { width: 100%; height: 34px; overflow: visible; display: block; }
+
+/* matriz + painel */
+.baixo { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; margin-top: 22px; }
+.card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; padding: 20px; }
+.card h2 { font: 400 22px/1.1 var(--serif); margin-bottom: 4px; }
+.card .sub { margin: 0 0 16px; }
+table.matriz { width: 100%; border-collapse: separate; border-spacing: 4px; }
+.matriz th { font: 500 11px var(--mono); color: var(--faint); text-align: left; padding: 0 4px 4px; font-weight: 500; }
+.matriz td { height: 46px; border-radius: 7px; padding: 6px 9px; vertical-align: top; position: relative; }
+.matriz td.rot { font-size: 12.5px; color: var(--muted); padding-left: 2px; vertical-align: middle; width: 128px; }
+.matriz td .v { font: 500 14px var(--mono); }
+.matriz td .n { position: absolute; right: 8px; bottom: 6px; font: 10.5px var(--mono); opacity: .7; }
+.matriz td.vazia { background: repeating-linear-gradient(135deg, transparent 0 5px, var(--line-soft) 5px 6px);
+  color: var(--faint); font-size: 11px; vertical-align: middle; text-align: center; }
+.nota { margin-top: 14px; padding: 11px 13px; border-radius: 8px; border-left: 2px solid var(--warn);
+  background: rgba(232,193,90,.06); color: #d8cfb8; font-size: 12.5px; }
+
+.shorts { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+.thumb { aspect-ratio: 9/16; border-radius: 8px; position: relative; overflow: hidden; background: var(--raised);
+  border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between; padding: 8px; }
+.thumb .t { font-size: 11px; line-height: 1.25; font-weight: 600; text-wrap: balance; }
+.thumb .x { font: 400 26px/1 var(--serif); }
+.thumb .c { font: 10px var(--mono); color: var(--muted); }
+.thumb.matura { opacity: .45; border-style: dashed; }
+
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; } nav { display: none; }
+  main { padding: 20px 16px; }
+  .linha { grid-template-columns: 1fr 70px; } .linha > :nth-child(2), .linha > :nth-child(4),
+  .linha > :nth-child(5), .linha > :nth-child(6) { display: none; }
+  .baixo { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav>
+    <div class="marca">cortes<b>.</b></div>
+    <a href="#">Contas</a>
+    <a href="#">Shorts <span class="cont">7 sem ligação</span></a>
+    <a href="#" class="ativo">Comparar</a>
+    <div class="contas">
+      <div class="conta"><i></i>@grana.cortes<small>09:12</small></div>
+      <div class="conta"><i></i>@bolso.clips<small>09:13</small></div>
+      <div class="conta"><i class="vencido"></i>@riso.cast<small>login</small></div>
+      <button class="atualizar">↻ Atualizar todas</button>
+    </div>
+  </nav>
+
+  <main>
+    <header>
+      <div>
+        <h1>O que está funcionando <em>— por formato</em></h1>
+        <p class="sub">Views aos 7 dias ÷ mediana da própria conta · 45 Shorts medidos · 3 em maturação · exemplo fictício</p>
+      </div>
+      <div class="seg" id="dim">
+        <button class="ativo">Formato</button><button>Conta</button><button>Tema</button><button>Podcast</button>
+      </div>
+    </header>
+
+    <div class="legenda">
+      <span><i class="pt" style="background:var(--up)"></i>acima da base da conta</span>
+      <span><i class="pt" style="background:var(--down)"></i>abaixo</span>
+      <span>│ linha tracejada = 1× (a mediana da conta)</span>
+      <span>▮ traço claro = mediana do grupo</span>
+    </div>
+
+    <section class="grupos" id="grupos"></section>
+
+    <div class="baixo">
+      <div class="card">
+        <h2>Formato × conta</h2>
+        <p class="sub">Mediana relativa por célula · n no canto · hachura = teste que falta</p>
+        <table class="matriz" id="matriz"></table>
+        <div class="nota" id="nota"></div>
+      </div>
+      <div class="card">
+        <h2 id="painel-t"></h2>
+        <p class="sub" id="painel-s"></p>
+        <div class="shorts" id="shorts"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const CONTAS = ["@grana.cortes", "@bolso.clips", "@riso.cast"];
+const F = [
+  { id: "f7", nome: "Conversa com reações", obs: "troca real de câmera", s: [
+    ["grana", 3.1, "O comediante que mais vende"], ["grana", 2.4, "Ele recusou 2 milhões"], ["grana", 2.3, "Quanto ganha um piloto"],
+    ["grana", 1.9, "O erro da herança"], ["grana", 0.8, "Aposentar aos 40?"], ["riso", 1.8, "Fui demitido no palco"],
+    ["riso", 2.6, "O show que deu prejuízo"], ["riso", 1.2, "Cachê de stand-up"], ["riso", 1.5, "A piada que custou caro"]] },
+  { id: "f3", nome: "Motion dinâmico", obs: "troca de imagem por fala", s: [
+    ["grana", 1.6, "400 mil em 10 anos"], ["grana", 1.1, "Juros do cartão"], ["grana", 2.2, "O carro que vale menos"],
+    ["bolso", 1.4, "Salário mínimo em 1994"], ["bolso", 0.9, "Inflação do cafezinho"], ["bolso", 1.3, "Quanto custa um filho"]] },
+  { id: "f4", nome: "B-roll real", obs: "risco alto de Content ID", s: [
+    ["grana", 1.3, "Liquidez para o apocalipse"], ["grana", 0.7, "O banco que quebrou"], ["grana", 1.1, "Ouro em 2008"],
+    ["grana", 1.6, "A fábrica fechada"], ["grana", 0.9, "Bolha das tulipas"], ["grana", 1.0, "O leilão do apartamento"]] },
+  { id: "f6", nome: "Estilo Hormozi", obs: "contraprova R1+R2", s: [
+    ["bolso", 0.5, "Netflix paga 300 mil"], ["bolso", 0.8, "3 regras do dinheiro"], ["bolso", 0.6, "Pare de comprar isso"],
+    ["bolso", 0.3, "Renda passiva é mentira"], ["bolso", 0.9, "O hábito dos ricos"]] },
+  { id: "f1", nome: "Falante puro", obs: "controle", s: [
+    ["grana", 0.9, "95% das carteiras erradas"], ["grana", 0.7, "Reserva de emergência"],
+    ["bolso", 0.7, "FGTS vale a pena?"], ["bolso", 0.4, "Tesouro ou CDB"]] },
+  { id: "f5", nome: "Gameplay embaixo", obs: "talvez sirva a humor", s: [
+    ["riso", 1.2, "Ficou rico do dia pra noite"], ["riso", 0.6, "O tio do pavê investidor"], ["riso", 2.0, "Pix errado de 10 mil"]] },
+  { id: "f8", nome: "16:9 desfocado", obs: "anti-controle", s: [
+    ["grana", 0.3, "Ganharia 20 vezes menos"], ["grana", 0.2, "O primeiro milhão"]] },
+];
+const MATURANDO = [["f7", "grana", "Herdou e perdeu tudo"], ["f3", "bolso", "Preço do pão em 2000"], ["f5", "riso", "Investi em figurinha"]];
+const PISTA = 5;
+const handle = c => CONTAS.find(h => h.includes(c));
+
+const mediana = xs => { const a = [...xs].sort((p, q) => p - q), m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+const fx = v => v.toFixed(1).replace(".", ",") + "×";
+// escala log de 0,1× a 10×: o mesmo passo visual para "metade" e "dobro"
+const px = (v, w) => (Math.log10(Math.min(10, Math.max(.1, v))) + 1) / 2 * w;
+
+function strip(vals, med) {
+  const W = 400, H = 34, y = 17;
+  const ticks = [.2, .5, 1, 2, 5].map(t =>
+    `<line x1="${px(t, W)}" x2="${px(t, W)}" y1="4" y2="30" stroke="#1e2126"/>`).join("");
+  const dots = vals.map((v, i) =>
+    `<circle cx="${px(v, W)}" cy="${y + ((i % 3) - 1) * 5}" r="4.2" fill="${v >= 1 ? "#ff7a2f" : "#7d93b8"}" fill-opacity=".85"/>`).join("");
+  return `<svg class="strip" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${ticks}
+    <line x1="${px(1, W)}" x2="${px(1, W)}" y1="0" y2="${H}" stroke="#8b9099" stroke-dasharray="2 3"/>
+    ${dots}<rect x="${px(med, W) - 1.5}" y="2" width="3" height="30" rx="1" fill="#ece7df"/></svg>`;
+}
+
+function eixo() {
+  const W = 400;
+  return `<svg class="strip" style="height:14px" viewBox="0 0 ${W} 14" preserveAspectRatio="none">` +
+    [[.2, "0,2×"], [.5, "0,5×"], [1, "1×"], [2, "2×"], [5, "5×"]].map(([t, r]) =>
+      `<text x="${px(t, W)}" y="11" text-anchor="middle" fill="#5b6068" font-size="10" font-family="JetBrains Mono">${r}</text>`).join("") + `</svg>`;
+}
+
+let sel = "f7";
+function render() {
+  const linhas = F.map(f => ({ ...f, med: mediana(f.s.map(s => s[1])) })).sort((a, b) => b.med - a.med);
+  document.getElementById("grupos").innerHTML =
+    `<div class="linha cab"><span>Formato</span><span class="num">n</span><span class="num">Mediana</span>
+     <span>${eixo()}</span><span class="num">assist.</span><span class="num">insc/1k</span></div>` +
+    linhas.map(f => `<div class="linha ${f.id === sel ? "sel" : ""}" data-id="${f.id}">
+      <div class="nome">${f.nome}<small>${f.id} · ${f.obs}</small>${f.s.length < PISTA ? '<span class="selo">pista · n&lt;5</span>' : ""}</div>
+      <div class="num">${f.s.length}</div>
+      <div class="rel ${f.med >= 1 ? "up" : "down"}">${fx(f.med)}</div>
+      <div>${strip(f.s.map(s => s[1]), f.med)}</div>
+      <div class="num">${Math.round(48 + f.med * 17)}%</div>
+      <div class="num">${(f.med * .6).toFixed(1).replace(".", ",")}</div></div>`).join("");
+  document.querySelectorAll(".linha[data-id]").forEach(el => el.onclick = () => { sel = el.dataset.id; render(); });
+
+  const cor = v => v >= 1 ? `rgba(255,122,47,${Math.min(.75, .14 + (v - 1) * .3)})` : `rgba(125,147,184,${Math.min(.6, .14 + (1 - v) * .6)})`;
+  document.getElementById("matriz").innerHTML =
+    `<tr><th></th>${CONTAS.map(c => `<th>${c}</th>`).join("")}</tr>` +
+    linhas.map(f => `<tr><td class="rot">${f.nome}</td>${["grana", "bolso", "riso"].map(c => {
+      const v = f.s.filter(s => s[0] === c).map(s => s[1]);
+      return v.length ? `<td style="background:${cor(mediana(v))}"><span class="v">${fx(mediana(v))}</span><span class="n">n${v.length}</span></td>`
+                      : `<td class="vazia">falta</td>`; }).join("")}</tr>`).join("");
+  const presos = linhas.filter(f => new Set(f.s.map(s => s[0])).size === 1);
+  document.getElementById("nota").innerHTML = `<b>Confusão:</b> ${presos.map(f => f.nome).join(", ")} só ` +
+    `rodaram em uma conta — o número mistura formato com conta. Postar em outra conta separa os dois.`;
+
+  const f = F.find(x => x.id === sel), mat = MATURANDO.filter(m => m[0] === sel);
+  document.getElementById("painel-t").textContent = f.nome;
+  document.getElementById("painel-s").textContent = `${f.s.length} medidos · ${mat.length} em maturação · ordenados pelo relativo à conta`;
+  document.getElementById("shorts").innerHTML = [...f.s].sort((a, b) => b[1] - a[1]).map(s =>
+    `<div class="thumb" style="border-color:${s[1] >= 1 ? "rgba(255,122,47,.45)" : "var(--line)"}">
+      <div class="t">${s[2]}</div><div><div class="x" style="color:${s[1] >= 1 ? "var(--up)" : "var(--down)"}">${fx(s[1])}</div>
+      <div class="c">${handle(s[0])}</div></div></div>`).join("") +
+    mat.map(m => `<div class="thumb matura"><div class="t">${m[2]}</div><div><div class="c">maturando · d3</div><div class="c">${handle(m[1])}</div></div></div>`).join("");
+}
+document.querySelectorAll("#dim button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#dim button").forEach(x => x.classList.toggle("ativo", x === b)); });
+render();
+</script>
+</body>
+</html>
