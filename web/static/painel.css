@@ -135,7 +135,8 @@ h3.secao span { color: var(--up); margin-left: 6px; }
 .linha-s.cab > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 img.mini { width: 36px; height: 64px; object-fit: cover; border-radius: 5px; background: var(--raised); }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer;
-  text-align: left; min-width: 0; }
+  text-align: left; min-width: 0; max-width: 100%; }
+.linha-s > * { min-width: 0; }   /* botão de chips não encolhe sozinho abaixo do conteúdo */
 /* max-width/overflow/ellipsis: um tema sem espaço (ex. "dinheiro_alheio_quanto_ganha") não tem
    onde quebrar linha — sem isso ele estoura a célula e fica cortado pelo overflow:hidden do
    .grupos em vez de truncar com "…" dentro do próprio chip. */
