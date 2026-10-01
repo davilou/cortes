@@ -19,7 +19,7 @@ from cortes.painel import coleta
 from cortes.painel.comparacao import comparaveis, confusoes, dimensao, grupos, matriz
 from cortes.painel.dados import ErroPainel, carregar_contas, carregar_vocabulario, ler_yaml_bruto
 from cortes.painel.ligacao import listar_cortes, sugerir
-from cortes.painel.metodo import montar_linhas
+from cortes.painel.metodo import bases, montar_linhas
 from cortes.painel.publicados import Etiquetas, Publicado, gravar_publicados, ler_publicados, ligar
 from cortes.painel.retratos import ler_retratos
 
@@ -102,8 +102,9 @@ def _rotas_leitura(app: FastAPI, cfg: Config, estado: EstadoColeta) -> None:
         voc = carregar_vocabulario(cfg.raiz)
         retratos = ler_retratos(cfg.retratos)
         pubs = ler_publicados(cfg.publicados, voc)
+        base = bases(montar_linhas(retratos, pubs), voc.contas)
         contas = [{**asdict(c), "ultimo_retrato": rs[-1].coletado_em if (rs := retratos.get(c.id)) else None,
-                   "coleta": estado.resultados.get(c.id),
+                   "coleta": estado.resultados.get(c.id), **asdict(base[c.id]),
                    "ligados": sum(1 for p in pubs if p.conta == c.id)} for c in voc.contas.values()]
         nichos = sorted(p.parent.name for p in (cfg.raiz / "nichos").glob("*/perfil.yaml"))
         return jsonable_encoder({"contas": contas, "rodando": estado.rodando, "formatos": voc.formatos,

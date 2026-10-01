@@ -4,9 +4,10 @@ from datetime import date, datetime
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from cortes.painel.coleta import ErroColeta
+from cortes.painel.coleta import Abridor, ErroColeta, Executor
 from cortes.painel.dados import ErroPainel
 from cortes.painel.retratos import Retrato, VideoRetrato, salvar_retrato
 from cortes.painel.servidor import Config, criar_app
@@ -45,7 +46,7 @@ def cfg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Config:
     videos = tuple(
         VideoRetrato(f"vid{i}xxxxxxx", f"O comediante {i}", date(2026, 10, 1), 30.0, 100 * i, 80.0, 24.0, 1)
         for i in range(1, 4))
-    salvar_retrato(c.retratos, Retrato("grana", datetime(2026, 10, 20, 9), videos))
+    salvar_retrato(c.retratos, Retrato("grana", datetime(2026, 10, 9, 9), videos))   # dia 7 + 1: medido
     return c
 
 
@@ -53,8 +54,13 @@ def falhar(args: list[str], cwd: Path) -> str:
     raise ErroColeta("login expirado")
 
 
-def cliente(cfg: Config) -> TestClient:
-    return TestClient(criar_app(cfg, executar=falhar, abrir=lambda args, cwd: None))
+def cliente(cfg: Config, executar: Executor = falhar, abrir: Abridor = lambda args, cwd: None) -> TestClient:
+    return local(criar_app(cfg, executar=executar, abrir=abrir))
+
+
+def local(app: FastAPI) -> TestClient:
+    """O painel só aceita Host 127.0.0.1/localhost; o TestClient manda 'testserver' por padrão."""
+    return TestClient(app, base_url="http://127.0.0.1")
 
 
 LIGACAO = {"link": "https://youtube.com/shorts/vid1xxxxxxx", "conta": "grana",
@@ -67,6 +73,7 @@ def test_estado(cfg: Config) -> None:
     assert e["contas"][0]["id"] == "grana" and e["contas"][0]["ultimo_retrato"] is not None
     assert e["formatos"]["f7"]["nome"] == "Conversa" and e["temas"] == ["humor"]
     assert e["nichos"] == ["financas"] and e["rodando"] is False
+    assert e["contas"][0]["mediana_7d"] == pytest.approx(200 * 7 / 8) and e["contas"][0]["medidos"] == 3
 
 
 def test_ligar_e_comparar(cfg: Config) -> None:
@@ -96,7 +103,7 @@ def test_sugestoes(cfg: Config) -> None:
 
 def test_atualizar_registra_falha(cfg: Config) -> None:
     app = criar_app(cfg, executar=falhar, abrir=lambda args, cwd: None)
-    c = TestClient(app)
+    c = local(app)
     assert c.post("/api/atualizar", json={}).status_code == 202
     app.state.coleta.fio.join(timeout=5)
     conta = c.get("/api/estado").json()["contas"][0]
@@ -139,7 +146,7 @@ def explode(args: list[str], cwd: Path) -> str:
 
 def test_atualizar_registra_erro_inesperado(cfg: Config) -> None:
     app = criar_app(cfg, executar=explode, abrir=lambda args, cwd: None)
-    c = TestClient(app)
+    c = local(app)
     assert c.post("/api/atualizar", json={}).status_code == 202
     app.state.coleta.fio.join(timeout=5)
     e = c.get("/api/estado").json()
@@ -155,7 +162,7 @@ def test_atualizar_409_se_ja_rodando(cfg: Config) -> None:
         raise ErroColeta("login expirado")
 
     app = criar_app(cfg, executar=bloqueante, abrir=lambda args, cwd: None)
-    c = TestClient(app)
+    c = local(app)
     assert c.post("/api/atualizar", json={}).status_code == 202
     assert c.post("/api/atualizar", json={}).status_code == 409
     liberar.set()
@@ -171,7 +178,7 @@ def test_login_conta_inexistente(cfg: Config) -> None:
 def test_login_abre_a_skill(cfg: Config) -> None:
     abertos: list[tuple[list[str], Path]] = []
     app = criar_app(cfg, executar=falhar, abrir=lambda args, cwd: abertos.append((args, cwd)))
-    c = TestClient(app)
+    c = local(app)
     assert c.post("/api/login/grana").status_code == 202
     assert abertos == [(["node", "src/cli.mjs", "login", "--perfil", "grana"], cfg.skill_dir)]
 

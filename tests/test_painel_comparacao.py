@@ -4,15 +4,15 @@ import pytest
 
 from cortes.painel.comparacao import Celula, Confusao, confusoes, dimensao, grupos, matriz
 from cortes.painel.dados import ErroPainel
-from cortes.painel.metodo import Linha, Medida
+from cortes.painel.metodo import Estado, Linha, Medida
 from cortes.painel.publicados import Etiquetas
 
 
 def linha(vid: str, conta: str, formato: str | None, rel: float | None, temas: tuple[str, ...] = (),
-          views: int = 1000, inscritos: int = 1) -> Linha:
+          views: int = 1000, inscritos: int = 1, estado: Estado = "medido") -> Linha:
     etq = Etiquetas(formato, temas, "PrimoCast") if formato else None
     return Linha(vid, conta, f"T {vid}", date(2026, 10, 1), etq, "testes/x" if etq else None,
-                 Medida("medido", float(views)), rel, views, 80.0, inscritos)
+                 Medida(estado, float(views)), rel, views, 80.0, inscritos)
 
 
 LINHAS = [
@@ -76,3 +76,10 @@ def test_dimensao_invalida() -> None:
     assert dimensao("tema") == "tema"
     with pytest.raises(ErroPainel, match="dimensão 'cor'"):
         dimensao("cor")
+
+
+def test_grupo_marca_estimados_alinhados_aos_rels() -> None:
+    ls = [linha("a", "grana", "f7", 3.0, estado="estimado"), linha("b", "grana", "f7", 1.0),
+          linha("c", "grana", "f7", 2.0, estado="estimado")]
+    (g,) = grupos(ls, "formato")
+    assert g.rels == (1.0, 2.0, 3.0) and g.estimados == (False, True, True) and g.n_estimados == 2

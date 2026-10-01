@@ -125,17 +125,31 @@ ao subir com mensagem clara.
 Para cada Short ligado, a série é `(publicado_em, 0)` seguida de `(dia do retrato, views)`
 de cada retrato da conta em que o vídeo aparece.
 
-- **Medido:** existe retrato até 3 dias depois do dia 7 → interpolação linear entre os
-  pontos que cercam o dia 7.
-- **Estimado:** o primeiro retrato depois do dia 7 está a mais de 3 dias dele → mesma
-  interpolação, marcada "estimado" na tela (entra na comparação com a marca).
-- **Em maturação:** nenhum retrato depois do dia 7 → fora da comparação, aparece apagado.
+Seja `d1` o primeiro retrato no dia 7 ou depois e `atraso = d1 − dia 7` (em dias):
+
+- **Em maturação:** nenhum retrato no dia 7 ou depois → fora da comparação, aparece apagado.
+- **Medido:** `atraso ≤ 3` (`FOLGA_DIAS`) → interpolação linear entre os pontos que cercam
+  o dia 7.
+- **Estimado:** `3 < atraso ≤ 7` (`LIMITE_ESTIMADO_DIAS`) → mesma interpolação, marcada
+  "estimado" na tela; entra na comparação com a marca (cada grupo traz `estimados`, alinhado
+  aos `rels`, e `n_estimados`).
+- **Sem dado:** `atraso > 7` → `views_7d` fica vazio: o Short aparece na tela de Shorts, mas
+  fica fora da base da conta e da comparação. É o caso de todo Short que já era antigo quando
+  a conta passou a ser acompanhada (um retrato só, semanas depois do dia 7).
+
+Decidido pelo usuário em 2026-10-01: a interpolação linear a partir de 0 numa lacuna longa
+subestima Shorts, cujas views se concentram nos primeiros dias — um valor de dia 7 inventado
+assim entraria na comparação como se fosse medida.
 
 ### 5.2 Relativo à conta
 
 `rel = views_7d / mediana(views_7d dos Shorts medidos da mesma conta)` — a base usa **todos** os
 Shorts medidos da conta, ligados ou não (mais dado para a referência); só a comparação exige ligação. Conta com menos de 3
 Shorts medidos não tem base: seus Shorts aparecem sem `rel` e com o aviso "conta sem base".
+
+Só Shorts entram no painel: vídeo com `duracao_s > 180` (`DURACAO_MAX_SHORT_S`; Shorts vão até
+3 min) é ignorado inteiro — não aparece, não entra na base nem na comparação. A base de cada
+conta (`mediana_7d` e `medidos`) vem pronta em `/api/estado`, calculada pela mesma função.
 
 ### 5.3 Grupos
 
@@ -241,3 +255,6 @@ Caminhos críticos, não cobertura:
 - **Confusão conta × formato:** se cada conta testar formatos diferentes, nada se separa. A
   matriz existe para guiar o que postar em seguida.
 - **Correlação:** grupos diferem também em tema e no dia de postagem; o painel mede, não prova.
+- **Frequência de atualização:** para um Short novo sair "medido", algum retrato precisa cair
+  até 3 dias depois do dia 7 dele; com mais de 7 dias de atraso ele fica "sem dado" para
+  sempre. Na prática, "Atualizar" pelo menos a cada ~3 dias.

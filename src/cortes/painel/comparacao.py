@@ -19,11 +19,13 @@ PISTA_N = 5
 class Grupo:
     chave: str
     n: int
+    n_estimados: int
     rel_mediana: float
     pct_mediana: float
     insc_por_mil: float | None
     pista: bool
-    rels: tuple[float, ...]
+    rels: tuple[float, ...]          # em ordem crescente
+    estimados: tuple[bool, ...]      # alinhado 1:1 com rels: True = views_7d "estimado"
     video_ids: tuple[str, ...]
 
 
@@ -67,10 +69,13 @@ def _chaves(etiquetas: Etiquetas, conta: str, dim: Dimensao) -> list[str]:
 def _grupo(chave: str, itens: list[tuple[Linha, float]]) -> Grupo:
     views = sum(linha.views for linha, _ in itens)
     inscritos = sum(linha.inscritos for linha, _ in itens)
-    rels = sorted(rel for _, rel in itens)
-    return Grupo(chave, len(itens), median(rels), median(linha.pct_media for linha, _ in itens),
+    pares = sorted((rel, linha.medida.estado == "estimado") for linha, rel in itens)
+    rels = tuple(rel for rel, _ in pares)
+    estimados = tuple(est for _, est in pares)
+    return Grupo(chave, len(itens), sum(estimados), median(rels),
+                 median(linha.pct_media for linha, _ in itens),
                  inscritos / views * 1000 if views else None, len(itens) < PISTA_N,
-                 tuple(rels), tuple(linha.video_id for linha, _ in itens))
+                 rels, estimados, tuple(linha.video_id for linha, _ in itens))
 
 
 def grupos(linhas: list[Linha], dim: Dimensao) -> list[Grupo]:

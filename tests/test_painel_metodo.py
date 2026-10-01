@@ -3,7 +3,7 @@ from datetime import date, datetime
 import pytest
 
 from cortes.painel.dados import ErroPainel
-from cortes.painel.metodo import Medida, montar_linhas, views_7d
+from cortes.painel.metodo import Base, Medida, bases, montar_linhas, views_7d
 from cortes.painel.publicados import Etiquetas, Publicado
 from cortes.painel.retratos import Retrato, VideoRetrato
 
@@ -30,6 +30,14 @@ def test_lacuna_maior_que_3_dias_e_estimado() -> None:
     assert views_7d(PUB, [(d(12), 1100)]) == Medida("estimado", pytest.approx(700.0))
 
 
+def test_atraso_de_7_dias_ainda_e_estimado() -> None:
+    assert views_7d(PUB, [(d(15), 1400)]) == Medida("estimado", pytest.approx(700.0))
+
+
+def test_atraso_maior_que_7_dias_fica_sem_dado() -> None:
+    assert views_7d(PUB, [(d(16), 1500)]) == Medida("sem_dado", None)
+
+
 def test_sem_retrato_depois_do_dia_7_esta_maturando() -> None:
     assert views_7d(PUB, [(d(5), 100)]) == Medida("maturando", None)
 
@@ -46,19 +54,19 @@ def retrato(conta: str, dia: int, videos: list[tuple[str, int, int]]) -> Retrato
 
 
 def test_relativo_e_views_7d_sobre_a_mediana_da_conta() -> None:
-    rs = {"grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])]}
+    rs = {"grana": [retrato("grana", 10, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])]}
     linhas = {ln.video_id: ln for ln in montar_linhas(rs, [])}
     assert linhas["c"].rel == pytest.approx(2.0) and linhas["a"].rel == pytest.approx(0.5)
 
 
 def test_conta_com_menos_de_3_medidos_fica_sem_base() -> None:
-    rs = {"grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("m", 18, 50)])]}
+    rs = {"grana": [retrato("grana", 10, [("a", 1, 100), ("b", 1, 200), ("m", 8, 50)])]}
     linhas = {ln.video_id: ln for ln in montar_linhas(rs, [])}
     assert linhas["a"].rel is None and linhas["m"].medida.estado == "maturando"
 
 
 def test_ligado_traz_etiquetas_e_sem_ligacao_vem_vazio() -> None:
-    rs = {"grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])]}
+    rs = {"grana": [retrato("grana", 10, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])]}
     p = Publicado("a", "grana", d(1), "testes/f7-x", Etiquetas("f7", ("humor",), "PrimoCast"))
     linhas = {ln.video_id: ln for ln in montar_linhas(rs, [p])}
     assert linhas["a"].etiquetas == p.etiquetas and linhas["a"].corte == "testes/f7-x"
@@ -78,7 +86,7 @@ def test_ordem_dos_retratos_na_lista_nao_muda_o_ultimo_total() -> None:
 
 
 def test_ligacao_em_conta_errada_falha_alto() -> None:
-    rs = {"grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])]}
+    rs = {"grana": [retrato("grana", 10, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])]}
     p = Publicado("a", "outra", d(1), "testes/f7-x", Etiquetas("f7", ("humor",), "PrimoCast"))
     with pytest.raises(ErroPainel, match="ligado à conta 'outra'"):
         montar_linhas(rs, [p])
@@ -86,8 +94,8 @@ def test_ligacao_em_conta_errada_falha_alto() -> None:
 
 def test_mesmo_video_id_em_duas_contas_falha_alto() -> None:
     rs = {
-        "grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])],
-        "outra": [retrato("outra", 20, [("a", 1, 100)])],
+        "grana": [retrato("grana", 10, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])],
+        "outra": [retrato("outra", 10, [("a", 1, 100)])],
     }
     with pytest.raises(ErroPainel, match="vídeo a"):
         montar_linhas(rs, [])
@@ -95,14 +103,39 @@ def test_mesmo_video_id_em_duas_contas_falha_alto() -> None:
 
 def test_contas_diferentes_tem_bases_independentes() -> None:
     rs = {
-        "grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])],
-        "outra": [retrato("outra", 20, [("x", 1, 1000), ("y", 1, 2000), ("z", 1, 4000)])],
+        "grana": [retrato("grana", 10, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])],
+        "outra": [retrato("outra", 10, [("x", 1, 1000), ("y", 1, 2000), ("z", 1, 4000)])],
     }
     linhas = {ln.video_id: ln for ln in montar_linhas(rs, [])}
     assert linhas["c"].rel == pytest.approx(2.0) and linhas["z"].rel == pytest.approx(2.0)
 
 
 def test_maturando_fica_sem_relativo_mesmo_com_base_na_conta() -> None:
-    rs = {"grana": [retrato("grana", 20, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400), ("m", 19, 10)])]}
+    rs = {"grana": [retrato("grana", 10, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400), ("m", 9, 10)])]}
     linhas = {ln.video_id: ln for ln in montar_linhas(rs, [])}
     assert linhas["m"].medida.estado == "maturando" and linhas["m"].rel is None
+
+
+def test_short_antigo_com_um_retrato_fica_sem_dado_e_fora_da_base() -> None:
+    antigo = VideoRetrato("velho", "T velho", date(2026, 8, 21), 30.0, 100_000, 80.0, 24.0, 1)
+    r = retrato("grana", 10, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400)])
+    rs = {"grana": [Retrato("grana", r.coletado_em, (*r.videos, antigo))]}
+    linhas = {ln.video_id: ln for ln in montar_linhas(rs, [])}
+    assert linhas["velho"].medida == Medida("sem_dado", None) and linhas["velho"].rel is None
+    assert linhas["c"].rel == pytest.approx(2.0)   # base = mediana de a, b, c; o antigo não entra
+
+
+def test_video_com_mais_de_3_minutos_nao_e_short() -> None:
+    longo = VideoRetrato("longo", "T longo", d(1), 181.0, 50_000, 40.0, 60.0, 9)
+    no_limite = VideoRetrato("limite", "T limite", d(1), 180.0, 300, 80.0, 24.0, 1)
+    rs = {"grana": [Retrato("grana", datetime(2026, 10, 10, 9), (longo, no_limite))]}
+    assert [ln.video_id for ln in montar_linhas(rs, [])] == ["limite"]
+
+
+def test_bases_por_conta() -> None:
+    rs = {
+        "grana": [retrato("grana", 10, [("a", 1, 100), ("b", 1, 200), ("c", 1, 400), ("m", 9, 10)])],
+        "outra": [retrato("outra", 10, [("x", 1, 1000)])],
+    }
+    assert bases(montar_linhas(rs, []), ["grana", "outra", "nova"]) == {
+        "grana": Base(pytest.approx(200 * 7 / 9), 3), "outra": Base(None, 1), "nova": Base(None, 0)}
