@@ -17,6 +17,10 @@ def arvore(raiz: Path) -> None:
     meta.write_text(json.dumps({"canal": "PrimoCast"}), encoding="utf-8")
 
 
+def re_escapado(caminho: Path) -> str:
+    return re.escape(str(caminho))
+
+
 def test_lista_cortes_de_testes_e_episodios(tmp_path: Path) -> None:
     arvore(tmp_path)
     cortes = {c.caminho: c for c in listar_cortes(tmp_path, {"f1", "f7"})}
@@ -47,8 +51,27 @@ def test_canal_nao_texto_levanta_erro_com_caminho(tmp_path: Path) -> None:
         listar_cortes(tmp_path, set())
 
 
-def re_escapado(caminho: Path) -> str:
-    return re.escape(str(caminho))
+def test_meta_ausente_levanta_erro_com_caminho(tmp_path: Path) -> None:
+    (tmp_path / "episodios" / "abc" / "cortes" / "1").mkdir(parents=True)
+    meta = tmp_path / "episodios" / "abc" / "meta.json"
+    with pytest.raises(ErroPainel, match=re_escapado(meta)):
+        listar_cortes(tmp_path, set())
+
+
+def test_meta_json_invalido_levanta_erro_com_caminho(tmp_path: Path) -> None:
+    (tmp_path / "episodios" / "abc" / "cortes" / "1").mkdir(parents=True)
+    meta = tmp_path / "episodios" / "abc" / "meta.json"
+    meta.write_text("{nao é json", encoding="utf-8")
+    with pytest.raises(ErroPainel, match=re_escapado(meta)):
+        listar_cortes(tmp_path, set())
+
+
+def test_meta_que_nao_e_mapa_levanta_erro_proprio(tmp_path: Path) -> None:
+    (tmp_path / "episodios" / "abc" / "cortes" / "1").mkdir(parents=True)
+    meta = tmp_path / "episodios" / "abc" / "meta.json"
+    meta.write_text(json.dumps(["PrimoCast"]), encoding="utf-8")
+    with pytest.raises(ErroPainel, match="esperava um mapa JSON"):
+        listar_cortes(tmp_path, set())
 
 
 def test_sugere_pelo_titulo() -> None:
@@ -63,3 +86,16 @@ def test_sugere_desempata_por_caminho_quando_empata(tmp_path: Path) -> None:
               CorteConhecido("testes/a-exemplo", "a-exemplo", None, None)]
     resultado = sugerir("titulo sem relacao nenhuma", cortes)
     assert [c.caminho for c in resultado] == ["testes/a-exemplo", "testes/b-exemplo"]
+
+
+def test_sugere_desambigua_pelo_numero_colado_a_letras() -> None:
+    cortes = [CorteConhecido("testes/x-95-carteiras", "x-95-carteiras", None, None),
+              CorteConhecido("testes/x-20-carteiras", "x-20-carteiras", None, None)]
+    assert sugerir("95% das carteiras estão erradas", cortes)[0].caminho == "testes/x-95-carteiras"
+    assert sugerir("só 20% das carteiras acertam", cortes)[0].caminho == "testes/x-20-carteiras"
+
+
+def test_sugere_casa_numero_colado_a_palavra_na_pasta() -> None:
+    cortes = [CorteConhecido("testes/short-400mil", "short-400mil", None, None),
+              CorteConhecido("testes/f1-falante-95-carteiras", "f1-falante-95-carteiras", "f1", None)]
+    assert sugerir("Ele ganhou 400 mil", cortes)[0].caminho == "testes/short-400mil"

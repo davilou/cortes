@@ -1,4 +1,10 @@
-"""Cortes conhecidos no disco e sugestão do corte pelo título do Short (spec painel §4.2)."""
+"""Cortes conhecidos no disco e sugestão do corte pelo título do Short (spec painel §4.2).
+
+Limite conhecido: cortes em `episodios/*/cortes/<n>` têm nome numérico (o `<n>` da pasta),
+então `sugerir` não consegue casá-los pelo título até a curadoria escrever um título para o
+corte — a tela sempre pede confirmação antes de ligar o Short a um corte.
+"""
+import json
 import re
 import unicodedata
 from collections.abc import Collection
@@ -27,11 +33,16 @@ def _corte(raiz: Path, pasta: Path, formatos: Collection[str], podcast: str | No
     return CorteConhecido(pasta.relative_to(raiz).as_posix(), pasta.name, formato, podcast)
 
 
-def _podcast_do_episodio(meta: Path) -> str | None:
+def _podcast_do_episodio(meta: Path) -> str:
     if not meta.exists():
-        return None
-    dados = ler_json(meta)
-    if not isinstance(dados, dict) or "canal" not in dados:
+        raise ErroPainel(f"{meta}: arquivo não existe")
+    try:
+        dados = ler_json(meta)
+    except json.JSONDecodeError as e:
+        raise ErroPainel(f"{meta}: JSON inválido: {e}") from e
+    if not isinstance(dados, dict):
+        raise ErroPainel(f"{meta}: esperava um mapa JSON, veio {type(dados).__name__}")
+    if "canal" not in dados:
         raise ErroPainel(f"{meta}: falta a chave 'canal'")
     canal = dados["canal"]
     if not isinstance(canal, str):
@@ -57,7 +68,7 @@ def listar_cortes(raiz: Path, formatos: Collection[str]) -> list[CorteConhecido]
 def _palavras(texto: str) -> set[str]:
     texto = re.sub(r"#\w+", " ", texto.lower())
     texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    return {w for w in re.split(r"[^a-z0-9]+", texto) if len(w) >= 3}
+    return {w for w in re.findall(r"[a-z]+|\d+", texto) if w.isdigit() or len(w) >= 3}
 
 
 def sugerir(titulo: str, cortes: list[CorteConhecido], n: int = 5) -> list[CorteConhecido]:
