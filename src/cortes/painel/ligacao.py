@@ -78,7 +78,7 @@ def sugerir(titulo: str, cortes: list[CorteConhecido], n: int = 5) -> list[Corte
     alvo = _palavras(titulo)
 
     def nota(c: CorteConhecido) -> tuple[float, float, str]:
-        ps = _palavras(c.nome)
+        ps = _palavras(_FORMATO.sub("", c.nome))
         comum = len(alvo & ps) / len(ps) if ps else 0.0
         semelhanca = SequenceMatcher(None, " ".join(sorted(alvo)), " ".join(sorted(ps))).ratio()
         return -comum, -semelhanca, c.caminho

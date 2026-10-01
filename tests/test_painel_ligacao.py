@@ -99,3 +99,19 @@ def test_sugere_casa_numero_colado_a_palavra_na_pasta() -> None:
     cortes = [CorteConhecido("testes/short-400mil", "short-400mil", None, None),
               CorteConhecido("testes/f1-falante-95-carteiras", "f1-falante-95-carteiras", "f1", None)]
     assert sugerir("Ele ganhou 400 mil", cortes)[0].caminho == "testes/short-400mil"
+
+
+def test_sugere_prefixo_de_formato_nao_conta_como_palavra() -> None:
+    cortes = [CorteConhecido("testes/f1-politica-internacional", "f1-politica-internacional", "f1", None),
+              CorteConhecido("testes/comediante-show", "comediante-show", None, None)]
+    # o "1" do título não deve casar com o "1" do prefixo "f1-"
+    assert sugerir("Episodio 1 do show de comedia", cortes)[0].caminho == "testes/comediante-show"
+
+
+def test_sugere_pasta_com_prefixo_de_formato_alcanca_casamento_total() -> None:
+    # sem tirar o prefixo "f7-", o "7" entraria nas palavras da pasta e o casamento ficaria
+    # em 2/3 (abaixo do concorrente, 3/4); tirando o prefixo, a pasta casa 100% e vence.
+    cortes = [CorteConhecido("testes/f7-conversa-comediante", "f7-conversa-comediante", "f7", None),
+              CorteConhecido("testes/conversa-com-comediante-extra",
+                              "conversa-com-comediante-extra", None, None)]
+    assert sugerir("A conversa com o comediante", cortes)[0].caminho == "testes/f7-conversa-comediante"
