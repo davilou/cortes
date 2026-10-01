@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from cortes.episodio import ler_json, salvar_json
-from cortes.painel.dados import VIDEO_ID, ErroPainel
+from cortes.painel.dados import VIDEO_ID, ErroPainel, campo_texto
 
 
 @dataclass(frozen=True)
@@ -43,21 +43,14 @@ def salvar_retrato(pasta: Path, r: Retrato) -> Path:
     return destino
 
 
-def _texto(d: Any, campo: str) -> str:
-    v = d[campo]
-    if not isinstance(v, str):
-        raise ErroPainel(f"campo '{campo}' não é texto")
-    return v
-
-
-def _numero(d: Any, campo: str) -> float:
+def _numero_json(d: Any, campo: str) -> float:
     v = d[campo]
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         raise ErroPainel(f"campo '{campo}' não é número")
     return float(v)
 
 
-def _inteiro(d: Any, campo: str) -> int:
+def _inteiro_json(d: Any, campo: str) -> int:
     v = d[campo]
     if isinstance(v, bool) or not isinstance(v, int):
         raise ErroPainel(f"campo '{campo}' não é inteiro")
@@ -67,18 +60,18 @@ def _inteiro(d: Any, campo: str) -> int:
 def _video(v: Any) -> VideoRetrato:
     if not isinstance(v, dict):
         raise ErroPainel("vídeo não é um mapa")
-    vid = _texto(v, "video_id")
+    vid = campo_texto(v, "video_id")
     if not VIDEO_ID.fullmatch(vid):
         raise ErroPainel(f"video_id inválido: {vid!r}")
     return VideoRetrato(
         video_id=vid,
-        titulo=_texto(v, "titulo"),
-        publicado_em=date.fromisoformat(_texto(v, "publicado_em")),
-        duracao_s=_numero(v, "duracao_s"),
-        views=_inteiro(v, "views"),
-        pct_media=_numero(v, "pct_media"),
-        duracao_media_s=_numero(v, "duracao_media_s"),
-        inscritos=_inteiro(v, "inscritos"),
+        titulo=campo_texto(v, "titulo"),
+        publicado_em=date.fromisoformat(campo_texto(v, "publicado_em")),
+        duracao_s=_numero_json(v, "duracao_s"),
+        views=_inteiro_json(v, "views"),
+        pct_media=_numero_json(v, "pct_media"),
+        duracao_media_s=_numero_json(v, "duracao_media_s"),
+        inscritos=_inteiro_json(v, "inscritos"),
     )
 
 
@@ -88,7 +81,7 @@ def _ler(arquivo: Path) -> Retrato:
         if not isinstance(d, dict):
             raise ErroPainel("não é um mapa")
         videos = tuple(_video(v) for v in d["videos"])
-        r = Retrato(_texto(d, "conta"), datetime.fromisoformat(_texto(d, "coletado_em")), videos)
+        r = Retrato(campo_texto(d, "conta"), datetime.fromisoformat(campo_texto(d, "coletado_em")), videos)
     except (KeyError, TypeError, ValueError, ErroPainel) as e:
         raise ErroPainel(f"{arquivo}: retrato inválido ({e!r})") from e
     if r.conta != arquivo.parent.name or r.dia.isoformat() != arquivo.stem:

@@ -59,7 +59,9 @@ def _mapa(loader: yaml.Loader | yaml.SafeLoader, node: yaml.Node, deep: bool = F
 _SemRepetidas.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _mapa)
 
 
-def _ler_yaml(arquivo: Path, chave: str) -> Any:
+def ler_yaml(arquivo: Path, chave: str) -> Any:
+    """Valor bruto sob `chave` num YAML do painel, com ErroPainel claro se o arquivo faltar,
+    vier vazio, repetir chave ou não tiver a chave."""
     try:
         dados = yaml.load(arquivo.read_text(encoding="utf-8"), Loader=_SemRepetidas)
     except (ErroPainel, yaml.YAMLError, OSError) as e:
@@ -69,11 +71,12 @@ def _ler_yaml(arquivo: Path, chave: str) -> Any:
     return dados[chave]
 
 
-def ler_yaml_bruto(arquivo: Path, chave: str) -> Any:
-    """Valor bruto sob `chave` num YAML do painel (p.ex. a lista de `contas`), com ErroPainel
-    claro se o arquivo faltar, vier vazio ou não tiver a chave — para quem precisa editar o
-    arquivo em vez de só carregá-lo (ver `servidor._acrescentar_conta`)."""
-    return _ler_yaml(arquivo, chave)
+def campo_texto(d: Any, campo: str) -> str:
+    """`d[campo]` de um JSON lido (publicados, retratos), exigindo texto."""
+    v = d[campo]
+    if not isinstance(v, str):
+        raise ErroPainel(f"campo '{campo}' não é texto")
+    return v
 
 
 def _conta(arquivo: Path, i: int, c: Any, pasta_nichos: Path) -> Conta:
@@ -96,7 +99,7 @@ def _conta(arquivo: Path, i: int, c: Any, pasta_nichos: Path) -> Conta:
 
 
 def carregar_contas(arquivo: Path, pasta_nichos: Path) -> dict[str, Conta]:
-    lista = _ler_yaml(arquivo, "contas")
+    lista = ler_yaml(arquivo, "contas")
     if not isinstance(lista, list):
         raise ErroPainel(f"{arquivo}: 'contas' deve ser uma lista")
     contas: dict[str, Conta] = {}
@@ -109,7 +112,7 @@ def carregar_contas(arquivo: Path, pasta_nichos: Path) -> dict[str, Conta]:
 
 
 def carregar_formatos(arquivo: Path) -> dict[str, Formato]:
-    mapa = _ler_yaml(arquivo, "formatos")
+    mapa = ler_yaml(arquivo, "formatos")
     if not isinstance(mapa, dict):
         raise ErroPainel(f"{arquivo}: 'formatos' deve ser um mapa {{id: {{nome, obs}}}}")
     formatos: dict[str, Formato] = {}

@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from cortes.painel.dados import VIDEO_ID, ErroPainel, Vocabulario
+from cortes.painel.dados import VIDEO_ID, ErroPainel, Vocabulario, campo_texto
 
 
 @dataclass(frozen=True)
@@ -52,13 +52,6 @@ def _para_dict(p: Publicado) -> dict[str, Any]:
             "corte": p.corte, "etiquetas": etiquetas}
 
 
-def _texto(d: Any, campo: str) -> str:
-    v = d[campo]
-    if not isinstance(v, str):
-        raise ErroPainel(f"campo '{campo}' não é texto")
-    return v
-
-
 def _lista_textos(d: Any, campo: str) -> tuple[str, ...]:
     v = d[campo]
     if not isinstance(v, list) or not all(isinstance(t, str) for t in v):
@@ -69,9 +62,9 @@ def _lista_textos(d: Any, campo: str) -> tuple[str, ...]:
 def _de_dict(d: Any) -> Publicado:
     try:
         e = d["etiquetas"]
-        return Publicado(_texto(d, "video_id"), _texto(d, "conta"), date.fromisoformat(d["publicado_em"]),
-                         _texto(d, "corte"),
-                         Etiquetas(_texto(e, "formato"), _lista_textos(e, "temas"), _texto(e, "podcast")))
+        etiquetas = Etiquetas(campo_texto(e, "formato"), _lista_textos(e, "temas"), campo_texto(e, "podcast"))
+        return Publicado(campo_texto(d, "video_id"), campo_texto(d, "conta"),
+                         date.fromisoformat(d["publicado_em"]), campo_texto(d, "corte"), etiquetas)
     except (KeyError, TypeError, ValueError) as ex:
         raise ErroPainel(f"linha inválida ({ex!r})") from ex
 

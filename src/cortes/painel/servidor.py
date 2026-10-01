@@ -18,9 +18,9 @@ from pydantic import BaseModel
 from cortes.episodio import id_do_video
 from cortes.painel import coleta
 from cortes.painel.comparacao import comparaveis, confusoes, dimensao, grupos, matriz
-from cortes.painel.dados import ErroPainel, carregar_contas, carregar_vocabulario, ler_yaml_bruto
+from cortes.painel.dados import ErroPainel, carregar_contas, carregar_vocabulario, ler_yaml
 from cortes.painel.ligacao import listar_cortes, sugerir
-from cortes.painel.metodo import bases, montar_linhas
+from cortes.painel.metodo import Linha, bases, montar_linhas
 from cortes.painel.publicados import Etiquetas, Publicado, gravar_publicados, ler_publicados, ligar
 from cortes.painel.retratos import ler_retratos
 
@@ -99,7 +99,7 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
 
 
 def _rotas_leitura(app: FastAPI, cfg: Config, estado: EstadoColeta) -> None:
-    def linhas() -> Any:
+    def linhas() -> list[Linha]:
         voc = carregar_vocabulario(cfg.raiz)
         return montar_linhas(ler_retratos(cfg.retratos), ler_publicados(cfg.publicados, voc))
 
@@ -202,7 +202,7 @@ def _cabecalho(texto: str) -> str:
 def _acrescentar_conta(cfg: Config, nova: NovaConta) -> None:
     """Grava num .tmp, valida o arquivo inteiro e só então substitui: conta inválida não entra."""
     texto = cfg.contas_yaml.read_text(encoding="utf-8")
-    contas_atuais = ler_yaml_bruto(cfg.contas_yaml, "contas")  # ErroPainel claro se vazio/inválido
+    contas_atuais = ler_yaml(cfg.contas_yaml, "contas")  # ErroPainel claro se vazio/inválido
     if not isinstance(contas_atuais, list):
         raise ErroPainel(f"{cfg.contas_yaml}: 'contas' deve ser uma lista")
     bruto = {"contas": [*contas_atuais, nova.model_dump()]}
