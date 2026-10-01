@@ -5,12 +5,18 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
+import uvicorn
+
 from cortes import ingestao, sinais, transcricao
 from cortes.detector import detectar
 from cortes.episodio import id_do_video, ler_json, pasta, salvar_json
+from cortes.painel.servidor import Config, criar_app
 from cortes.perfil import carregar_perfil
 from cortes.segmentacao import frases
 from cortes.tipos import Palavra
+
+ESTATICO = Path(__file__).resolve().parents[2] / "web" / "static"
+SKILL_ANALYTICS = Path.home() / ".claude" / "skills" / "youtube-analytics" / "scripts"
 
 
 def _etapa(nome: str, pronto: bool) -> bool:
@@ -44,6 +50,12 @@ def rodar_detectar(url: str, nicho: str, modelo: str) -> Path:
     return d
 
 
+def rodar_painel(porta: int, skill: Path, raiz: Path) -> None:
+    app = criar_app(Config(raiz=raiz, skill_dir=skill, estatico=ESTATICO))
+    print(f"painel em http://127.0.0.1:{porta}", flush=True)
+    uvicorn.run(app, host="127.0.0.1", port=porta)
+
+
 def main() -> None:
     if isinstance(sys.stdout, io.TextIOWrapper):   # console cp1252 do Windows quebra com "→" e acentos
         sys.stdout.reconfigure(encoding="utf-8")
@@ -53,6 +65,13 @@ def main() -> None:
     det.add_argument("url")
     det.add_argument("--nicho", default="financas")
     det.add_argument("--modelo", default="sonnet", help="modelo do claude -p (sonnet, opus, haiku)")
+    pn = sub.add_parser("painel", help="sobe o painel de contas em 127.0.0.1")
+    pn.add_argument("--porta", type=int, default=8765)
+    pn.add_argument("--skill", type=Path, default=SKILL_ANALYTICS,
+                     help="pasta scripts/ da skill youtube-analytics")
+    pn.add_argument("--raiz", type=Path, default=Path.cwd(), help="pasta com contas/, nichos/, testes/")
     args = ap.parse_args()
     if args.comando == "detectar":
         rodar_detectar(args.url, args.nicho, args.modelo)
+    elif args.comando == "painel":
+        rodar_painel(args.porta, args.skill, args.raiz)
