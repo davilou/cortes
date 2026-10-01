@@ -45,6 +45,22 @@ def test_pista_some_com_n_5() -> None:
     assert not grupos(ls, "formato")[0].pista
 
 
+def test_insc_por_mil_none_sem_views() -> None:
+    (g,) = grupos([linha("a", "grana", "f7", 1.0, views=0, inscritos=0)], "formato")
+    assert g.insc_por_mil is None
+
+
+def test_grupos_por_podcast_e_conta() -> None:
+    assert {g.chave for g in grupos(LINHAS, "podcast")} == {"PrimoCast"}
+    gs = {g.chave: g for g in grupos(LINHAS, "conta")}
+    assert gs["grana"].n == 3 and gs["riso"].n == 1
+
+
+def test_grupos_ordem_deterministica_em_mediana_igual() -> None:
+    ls = [linha("a", "grana", "fy", 1.0), linha("b", "grana", "fx", 1.0)]
+    assert [g.chave for g in grupos(ls, "formato")] == ["fx", "fy"]
+
+
 def test_matriz() -> None:
     cel = {(c.formato, c.conta): c for c in matriz(LINHAS)}
     assert cel[("f7", "grana")] == Celula("f7", "grana", 2, 2.0)

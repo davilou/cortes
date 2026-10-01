@@ -8,6 +8,7 @@ from typing import Literal
 
 from cortes.painel.dados import ErroPainel
 from cortes.painel.metodo import Linha
+from cortes.painel.publicados import Etiquetas
 
 Dimensao = Literal["formato", "conta", "tema", "podcast"]
 DIMENSOES: tuple[Dimensao, ...] = ("formato", "conta", "tema", "podcast")
@@ -49,20 +50,18 @@ def dimensao(texto: str) -> Dimensao:
     raise ErroPainel(f"dimensão '{texto}' inválida; use uma de {DIMENSOES}")
 
 
-def _comparaveis(linhas: list[Linha]) -> list[tuple[Linha, float]]:
-    return [(linha, linha.rel) for linha in linhas if linha.etiquetas is not None and linha.rel is not None]
+def _comparaveis(linhas: list[Linha]) -> list[tuple[Linha, Etiquetas, float]]:
+    return [(linha, linha.etiquetas, linha.rel) for linha in linhas
+            if linha.etiquetas is not None and linha.rel is not None]
 
 
 def comparaveis(linhas: list[Linha]) -> int:
     return len(_comparaveis(linhas))
 
 
-def _chaves(linha: Linha, dim: Dimensao) -> list[str]:
-    e = linha.etiquetas
-    if e is None:
-        return []
-    return {"formato": [e.formato], "conta": [linha.conta], "tema": list(e.temas),
-            "podcast": [e.podcast]}[dim]
+def _chaves(etiquetas: Etiquetas, conta: str, dim: Dimensao) -> list[str]:
+    return {"formato": [etiquetas.formato], "conta": [conta], "tema": list(etiquetas.temas),
+            "podcast": [etiquetas.podcast]}[dim]
 
 
 def _grupo(chave: str, itens: list[tuple[Linha, float]]) -> Grupo:
@@ -77,17 +76,16 @@ def _grupo(chave: str, itens: list[tuple[Linha, float]]) -> Grupo:
 def grupos(linhas: list[Linha], dim: Dimensao) -> list[Grupo]:
     """Só Shorts ligados e com relativo. Em 'tema', um Short entra em todos os seus temas."""
     por_chave: dict[str, list[tuple[Linha, float]]] = {}
-    for linha, rel in _comparaveis(linhas):
-        for chave in _chaves(linha, dim):
+    for linha, etiquetas, rel in _comparaveis(linhas):
+        for chave in _chaves(etiquetas, linha.conta, dim):
             por_chave.setdefault(chave, []).append((linha, rel))
-    return sorted((_grupo(k, v) for k, v in por_chave.items()), key=lambda g: g.rel_mediana, reverse=True)
+    return sorted((_grupo(k, v) for k, v in por_chave.items()), key=lambda g: (-g.rel_mediana, g.chave))
 
 
 def matriz(linhas: list[Linha]) -> list[Celula]:
     por_celula: dict[tuple[str, str], list[float]] = {}
-    for linha, rel in _comparaveis(linhas):
-        assert linha.etiquetas is not None
-        por_celula.setdefault((linha.etiquetas.formato, linha.conta), []).append(rel)
+    for linha, etiquetas, rel in _comparaveis(linhas):
+        por_celula.setdefault((etiquetas.formato, linha.conta), []).append(rel)
     return [Celula(f, c, len(rels), median(rels)) for (f, c), rels in sorted(por_celula.items())]
 
 

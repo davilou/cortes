@@ -38,6 +38,11 @@ def test_tema_fora_do_vocabulario() -> None:
         ligar([], pub(temas=("inventado",)), VOC)
 
 
+def test_tema_repetido() -> None:
+    with pytest.raises(ErroPainel, match="temas repetidos"):
+        ligar([], pub(temas=("humor", "humor")), VOC)
+
+
 def test_ligar_substitui_mesmo_video() -> None:
     novo = pub(temas=("dinheiro_alheio_quanto_ganha",))
     assert ligar([pub(), pub("zzzzzzzzzzz")], novo, VOC) == [pub("zzzzzzzzzzz"), novo]

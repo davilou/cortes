@@ -40,6 +40,8 @@ def validar(p: Publicado, voc: Vocabulario) -> None:
         raise ErroPainel(f"formato '{p.etiquetas.formato}' não existe em formatos.yaml")
     if fora := sorted(set(p.etiquetas.temas) - voc.temas):
         raise ErroPainel(f"temas fora do vocabulário dos perfis de nicho: {fora}")
+    if dups := sorted({t for t in p.etiquetas.temas if p.etiquetas.temas.count(t) > 1}):
+        raise ErroPainel(f"temas repetidos: {dups}")
     if not p.etiquetas.podcast.strip():
         raise ErroPainel("podcast vazio")
     if not p.corte.strip():
