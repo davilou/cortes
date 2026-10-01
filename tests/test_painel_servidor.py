@@ -1,4 +1,5 @@
 import json
+import threading
 from datetime import date, datetime
 from pathlib import Path
 
@@ -130,3 +131,68 @@ def test_publicados_gravado_em_disco(cfg: Config) -> None:
     cliente(cfg).post("/api/ligar", json=LIGACAO)
     linha = json.loads(cfg.publicados.read_text(encoding="utf-8").splitlines()[0])
     assert linha["publicado_em"] == "2026-10-01" and linha["etiquetas"]["podcast"] == "PrimoCast"
+
+
+def explode(args: list[str], cwd: Path) -> str:
+    raise RuntimeError("tudo quebrou")
+
+
+def test_atualizar_registra_erro_inesperado(cfg: Config) -> None:
+    app = criar_app(cfg, executar=explode, abrir=lambda args, cwd: None)
+    c = TestClient(app)
+    assert c.post("/api/atualizar", json={}).status_code == 202
+    app.state.coleta.fio.join(timeout=5)
+    e = c.get("/api/estado").json()
+    assert e["rodando"] is False
+    assert "RuntimeError" in e["erro_coleta"] and "tudo quebrou" in e["erro_coleta"]
+
+
+def test_atualizar_409_se_ja_rodando(cfg: Config) -> None:
+    liberar = threading.Event()
+
+    def bloqueante(args: list[str], cwd: Path) -> str:
+        liberar.wait(timeout=5)
+        raise ErroColeta("login expirado")
+
+    app = criar_app(cfg, executar=bloqueante, abrir=lambda args, cwd: None)
+    c = TestClient(app)
+    assert c.post("/api/atualizar", json={}).status_code == 202
+    assert c.post("/api/atualizar", json={}).status_code == 409
+    liberar.set()
+    app.state.coleta.fio.join(timeout=5)
+    assert not app.state.coleta.fio.is_alive()
+
+
+def test_login_conta_inexistente(cfg: Config) -> None:
+    r = cliente(cfg).post("/api/login/naoexiste")
+    assert r.status_code == 422 and "naoexiste" in r.json()["detail"]
+
+
+def test_login_abre_a_skill(cfg: Config) -> None:
+    abertos: list[tuple[list[str], Path]] = []
+    app = criar_app(cfg, executar=falhar, abrir=lambda args, cwd: abertos.append((args, cwd)))
+    c = TestClient(app)
+    assert c.post("/api/login/grana").status_code == 202
+    assert abertos == [(["node", "src/cli.mjs", "login", "--perfil", "grana"], cfg.skill_dir)]
+
+
+def test_ligar_conta_inexistente(cfg: Config) -> None:
+    r = cliente(cfg).post("/api/ligar", json={**LIGACAO, "conta": "naoexiste"})
+    assert r.status_code == 422 and "naoexiste" in r.json()["detail"]
+
+
+def test_ligar_corte_fora_do_catalogo(cfg: Config) -> None:
+    for corte in ("../..", "testes"):
+        r = cliente(cfg).post("/api/ligar", json={**LIGACAO, "corte": corte})
+        assert r.status_code == 422 and "corte" in r.json()["detail"]
+    assert not cfg.publicados.exists()
+
+
+def test_nova_conta_preserva_comentario_do_topo(cfg: Config) -> None:
+    com_comentario = "# gerado pelo painel, não editar à mão\n" + cfg.contas_yaml.read_text(encoding="utf-8")
+    cfg.contas_yaml.write_text(com_comentario, encoding="utf-8")
+    r = cliente(cfg).post("/api/contas", json={"id": "bolso", "nome": "Bolso", "handle": "@bolso",
+                                               "nicho": "financas", "perfil_studio": "bolso"})
+    assert r.status_code == 201
+    depois = cfg.contas_yaml.read_text(encoding="utf-8")
+    assert depois.startswith("# gerado pelo painel, não editar à mão\n")

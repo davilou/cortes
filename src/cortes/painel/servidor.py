@@ -1,5 +1,6 @@
 """Servidor local do painel: rotas JSON finas sobre as funções puras + a página estática."""
 import threading
+import traceback
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -16,7 +17,7 @@ from pydantic import BaseModel
 from cortes.episodio import id_do_video
 from cortes.painel import coleta
 from cortes.painel.comparacao import comparaveis, confusoes, dimensao, grupos, matriz
-from cortes.painel.dados import ErroPainel, carregar_contas, carregar_vocabulario
+from cortes.painel.dados import ErroPainel, carregar_contas, carregar_vocabulario, ler_yaml_bruto
 from cortes.painel.ligacao import listar_cortes, sugerir
 from cortes.painel.metodo import montar_linhas
 from cortes.painel.publicados import Etiquetas, Publicado, gravar_publicados, ler_publicados, ligar
@@ -47,6 +48,7 @@ class EstadoColeta:
     trava: threading.Lock = field(default_factory=threading.Lock)
     rodando: bool = False
     resultados: dict[str, coleta.Resultado] = field(default_factory=dict)
+    erro: str | None = None   # exceção inesperada (fora de ErroColeta/ErroPainel/OSError)
     fio: threading.Thread | None = None
 
 
@@ -105,7 +107,7 @@ def _rotas_leitura(app: FastAPI, cfg: Config, estado: EstadoColeta) -> None:
                    "ligados": sum(1 for p in pubs if p.conta == c.id)} for c in voc.contas.values()]
         nichos = sorted(p.parent.name for p in (cfg.raiz / "nichos").glob("*/perfil.yaml"))
         return jsonable_encoder({"contas": contas, "rodando": estado.rodando, "formatos": voc.formatos,
-                                 "temas": sorted(voc.temas), "nichos": nichos,
+                                 "temas": sorted(voc.temas), "nichos": nichos, "erro_coleta": estado.erro,
                                  "podcasts": sorted({p.etiquetas.podcast for p in pubs})})
 
     @app.get("/api/shorts")
@@ -144,11 +146,16 @@ def _rotas_acao(app: FastAPI, cfg: Config, estado: EstadoColeta, executar: colet
             if estado.rodando:
                 raise HTTPException(409, "já existe uma atualização rodando")
             estado.rodando = True
+            estado.erro = None
+            estado.resultados.clear()
 
         def rodar() -> None:
             try:
                 coleta.coletar_todas(alvo, cfg.skill_dir, cfg.retratos, agora, executar,
                                      lambda r: estado.resultados.__setitem__(r.conta, r))
+            except Exception as e:
+                estado.erro = f"coleta interrompida: {type(e).__name__}: {e}"
+                traceback.print_exc()
             finally:
                 estado.rodando = False
 
@@ -174,27 +181,41 @@ def _rotas_acao(app: FastAPI, cfg: Config, estado: EstadoColeta, executar: colet
         return jsonable_encoder(_ligar(cfg, lig))
 
 
+def _cabecalho(texto: str) -> str:
+    """O bloco de comentários `#` do topo do arquivo original: o dump do YAML não os preserva,
+    então quem edita o arquivo por fora (anotação, aviso de "gerado") perderia na próxima gravação."""
+    linhas = texto.splitlines(keepends=True)
+    fim = next((i for i, linha in enumerate(linhas) if not linha.startswith("#")), len(linhas))
+    return "".join(linhas[:fim])
+
+
 def _acrescentar_conta(cfg: Config, nova: NovaConta) -> None:
     """Grava num .tmp, valida o arquivo inteiro e só então substitui: conta inválida não entra."""
-    bruto = yaml.safe_load(cfg.contas_yaml.read_text(encoding="utf-8"))
-    bruto["contas"] = [*(bruto.get("contas") or []), nova.model_dump()]
+    texto = cfg.contas_yaml.read_text(encoding="utf-8")
+    contas_atuais = ler_yaml_bruto(cfg.contas_yaml, "contas")  # ErroPainel claro se vazio/inválido
+    if not isinstance(contas_atuais, list):
+        raise ErroPainel(f"{cfg.contas_yaml}: 'contas' deve ser uma lista")
+    bruto = {"contas": [*contas_atuais, nova.model_dump()]}
     tmp = cfg.contas_yaml.with_suffix(".yaml.tmp")
-    tmp.write_text(yaml.safe_dump(bruto, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    tmp.write_text(_cabecalho(texto) + yaml.safe_dump(bruto, allow_unicode=True, sort_keys=False),
+                   encoding="utf-8")
     try:
         carregar_contas(tmp, cfg.raiz / "nichos")
-    except ErroPainel:
-        tmp.unlink()
-        raise
-    tmp.replace(cfg.contas_yaml)
+        tmp.replace(cfg.contas_yaml)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _ligar(cfg: Config, lig: Ligacao) -> Publicado:
     voc = carregar_vocabulario(cfg.raiz)
+    if lig.conta not in voc.contas:
+        raise ErroPainel(f"conta '{lig.conta}' não existe")
     try:
         vid = id_do_video(lig.link)
     except ValueError as e:
         raise ErroPainel(str(e)) from e
-    if not (cfg.raiz / lig.corte).is_dir():
+    cortes_conhecidos = {c.caminho for c in listar_cortes(cfg.raiz, voc.formatos)}
+    if lig.corte not in cortes_conhecidos:
         raise ErroPainel(f"corte '{lig.corte}' não existe")
     rs = ler_retratos(cfg.retratos).get(lig.conta)
     video = next((v for v in rs[-1].videos if v.video_id == vid), None) if rs else None

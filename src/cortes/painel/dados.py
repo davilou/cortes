@@ -65,6 +65,13 @@ def _ler_yaml(arquivo: Path, chave: str) -> Any:
     return dados[chave]
 
 
+def ler_yaml_bruto(arquivo: Path, chave: str) -> Any:
+    """Valor bruto sob `chave` num YAML do painel (p.ex. a lista de `contas`), com ErroPainel
+    claro se o arquivo faltar, vier vazio ou não tiver a chave — para quem precisa editar o
+    arquivo em vez de só carregá-lo (ver `servidor._acrescentar_conta`)."""
+    return _ler_yaml(arquivo, chave)
+
+
 def _conta(arquivo: Path, i: int, c: Any, pasta_nichos: Path) -> Conta:
     if not isinstance(c, dict):
         raise ErroPainel(f"{arquivo}: conta #{i} não é um mapa")
