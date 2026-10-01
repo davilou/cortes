@@ -66,7 +66,7 @@ def main() -> None:
     det.add_argument("--nicho", default="financas")
     det.add_argument("--modelo", default="sonnet", help="modelo do claude -p (sonnet, opus, haiku)")
     pn = sub.add_parser("painel", help="sobe o painel de contas em 127.0.0.1")
-    pn.add_argument("--porta", type=int, default=8765)
+    pn.add_argument("--porta", type=int, default=8790)
     pn.add_argument("--skill", type=Path, default=SKILL_ANALYTICS,
                      help="pasta scripts/ da skill youtube-analytics")
     pn.add_argument("--raiz", type=Path, default=Path.cwd(), help="pasta com contas/, nichos/, testes/")

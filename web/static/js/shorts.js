@@ -94,9 +94,16 @@ function preencherDoCorte(form, todos, etiquetas) {
     form.formato.value = novoFormato;
     form.formato.dataset.auto = novoFormato;
   }
-  if (c?.podcast && (!form.podcast.value || form.podcast.value === form.podcast.dataset.auto)) {
-    form.podcast.value = c.podcast;
-    form.podcast.dataset.auto = c.podcast;
+  if (c?.podcast) {
+    if (!form.podcast.value || form.podcast.value === form.podcast.dataset.auto) {
+      form.podcast.value = c.podcast;
+      form.podcast.dataset.auto = c.podcast;
+    }
+  } else if (form.podcast.value === form.podcast.dataset.auto) {
+    // corte novo não tem podcast: limpa o que foi preenchido automaticamente (campo é
+    // obrigatório, então a pessoa precisa digitar o podcast certo, em vez de ficar com o antigo).
+    form.podcast.value = "";
+    form.podcast.dataset.auto = "";
   }
 }
 
@@ -119,6 +126,10 @@ function fecharGaveta() {
   gatilhoGaveta = null;
 }
 
+// Navegar para outra tela (inclusive via trás/avante do navegador) fecha a gaveta: #camada
+// é global, fora de #tela, então troca de tela não a limpa por conta própria.
+window.addEventListener("hashchange", fecharGaveta);
+
 async function abrirLigar(vid, gatilho) {
   fecharGaveta();
   const meu = ++tokenGaveta;
@@ -128,9 +139,13 @@ async function abrirLigar(vid, gatilho) {
     if (meu !== tokenGaveta) return;   // outra gaveta abriu (ou esta foi fechada) enquanto buscava
     const corteValido = l?.corte != null && todos.some(c => c.caminho === l.corte);
     if (l?.corte != null && !corteValido) avisar(`o corte antigo '${l.corte}' não existe mais; escolha outro`);
+    // Sem ligação e com sugestão: a primeira opção do <select> já é a sugestão top (ver
+    // opcoesCorte) e fica pré-selecionada por padrão — só força o placeholder "escolha o corte"
+    // quando não há nada pra pré-selecionar (religação com corte apagado) ou nenhuma sugestão.
+    const comPlaceholder = !corteValido && (l?.corte != null || !sugeridos.length);
     gatilhoGaveta = gatilho ?? null;
     const camada = $("#camada");
-    camada.innerHTML = formGaveta(l, sugeridos, todos, !corteValido);
+    camada.innerHTML = formGaveta(l, sugeridos, todos, comPlaceholder);
     const form = $("form", camada);
     if (corteValido) form.corte.value = l.corte;
     preencherDoCorte(form, todos, l?.etiquetas ?? null);

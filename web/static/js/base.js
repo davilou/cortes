@@ -54,20 +54,27 @@ function trilho() {
     const quando = falhou ? "falhou" : c.ultimo_retrato ? dataHora(c.ultimo_retrato) : "nunca";
     return `<div class="conta" title="${esc(falhou ? c.coleta.mensagem : "")}"><i class="${alerta ? "vencido" : ""}"></i>${esc(c.handle)}<small>${quando}</small></div>`;
   }).join("");
-  for (const [sel, rotulo] of [["#atualizar-todas", "↻ Atualizar todas"], ["#atualizar-todas-m", "↻ Atualizar"]]) {
+  // Botão do celular é só o ícone (a barra mobile não tem espaço pro rótulo por extenso);
+  // title/aria-label seguram a explicação que o texto deixou de dar.
+  for (const [sel, rotulo, rodando] of [["#atualizar-todas", "↻ Atualizar todas", "atualizando…"],
+                                         ["#atualizar-todas-m", "↻", "…"]]) {
     const b = $(sel);
     if (!b) continue;
     b.disabled = E.rodando || !E.contas.length;
-    b.textContent = E.rodando ? "atualizando…" : rotulo;
+    b.textContent = E.rodando ? rodando : rotulo;
   }
   $$("[data-atualizar]").forEach(b => { b.disabled = E.rodando; });
   const sem = S.filter(l => !l.etiquetas).length;
-  for (const sel of ["#sem-ligacao", "#sem-ligacao-m"]) {
+  // No trilho tem espaço pro rótulo; na barra do celular só o número, senão a pílula não cabe
+  // ao lado de Contas/Shorts/Comparar em 375px — o "sem ligação" vai pro title.
+  for (const [sel, texto] of [["#sem-ligacao", `${sem} sem ligação`], ["#sem-ligacao-m", String(sem)]]) {
     const el = $(sel);
     if (!el) continue;
     el.hidden = !sem;
-    el.textContent = `${sem} sem ligação`;
+    el.textContent = texto;
   }
+  const badgeM = $("#sem-ligacao-m");
+  if (badgeM) badgeM.title = "sem ligação";
   const erroEl = $("#erro-coleta");
   if (erroEl) {
     erroEl.hidden = !E.erro_coleta;

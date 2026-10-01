@@ -18,7 +18,7 @@ App local que transforma episódios de podcast em Shorts. Spec em
 
 ## Painel de contas
 
-    .venv/Scripts/cortes painel          # http://127.0.0.1:8765
+    .venv/Scripts/cortes painel          # http://127.0.0.1:8790
 
 Spec em `docs/superpowers/specs/2026-10-01-painel-contas-design.md`. Usa a skill
 `youtube-analytics` (export do Studio) por subprocesso; contas em `contas/contas.yaml`.

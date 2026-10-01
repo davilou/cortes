@@ -129,9 +129,18 @@ h3.secao span { color: var(--up); margin-left: 6px; }
   text-transform: uppercase; letter-spacing: .06em; }
 .linha-s.matura { opacity: .55; }
 .linha-s .nome { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* cabeçalho segue as mesmas colunas/ocultações das linhas de dado (mesmo seletor .linha-s);
+   o rótulo é mais longo que o valor da célula ("Relativo" × "1,2×"), então sem truncar ele
+   vaza pro vizinho em telas estreitas. */
+.linha-s.cab > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 img.mini { width: 36px; height: 64px; object-fit: cover; border-radius: 5px; background: var(--raised); }
-.chips { display: flex; flex-wrap: wrap; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
-.chip { font: 11px var(--mono); padding: 2px 7px; border-radius: 99px; background: var(--raised); color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer;
+  text-align: left; min-width: 0; }
+/* max-width/overflow/ellipsis: um tema sem espaço (ex. "dinheiro_alheio_quanto_ganha") não tem
+   onde quebrar linha — sem isso ele estoura a célula e fica cortado pelo overflow:hidden do
+   .grupos em vez de truncar com "…" dentro do próprio chip. */
+.chip { font: 11px var(--mono); padding: 2px 7px; border-radius: 99px; background: var(--raised); color: var(--muted);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip.f { color: var(--text); border: 1px solid var(--line); }
 
 /* gaveta de ligação */
@@ -171,22 +180,28 @@ form.nova input, form.nova select { background: var(--bg); border: 1px solid var
 
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; } nav { display: none; }
-  .barra-mobile { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  .barra-mobile { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
     border-bottom: 1px solid var(--line-soft); position: sticky; top: 0; background: var(--bg);
-    z-index: 20; flex-wrap: wrap; }
-  .barra-mobile .marca { padding: 0; font-size: 20px; }
-  .links-mobile { display: flex; gap: 10px; overflow-x: auto; flex: 1; min-width: 0; }
-  .links-mobile a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: 12.5px;
-    white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
-  .links-mobile a.ativo { color: var(--text); }
-  .barra-mobile .atualizar { margin: 0; padding: 6px 10px; font-size: 11.5px; white-space: nowrap; }
+    z-index: 20; }
+  .barra-mobile .marca { padding: 0; font-size: 17px; flex: none; }
+  /* mesmo visual dos links do trilho (nav a): sem sublinhado, cor apagada, estado ativo —
+     e compacto o bastante pra Contas + Shorts + Comparar + Atualizar caberem nos 375px sem
+     rolagem de página (o links-mobile pode rolar por conta própria se precisar). */
+  .links-mobile { display: flex; gap: 2px; overflow-x: auto; flex: 1; min-width: 0; }
+  .links-mobile a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: 11.5px;
+    white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; padding: 5px 6px;
+    border-radius: 6px; }
+  .links-mobile a:hover, .links-mobile a:focus-visible { color: var(--text); }
+  .links-mobile a.ativo { color: var(--text); background: var(--raised); }
+  .links-mobile .cont { font-size: 10px; padding: 1px 5px; }
+  .barra-mobile .atualizar { margin: 0; padding: 6px 9px; font-size: 14px; white-space: nowrap; flex: none; }
   main { padding: 20px 16px; max-width: 100%; }
   .linha { grid-template-columns: 1fr 70px; }
   .linha > :nth-child(2), .linha > :nth-child(4), .linha > :nth-child(5), .linha > :nth-child(6) { display: none; }
   .baixo { grid-template-columns: 1fr; }
   /* thumb, título e a célula de ação (chips/Ligar) — ligar precisa continuar possível na tela
      estreita; relativo cabe num número curto e fica. Conta/idade/views7d/assist. saem. */
-  .linha-s { grid-template-columns: 36px minmax(0, 1fr) 46px minmax(64px, 1fr); gap: 8px; padding: 10px 10px; }
+  .linha-s { grid-template-columns: 36px minmax(0, 1fr) 54px minmax(64px, 1fr); gap: 8px; padding: 10px 10px; }
   .linha-s > :nth-child(3), .linha-s > :nth-child(4), .linha-s > :nth-child(5),
   .linha-s > :nth-child(7) { display: none; }
   .gaveta { padding: 20px 16px; }
