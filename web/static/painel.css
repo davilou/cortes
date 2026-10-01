@@ -162,6 +162,13 @@ form.nova { display: grid; gap: 10px; }
 form.nova label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
 form.nova input, form.nova select { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; }
 
+/* Shorts entre 901px e 1180px: conta/idade/assist. saem para a etiqueta (e o botão Ligar que
+   mora nela) nunca ficar espremida contra a borda da tabela. */
+@media (max-width: 1180px) {
+  .linha-s { grid-template-columns: 36px minmax(0, 1fr) 86px 70px minmax(130px, 220px); gap: 10px; padding: 10px 14px; }
+  .linha-s > :nth-child(3), .linha-s > :nth-child(4), .linha-s > :nth-child(7) { display: none; }
+}
+
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; } nav { display: none; }
   .barra-mobile { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
@@ -177,8 +184,10 @@ form.nova input, form.nova select { background: var(--bg); border: 1px solid var
   .linha { grid-template-columns: 1fr 70px; }
   .linha > :nth-child(2), .linha > :nth-child(4), .linha > :nth-child(5), .linha > :nth-child(6) { display: none; }
   .baixo { grid-template-columns: 1fr; }
-  .linha-s { grid-template-columns: 36px minmax(0, 1fr) 64px; gap: 10px; padding: 10px 12px; }
+  /* thumb, título e a célula de ação (chips/Ligar) — ligar precisa continuar possível na tela
+     estreita; relativo cabe num número curto e fica. Conta/idade/views7d/assist. saem. */
+  .linha-s { grid-template-columns: 36px minmax(0, 1fr) 46px minmax(64px, 1fr); gap: 8px; padding: 10px 10px; }
   .linha-s > :nth-child(3), .linha-s > :nth-child(4), .linha-s > :nth-child(5),
-  .linha-s > :nth-child(7), .linha-s > :nth-child(8) { display: none; }
+  .linha-s > :nth-child(7) { display: none; }
   .gaveta { padding: 20px 16px; }
 }

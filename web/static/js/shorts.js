@@ -34,6 +34,7 @@ function tabelaShorts(ls) {
 }
 
 async function telaShorts(meu) {
+  fecharGaveta();   // tela re-renderizada (ou revisitada): nada de gaveta velha ligada a outro Short
   await carregar();
   if (meu !== desenhar.n) return;   // uma renderização mais nova já começou: não pisa nela
   const sem = S.filter(l => !l.etiquetas), lig = S.filter(l => l.etiquetas);
@@ -48,59 +49,116 @@ async function telaShorts(meu) {
   if (ligarLink) ligarLink.onclick = () => abrirLigar(null, ligarLink);
 }
 
-function opcoesCorte(sugeridos, todos) {
+function opcoesCorte(sugeridos, todos, comPlaceholder) {
   const vistos = new Set(sugeridos.map(c => c.caminho));
   const resto = todos.filter(c => !vistos.has(c.caminho));
   const opt = c => `<option value="${esc(c.caminho)}">${esc(c.caminho)}</option>`;
-  return (sugeridos.length ? `<optgroup label="Sugeridos pelo título">${sugeridos.map(opt).join("")}</optgroup>` : "")
+  const placeholder = comPlaceholder ? `<option value="" disabled selected>escolha o corte</option>` : "";
+  return placeholder
+    + (sugeridos.length ? `<optgroup label="Sugeridos pelo título">${sugeridos.map(opt).join("")}</optgroup>` : "")
     + `<optgroup label="Todos">${resto.map(opt).join("")}</optgroup>`;
 }
 
-function formGaveta(l, sugeridos, todos) {
+function formGaveta(l, sugeridos, todos, comPlaceholder) {
   const e = l?.etiquetas;
-  return `<div class="fundo"></div><form class="gaveta"><h2>Ligar Short</h2>
+  return `<div class="fundo"></div><form class="gaveta" role="dialog" aria-modal="true" aria-labelledby="gaveta-titulo">
+    <h2 id="gaveta-titulo">Ligar Short</h2>
     ${l ? `<p class="sub">${esc(l.titulo)}</p>` : ""}
     <label>Link do Short<input name="link" required value="${l ? `https://youtube.com/shorts/${esc(l.video_id)}` : ""}"></label>
     <label>Conta<select name="conta">${E.contas.map(c => `<option value="${esc(c.id)}" ${l?.conta === c.id ? "selected" : ""}>${esc(c.handle)}</option>`).join("")}</select></label>
-    <label>Corte<select name="corte" required>${opcoesCorte(sugeridos, todos)}</select></label>
-    <label>Formato<select name="formato">${Object.entries(E.formatos).map(([id, f]) => `<option value="${esc(id)}">${esc(id)} · ${esc(f.nome)}</option>`).join("")}</select></label>
+    <label>Corte<select name="corte" required>${opcoesCorte(sugeridos, todos, comPlaceholder)}</select></label>
+    <label>Formato<select name="formato" required><option value="">— escolha —</option>${
+      Object.entries(E.formatos).map(([id, f]) => `<option value="${esc(id)}">${esc(id)} · ${esc(f.nome)}</option>`).join("")}</select></label>
     <div><span class="rotulo-grupo">Temas</span><div class="temas">${E.temas.map(t => `<label><input type="checkbox" name="temas" value="${esc(t)}" ${e?.temas.includes(t) ? "checked" : ""}>${esc(t)}</label>`).join("")}</div></div>
     <label>Podcast<input name="podcast" required list="podcasts" value="${esc(e?.podcast ?? "")}"><datalist id="podcasts">${E.podcasts.map(p => `<option value="${esc(p)}">`).join("")}</datalist></label>
-    <div class="acoes"><button type="button" class="botao" id="cancelar">Cancelar</button><button class="botao primario">Ligar</button></div></form>`;
+    <div class="acoes"><button type="button" class="botao" id="cancelar">Cancelar</button><button type="submit" class="botao primario" id="gaveta-enviar">Ligar</button></div></form>`;
 }
 
+// `etiquetas` presente (abertura inicial, religando um Short já com formato/podcast): semeia
+// formato e podcast com o que já estava gravado, e guarda em dataset.auto o que foi preenchido
+// sem a pessoa escolher — assim uma troca de corte depois sabe se pode sobrescrever ou não.
+// `etiquetas` null (abertura sem ligação, ou troca de corte): deriva do corte selecionado, mas só
+// sobrescreve um campo que ainda está vazio ou que continua igual ao último valor automático —
+// se a pessoa já editou o campo à mão, a troca de corte não apaga a escolha dela.
 function preencherDoCorte(form, todos, etiquetas) {
+  if (etiquetas) {
+    form.formato.value = etiquetas.formato;
+    form.formato.dataset.auto = etiquetas.formato;
+    form.podcast.value = etiquetas.podcast;
+    form.podcast.dataset.auto = etiquetas.podcast;
+    return;
+  }
   const c = todos.find(x => x.caminho === form.corte.value);
-  if (etiquetas) { form.formato.value = etiquetas.formato; return; }
-  if (c?.formato) form.formato.value = c.formato;
-  if (c?.podcast && !form.podcast.value) form.podcast.value = c.podcast;
+  if (!form.formato.value || form.formato.value === form.formato.dataset.auto) {
+    const novoFormato = c?.formato ?? "";   // sem formato no corte: placeholder "— escolha —", nunca o valor antigo
+    form.formato.value = novoFormato;
+    form.formato.dataset.auto = novoFormato;
+  }
+  if (c?.podcast && (!form.podcast.value || form.podcast.value === form.podcast.dataset.auto)) {
+    form.podcast.value = c.podcast;
+    form.podcast.dataset.auto = c.podcast;
+  }
+}
+
+let aoTeclarGaveta = null;
+let gatilhoGaveta = null;
+let tokenGaveta = 0;
+
+// Fecha a gaveta (se houver uma aberta) e invalida qualquer abertura em andamento: uma
+// `abrirLigar` cujo fetch ainda não voltou confere `tokenGaveta` antes de desenhar e desiste
+// se alguém já fechou ou abriu outra gaveta nesse meio tempo.
+function fecharGaveta() {
+  tokenGaveta++;
+  const camada = $("#camada");
+  if (camada && camada.innerHTML) camada.innerHTML = "";
+  if (aoTeclarGaveta) {
+    document.removeEventListener("keydown", aoTeclarGaveta);
+    aoTeclarGaveta = null;
+  }
+  gatilhoGaveta?.focus();
+  gatilhoGaveta = null;
 }
 
 async function abrirLigar(vid, gatilho) {
-  const l = vid ? S.find(x => x.video_id === vid) : null;
-  const [sugeridos, todos] = await Promise.all([vid ? api(`/api/sugestoes/${vid}`) : [], api("/api/cortes")]);
-  const camada = $("#camada");
-  camada.innerHTML = formGaveta(l, sugeridos, todos);
-  const form = $("form", camada);
-  if (l?.corte) form.corte.value = l.corte;
-  preencherDoCorte(form, todos, l?.etiquetas);
-  form.corte.onchange = () => preencherDoCorte(form, todos, null);
-  const aoTeclar = ev => { if (ev.key === "Escape") fechar(); };
-  function fechar() {
-    camada.innerHTML = "";
-    document.removeEventListener("keydown", aoTeclar);
-    gatilho?.focus();
+  fecharGaveta();
+  const meu = ++tokenGaveta;
+  try {
+    const l = vid ? S.find(x => x.video_id === vid) : null;
+    const [sugeridos, todos] = await Promise.all([vid ? api(`/api/sugestoes/${vid}`) : [], api("/api/cortes")]);
+    if (meu !== tokenGaveta) return;   // outra gaveta abriu (ou esta foi fechada) enquanto buscava
+    const corteValido = l?.corte != null && todos.some(c => c.caminho === l.corte);
+    if (l?.corte != null && !corteValido) avisar(`o corte antigo '${l.corte}' não existe mais; escolha outro`);
+    gatilhoGaveta = gatilho ?? null;
+    const camada = $("#camada");
+    camada.innerHTML = formGaveta(l, sugeridos, todos, !corteValido);
+    const form = $("form", camada);
+    if (corteValido) form.corte.value = l.corte;
+    preencherDoCorte(form, todos, l?.etiquetas ?? null);
+    form.corte.onchange = () => preencherDoCorte(form, todos, null);
+    aoTeclarGaveta = ev => { if (ev.key === "Escape") fecharGaveta(); };
+    document.addEventListener("keydown", aoTeclarGaveta);
+    $(".fundo", camada).onclick = fecharGaveta;
+    $("#cancelar").onclick = fecharGaveta;
+    form.link.focus();
+    const enviar = $("#gaveta-enviar", camada);
+    form.onsubmit = async ev => {
+      ev.preventDefault();
+      const corpo = { link: form.link.value.trim(), conta: form.conta.value, corte: form.corte.value,
+        formato: form.formato.value, podcast: form.podcast.value,
+        temas: $$("input[name=temas]:checked", form).map(i => i.value) };
+      enviar.disabled = true;
+      try {
+        await post("/api/ligar", corpo);
+        fecharGaveta();
+        desenhar();
+      } catch (e) {
+        avisar(e.message);
+      } finally {
+        enviar.disabled = false;
+      }
+    };
+  } catch (e) {
+    if (meu === tokenGaveta) avisar(e.message);
   }
-  document.addEventListener("keydown", aoTeclar);
-  $(".fundo", camada).onclick = fechar;
-  $("#cancelar").onclick = fechar;
-  form.link.focus();
-  form.onsubmit = async ev => {
-    ev.preventDefault();
-    const corpo = { link: form.link.value.trim(), conta: form.conta.value, corte: form.corte.value,
-      formato: form.formato.value, podcast: form.podcast.value,
-      temas: $$("input[name=temas]:checked", form).map(i => i.value) };
-    try { await post("/api/ligar", corpo); fechar(); desenhar(); } catch (e) { avisar(e.message); }
-  };
 }
 TELAS.shorts = telaShorts;
