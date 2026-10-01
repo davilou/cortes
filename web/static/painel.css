@@ -119,6 +119,36 @@ table.matriz { width: 100%; border-collapse: separate; border-spacing: 4px; }
 .aviso { position: fixed; right: 20px; bottom: 20px; max-width: 460px; padding: 12px 16px; border-radius: 9px;
   background: #2a1d12; border: 1px solid rgba(255,122,47,.5); color: var(--text); font-size: 13px; z-index: 30; }
 
+/* tela Shorts */
+h3.secao { font: 500 11px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .08em; margin: 24px 0 10px; }
+h3.secao span { color: var(--up); margin-left: 6px; }
+.linha-s { display: grid; grid-template-columns: 36px minmax(0, 1fr) 120px 48px 86px 70px 60px 190px; gap: 14px;
+  align-items: center; padding: 10px 16px; border-top: 1px solid var(--line-soft); }
+.linha-s:first-child { border-top: 0; }
+.linha-s.cab { padding: 11px 16px; cursor: default; color: var(--faint); font: 500 11px var(--mono);
+  text-transform: uppercase; letter-spacing: .06em; }
+.linha-s.matura { opacity: .55; }
+.linha-s .nome { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+img.mini { width: 36px; height: 64px; object-fit: cover; border-radius: 5px; background: var(--raised); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.chip { font: 11px var(--mono); padding: 2px 7px; border-radius: 99px; background: var(--raised); color: var(--muted); }
+.chip.f { color: var(--text); border: 1px solid var(--line); }
+
+/* gaveta de ligação */
+.fundo { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 20; }
+.gaveta { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100%); background: var(--surface);
+  border-left: 1px solid var(--line); padding: 26px 24px; overflow-y: auto; z-index: 21; display: grid; gap: 14px; align-content: start; }
+.gaveta h2 { font: 400 28px var(--serif); }
+.gaveta label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
+.gaveta .rotulo-grupo { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.gaveta input, .gaveta select { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; }
+.gaveta input:focus, .gaveta select:focus { outline: 1px solid var(--up); border-color: var(--up); }
+.temas { display: flex; flex-wrap: wrap; gap: 6px; }
+.temas label { display: inline-flex; gap: 6px; align-items: center; padding: 5px 9px; border: 1px solid var(--line);
+  border-radius: 99px; color: var(--text); cursor: pointer; }
+.temas input { accent-color: var(--up); }
+.acoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; } nav { display: none; }
   .barra-mobile { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
@@ -134,4 +164,8 @@ table.matriz { width: 100%; border-collapse: separate; border-spacing: 4px; }
   .linha { grid-template-columns: 1fr 70px; }
   .linha > :nth-child(2), .linha > :nth-child(4), .linha > :nth-child(5), .linha > :nth-child(6) { display: none; }
   .baixo { grid-template-columns: 1fr; }
+  .linha-s { grid-template-columns: 36px minmax(0, 1fr) 64px; gap: 10px; padding: 10px 12px; }
+  .linha-s > :nth-child(3), .linha-s > :nth-child(4), .linha-s > :nth-child(5),
+  .linha-s > :nth-child(7), .linha-s > :nth-child(8) { display: none; }
+  .gaveta { padding: 20px 16px; }
 }
