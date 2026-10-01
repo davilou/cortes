@@ -37,6 +37,36 @@ def test_retrato_quebrado(tmp_path: Path) -> None:
         ler_retratos(tmp_path)
 
 
+def test_json_truncado(tmp_path: Path) -> None:
+    (tmp_path / "grana").mkdir()
+    (tmp_path / "grana" / "2026-10-10.json").write_text('{"conta": "gra', encoding="utf-8")
+    with pytest.raises(ErroPainel, match="retrato inválido"):
+        ler_retratos(tmp_path)
+
+
+def test_conta_nao_casa_com_a_pasta(tmp_path: Path) -> None:
+    (tmp_path / "grana").mkdir()
+    r = Retrato("outraconta", datetime(2026, 10, 10, 9, 12), (video(1830),))
+    salvar_retrato(tmp_path, Retrato("outraconta", r.coletado_em, r.videos))
+    (tmp_path / "grana" / "2026-10-10.json").write_bytes(
+        (tmp_path / "outraconta" / "2026-10-10.json").read_bytes()
+    )
+    with pytest.raises(ErroPainel, match="retrato inválido"):
+        ler_retratos(tmp_path)
+
+
+def test_dia_nao_casa_com_o_nome_do_arquivo(tmp_path: Path) -> None:
+    (tmp_path / "grana").mkdir()
+    r = Retrato("grana", datetime(2026, 10, 10, 9, 12), (video(1830),))
+    salvar_retrato(tmp_path, r)
+    (tmp_path / "grana" / "2026-10-11.json").write_bytes(
+        (tmp_path / "grana" / "2026-10-10.json").read_bytes()
+    )
+    (tmp_path / "grana" / "2026-10-10.json").unlink()
+    with pytest.raises(ErroPainel, match="retrato inválido"):
+        ler_retratos(tmp_path)
+
+
 def test_video_com_campo_de_tipo_errado(tmp_path: Path) -> None:
     (tmp_path / "grana").mkdir()
     arquivo = tmp_path / "grana" / "2026-10-10.json"

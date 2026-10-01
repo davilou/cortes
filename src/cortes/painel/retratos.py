@@ -80,14 +80,17 @@ def _video(v: Any) -> VideoRetrato:
 
 
 def _ler(arquivo: Path) -> Retrato:
-    d = ler_json(arquivo)
     try:
+        d = ler_json(arquivo)
         if not isinstance(d, dict):
             raise ErroPainel("não é um mapa")
         videos = tuple(_video(v) for v in d["videos"])
-        return Retrato(_texto(d, "conta"), datetime.fromisoformat(_texto(d, "coletado_em")), videos)
+        r = Retrato(_texto(d, "conta"), datetime.fromisoformat(_texto(d, "coletado_em")), videos)
     except (KeyError, TypeError, ValueError, ErroPainel) as e:
         raise ErroPainel(f"{arquivo}: retrato inválido ({e!r})") from e
+    if r.conta != arquivo.parent.name or r.dia.isoformat() != arquivo.stem:
+        raise ErroPainel(f"{arquivo}: retrato inválido (conta/dia não casam com a pasta e o nome do arquivo)")
+    return r
 
 
 def ler_retratos(pasta: Path) -> dict[str, list[Retrato]]:
