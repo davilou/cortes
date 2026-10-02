@@ -73,3 +73,13 @@ def test_novo_inicio_refaz_trecho_e_rosto(tmp_path: Path) -> None:
     renderizar_corte(pasta, C, tmp_path, f.dep())
     renderizar_corte(pasta, replace(concluir(C), inicio=11.0), tmp_path, f.dep())
     assert f.chamadas == ["ffmpeg", "py-visao", "npx", "ffmpeg", "py-visao", "npx"]
+
+
+def test_rosto_json_apagado_refaz_trecho_mesmo_com_marcador(tmp_path: Path) -> None:
+    """O marcador `recorte.json` não basta: se `rosto.json` (ou `trecho.mp4`) não existir mais,
+    o cache não pode ser reaproveitado — senão o render seguinte usaria um rosto.json ausente."""
+    pasta, f = episodio(tmp_path), Falso()
+    renderizar_corte(pasta, C, tmp_path, f.dep())
+    (pasta / "cortes" / "0" / "rosto.json").unlink()
+    renderizar_corte(pasta, concluir(C), tmp_path, f.dep())
+    assert f.chamadas == ["ffmpeg", "py-visao", "npx", "ffmpeg", "py-visao", "npx"]

@@ -44,14 +44,26 @@ def janela(c: Corte) -> tuple[float, float]:
     return max(0.0, round(c.inicio - FOLGA_INICIO, 3)), c.fim
 
 
+def _cache_valido(d: Path, marca: Path, ini: float, fim: float) -> list[Segmento] | None:
+    """`recorte.json` só vale como cache se o que ele promete gravar ainda existir: sem
+    `trecho.mp4` ou `rosto.json`, um render anterior falhou ou os apagaram, e reaproveitar
+    o marcador deixaria o render seguinte sem rosto para ler."""
+    if not marca.exists():
+        return None
+    if not (d / "projeto" / "assets" / "trecho.mp4").exists() or not (d / "rosto.json").exists():
+        return None
+    r = ler_json(marca)
+    if r["inicio"] != ini or r["fim"] != fim:
+        return None
+    return [(float(a), float(b)) for a, b in r["segmentos"]]
+
+
 def preparar_trecho(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> list[Segmento]:
     d = pasta_corte(pasta_ep, c.indice)
     ini, fim = janela(c)
     marca = d / "recorte.json"
-    if marca.exists():
-        r = ler_json(marca)
-        if r["inicio"] == ini and r["fim"] == fim:
-            return [(float(a), float(b)) for a, b in r["segmentos"]]
+    if (segs := _cache_valido(d, marca, ini, fim)) is not None:
+        return segs
     segs = segmentos_sem_pausa(dep.ler_audio(pasta_ep / "audio.wav", ini, fim - ini))
     trecho = d / "projeto" / "assets" / "trecho.mp4"
     trecho.parent.mkdir(parents=True, exist_ok=True)
