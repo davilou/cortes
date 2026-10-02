@@ -25,7 +25,9 @@ from cortes.render.recorte import (
 from cortes.render.rosto import ler_rosto, medir_rosto
 from cortes.tipos import Palavra
 
-FOLGA_INICIO = 0.3   # s: a legenda do YouTube começa a palavra ~0,2–0,4 s depois do Whisper (spec §4.2)
+FOLGA_INICIO = 0.3   # s: folga para o início de palavra estimado. Episódio antigo, com
+# palavras.json vindo da legenda do YouTube, começa a palavra ~0,2-0,4 s tarde; com o Whisper
+# local é só respiro — o silêncio extra é aparado pela regra de bordas de segmentos_sem_pausa.
 SCRIPT_ROSTO = Path("render") / "visao" / "rosto.py"
 
 

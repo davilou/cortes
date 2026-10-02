@@ -1,4 +1,4 @@
-"""As 5 etapas do episódio no painel: vídeo, legenda do YouTube (ou transcrição colada), sinais,
+"""As 5 etapas do episódio no painel: vídeo, transcrição local (etapa "legenda"), sinais,
 momentos, render.
 
 Cada etapa grava seu arquivo e pula se ele já existe (mesmo padrão do `cortes detectar`).

@@ -1,10 +1,10 @@
 """Trecho do Short: pausas cortadas pela energia do áudio e o recorte no ffmpeg (spec produção §4.1).
 
 Portado de testes/comum/corte.py (dia 2), com uma diferença: as pausas vêm do ÁUDIO, não do vão
-entre palavras. Na legenda do YouTube o fim de cada palavra é o início da seguinte (spec §4.2),
-então esse vão é quase sempre zero. Regra mantida (testes/TEMPLATES.md, dia 2): pausa > 0,4 s,
-só se estiver 18 dB abaixo da fala; 0,12 s de respiro de cada lado. Pausa "barulhenta" (riso,
-reação) fica.
+entre palavras — pelo áudio, a pausa pega o silêncio real, independente de como a transcrição
+estimou o fim de cada palavra (o fim estimado pode ficar antes ou depois do silêncio de verdade).
+Regra mantida (testes/TEMPLATES.md, dia 2): pausa > 0,4 s, só se estiver 18 dB abaixo da fala;
+0,12 s de respiro de cada lado. Pausa "barulhenta" (riso, reação) fica.
 """
 import subprocess
 from collections.abc import Callable
@@ -92,7 +92,8 @@ def segmentos_sem_pausa(audio: NDArray[np.float32], taxa: int = TAXA) -> list[Se
 
 def remapear(t: float, segs: list[Segmento]) -> float:
     """Tempo do trecho original → tempo sem pausas. Um tempo dentro de uma pausa removida vai para
-    a emenda: o início de palavra da legenda tem erro de ~0,3 s e pode cair na pausa sem ser bug."""
+    a emenda: o início de palavra estimado pela transcrição tem erro de alinhamento e pode cair
+    numa pausa cortada sem ser bug."""
     acum = 0.0
     for a, b in segs:
         if t < a:
