@@ -41,17 +41,49 @@ function salvarVelocidade(v) {
   try { localStorage.setItem(CHAVE_VELOCIDADE, String(v)); } catch { /* localStorage indisponível: segue só na sessão */ }
 }
 
+// "Ouvir antes": estende o início tocável pra trás do candidato, pra checar se o corte não
+// comeu o começo da frase. Só o início muda — o fim do trecho (c.fim) nunca se move.
+const PREROLLS = [0, 3, 5];
+const NOMES_PREROLL = { 0: "não", 3: "3 s", 5: "5 s" };
+const CHAVE_PREROLL = "cortes_preroll";
+
+function prerollSalvo() {
+  try {
+    const v = Number(localStorage.getItem(CHAVE_PREROLL));
+    return PREROLLS.includes(v) ? v : 0;
+  } catch { return 0; }
+}
+function salvarPreroll(v) {
+  try { localStorage.setItem(CHAVE_PREROLL, String(v)); } catch { /* localStorage indisponível: segue só na sessão */ }
+}
+// Faixa tocável [ini, c.fim] pro candidato com N segundos de preroll — clampada em 0 pra não
+// pedir tempo antes do início do episódio. durTotal é o que a barra de progresso cobre
+// (preroll + duração real do trecho); dur continua sendo só a duração do trecho, usada no
+// rótulo de tempo total ("… / 0:42") independente do preroll escolhido.
+function faixaComPreroll(c, segundos) {
+  const preOffset = Math.min(segundos, c.inicio);
+  return { ini: c.inicio - preOffset, preOffset, durTotal: (c.fim - c.inicio) + preOffset };
+}
+
 function htmlPlayer(D, c) {
   const dur = c.fim - c.inicio;
+  const { durTotal } = faixaComPreroll(c, prerollSalvo());
   return `<div class="player">
     <video class="trecho" preload="metadata" playsinline src="/api/episodios/${encodeURIComponent(D.id)}/video#t=${c.inicio},${c.fim}"></video>
     <div class="player-ctrl">
       <button class="play" type="button" aria-label="Tocar trecho">▶</button>
-      <input class="barra" type="range" min="0" max="${dur.toFixed(1)}" step="0.1" value="0" aria-label="Posição no trecho">
+      <div class="barra-wrap">
+        <input class="barra" type="range" min="0" max="${durTotal.toFixed(1)}" step="0.1" value="0" aria-label="Posição no trecho">
+        <div class="barra-pre" aria-hidden="true" hidden></div>
+        <div class="barra-marca" aria-hidden="true" hidden></div>
+      </div>
       <span class="tempo">0:00 / ${tempo(dur)}</span>
     </div>
     <div class="seg vel" role="group" aria-label="Velocidade">
       ${VELOCIDADES.map(v => `<button type="button" data-vel="${v}" aria-pressed="false">${String(v).replace(".", ",")}×</button>`).join("")}
+    </div>
+    <div class="seg preroll" role="group" aria-label="Ouvir antes">
+      ${PREROLLS.map(s => `<button type="button" data-preroll="${s}" aria-pressed="false">${esc(NOMES_PREROLL[s])}</button>`).join("")}
     </div>
   </div>`;
 }
@@ -87,17 +119,39 @@ function marcarVelocidadeAtiva(seg, vel) {
   });
 }
 
-// Mantém a barra de progresso e o relógio (0:07 / 0:42, relativos ao trecho — não ao episódio)
-// sincronizados com v.currentTime via rAF, porque arrastar a barra ou tocar não dispara
-// timeupdate com frequência suficiente pra uma barra fluida.
-function posRelativa(v, c, dur) {
-  return Math.min(Math.max(v.currentTime - c.inicio, 0), dur);
+function marcarPrerollAtiva(seg, segundos) {
+  $$("[data-preroll]", seg).forEach(b => {
+    const ativo = Number(b.dataset.preroll) === segundos;
+    b.classList.toggle("ativo", ativo);
+    b.setAttribute("aria-pressed", String(ativo));
+  });
 }
 
-function atualizarBarra(v, c, dur, barra, tempoEl) {
-  const p = posRelativa(v, c, dur);
+// Desenha o trecho de preroll na barra (tracejado) e a marca do início real do candidato.
+// Sem preroll (preOffset 0) os dois ficam escondidos — não há o que distinguir na barra.
+function atualizarMarcaPreroll(wrap, preOffset, durTotal) {
+  const pre = $(".barra-pre", wrap);
+  const marca = $(".barra-marca", wrap);
+  if (preOffset <= 0) { pre.hidden = true; marca.hidden = true; return; }
+  const pct = `${(preOffset / durTotal) * 100}%`;
+  pre.hidden = false; pre.style.width = pct;
+  marca.hidden = false; marca.style.left = pct;
+}
+
+// Rótulo de tempo sempre relativo ao início real do candidato (não ao início da faixa com
+// preroll): negativo enquanto toca o preroll ("-0:03 / 0:42"), 0:00 no início real do trecho.
+function rotuloTempo(relTrecho, dur) {
+  return `${relTrecho < 0 ? "-" : ""}${tempo(Math.abs(relTrecho))} / ${tempo(dur)}`;
+}
+
+// Mantém a barra de progresso e o relógio sincronizados com v.currentTime via rAF, porque
+// arrastar a barra ou tocar não dispara timeupdate com frequência suficiente pra uma barra
+// fluida. ini é o início da faixa tocável (c.inicio menos o preroll); durTotal é o que a
+// barra cobre (preroll + duração do trecho); dur é só a duração do trecho (rótulo "/ 0:42").
+function atualizarBarra(v, c, ini, dur, durTotal, barra, tempoEl) {
+  const p = Math.min(Math.max(v.currentTime - ini, 0), durTotal);
   barra.value = p.toFixed(1);
-  tempoEl.textContent = `${tempo(p)} / ${tempo(dur)}`;
+  tempoEl.textContent = rotuloTempo(v.currentTime - c.inicio, dur);
 }
 
 // O fragmento #t= só posiciona o vídeo na carga inicial; depois disso o navegador não respeita
@@ -108,9 +162,11 @@ function ligarVideo(painel, c) {
   const v = $("video.trecho", painel);
   const dur = c.fim - c.inicio;
   const btnPlay = $(".play", painel);
+  const barraWrap = $(".barra-wrap", painel);
   const barra = $(".barra", painel);
   const tempoEl = $(".tempo", painel);
   const segVel = $(".seg.vel", painel);
+  const segPre = $(".seg.preroll", painel);
 
   if (rafPlayer) cancelAnimationFrame(rafPlayer);
 
@@ -119,15 +175,22 @@ function ligarVideo(painel, c) {
   v.preservesPitch = true;
   marcarVelocidadeAtiva(segVel, vel);
 
+  // ini e durTotal mudam quando o botão "ouvir antes" é clicado (ver abaixo), sem recriar o
+  // <video> nem o resto do player — por isso ficam em `let`, fechados sobre pelos handlers.
+  let { ini, durTotal } = faixaComPreroll(c, prerollSalvo());
+  barra.max = durTotal.toFixed(1);
+  marcarPrerollAtiva(segPre, prerollSalvo());
+  atualizarMarcaPreroll(barraWrap, c.inicio - ini, durTotal);
+
   const loop = () => {
     if (!document.body.contains(v)) { rafPlayer = null; return; }
-    if (!v.paused) atualizarBarra(v, c, dur, barra, tempoEl);
+    if (!v.paused) atualizarBarra(v, c, ini, dur, durTotal, barra, tempoEl);
     rafPlayer = requestAnimationFrame(loop);
   };
   rafPlayer = requestAnimationFrame(loop);
 
   v.onplay = () => {
-    if (v.currentTime < c.inicio || v.currentTime >= c.fim) v.currentTime = c.inicio;
+    if (v.currentTime < ini || v.currentTime >= c.fim) v.currentTime = ini;
     btnPlay.textContent = "❚❚";
     btnPlay.setAttribute("aria-label", "Pausar trecho");
   };
@@ -137,14 +200,14 @@ function ligarVideo(painel, c) {
   };
   v.ontimeupdate = () => {
     if (!v.paused && v.currentTime >= c.fim) { v.currentTime = c.fim; v.pause(); }
-    atualizarBarra(v, c, dur, barra, tempoEl);
+    atualizarBarra(v, c, ini, dur, durTotal, barra, tempoEl);
   };
   v.onclick = () => { if (v.paused) v.play(); else v.pause(); };
   btnPlay.onclick = () => { if (v.paused) v.play(); else v.pause(); };
 
   barra.oninput = () => {
-    v.currentTime = c.inicio + Math.min(Math.max(Number(barra.value), 0), dur);
-    atualizarBarra(v, c, dur, barra, tempoEl);
+    v.currentTime = ini + Math.min(Math.max(Number(barra.value), 0), durTotal);
+    atualizarBarra(v, c, ini, dur, durTotal, barra, tempoEl);
   };
 
   $$("[data-vel]", segVel).forEach(b => {
@@ -156,16 +219,31 @@ function ligarVideo(painel, c) {
     };
   });
 
+  // Troca de "ouvir antes": recalcula a faixa sem recriar o player. Pausado, reposiciona pro
+  // novo início; tocando, só muda a faixa e deixa continuar tocando de onde está.
+  $$("[data-preroll]", segPre).forEach(b => {
+    b.onclick = () => {
+      const segundos = Number(b.dataset.preroll);
+      salvarPreroll(segundos);
+      ({ ini, durTotal } = faixaComPreroll(c, segundos));
+      barra.max = durTotal.toFixed(1);
+      marcarPrerollAtiva(segPre, segundos);
+      atualizarMarcaPreroll(barraWrap, c.inicio - ini, durTotal);
+      if (v.paused) v.currentTime = ini;
+      atualizarBarra(v, c, ini, dur, durTotal, barra, tempoEl);
+    };
+  });
+
   // Espaço e ←/→ só quando o foco está no player — não quando está no select/input do motivo
   // de rejeição (ligarPainel vive no mesmo <aside>, e Espaço lá digita espaço num texto livre).
   $(".player", painel).onkeydown = ev => {
     if (ev.target.closest(".motivo") || ["SELECT", "INPUT"].includes(ev.target.tagName)) return;
     if (ev.key === " ") { ev.preventDefault(); if (v.paused) v.play(); else v.pause(); }
-    else if (ev.key === "ArrowLeft") { ev.preventDefault(); v.currentTime = Math.max(c.inicio, v.currentTime - 5); }
+    else if (ev.key === "ArrowLeft") { ev.preventDefault(); v.currentTime = Math.max(ini, v.currentTime - 5); }
     else if (ev.key === "ArrowRight") { ev.preventDefault(); v.currentTime = Math.min(c.fim, v.currentTime + 5); }
   };
 
-  atualizarBarra(v, c, dur, barra, tempoEl);
+  atualizarBarra(v, c, ini, dur, durTotal, barra, tempoEl);
 }
 
 // Todos os controles de decisão do painel (aprovar, rejeitar, e os do motivo) — desabilitados
