@@ -16,7 +16,7 @@ from typing import Any
 from cortes.tipos import Palavra
 
 FIM_MAX_S = 1.5
-_MARCA = re.compile(r"\[[^\]]*\]|>>")
+MARCA = re.compile(r"\[[^\]]*\]|>>")
 
 
 class ErroLegenda(RuntimeError):
@@ -70,18 +70,35 @@ def _validar_evento(ev: dict[str, Any]) -> None:
 def _inicios_do_evento(ev: dict[str, Any]) -> list[tuple[str, float]]:
     t0 = ev["tStartMs"] / 1000
     fim_ev = t0 + ev.get("dDurationMs", 0) / 1000
-    segs = [s for s in ev["segs"] if _MARCA.sub(" ", s.get("utf8", "")).strip()]
+    segs = [s for s in ev["segs"] if MARCA.sub(" ", s.get("utf8", "")).strip()]
     saida: list[tuple[str, float]] = []
     for k, seg in enumerate(segs):
         ini = t0 + seg.get("tOffsetMs", 0) / 1000
         fim = t0 + segs[k + 1].get("tOffsetMs", 0) / 1000 if k + 1 < len(segs) else max(fim_ev, ini)
-        palavras = _MARCA.sub(" ", seg["utf8"]).split()
-        total = sum(len(w) for w in palavras)
-        acumulado = 0
-        for w in palavras:
-            saida.append((w, ini + (fim - ini) * acumulado / total))
-            acumulado += len(w)
+        saida.extend(distribuir(MARCA.sub(" ", seg["utf8"]).split(), ini, fim))
     return saida
+
+
+def distribuir(palavras: list[str], ini: float, fim: float) -> list[tuple[str, float]]:
+    """Início de cada palavra de um trecho [ini, fim) sem tempo próprio, na proporção do
+    tamanho (em caracteres) das palavras anteriores. Usado na legenda manual e na transcrição
+    colada (`transcricao_colada`)."""
+    total = sum(len(w) for w in palavras)
+    saida: list[tuple[str, float]] = []
+    acumulado = 0
+    for w in palavras:
+        saida.append((w, ini + (fim - ini) * acumulado / total))
+        acumulado += len(w)
+    return saida
+
+
+def com_fim(inicios: list[tuple[str, float]]) -> list[Palavra]:
+    """Fim = início da palavra seguinte, limitado a FIM_MAX_S (a última ganha FIM_MAX_S)."""
+    palavras: list[Palavra] = []
+    for i, (texto, ini) in enumerate(inicios):
+        seguinte = inicios[i + 1][1] if i + 1 < len(inicios) else ini + FIM_MAX_S
+        palavras.append(Palavra(texto, round(ini, 3), round(min(seguinte, ini + FIM_MAX_S), 3)))
+    return palavras
 
 
 def palavras_do_json3(dados: dict[str, Any]) -> list[Palavra]:
@@ -97,8 +114,4 @@ def palavras_do_json3(dados: dict[str, Any]) -> list[Palavra]:
     if not inicios:
         raise ErroLegenda("legenda do YouTube sem palavras")
     inicios.sort(key=lambda par: par[1])
-    palavras: list[Palavra] = []
-    for i, (texto, ini) in enumerate(inicios):
-        seguinte = inicios[i + 1][1] if i + 1 < len(inicios) else ini + FIM_MAX_S
-        palavras.append(Palavra(texto, round(ini, 3), round(min(seguinte, ini + FIM_MAX_S), 3)))
-    return palavras
+    return com_fim(inicios)
