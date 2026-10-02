@@ -185,6 +185,26 @@ form.nova { display: grid; gap: 10px; }
 form.nova label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
 form.nova input, form.nova select { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; }
 
+/* tela Formatos: galeria 9:16 com a demo de cada formato */
+.formatos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.formato-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; min-width: 0; }
+.formato-card .demo { aspect-ratio: 9/16; width: 100%; background: #000; border-radius: 9px; overflow: hidden; }
+.formato-card video { width: 100%; height: 100%; display: block; object-fit: contain; background: #000; }
+.demo-vazia { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 6px; text-align: center; color: var(--faint); padding: 14px; }
+.demo-vazia p { font-size: 12.5px; }
+.demo-vazia small { font: 11px var(--mono); }
+.formato-topo { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.formato-topo h2 { font: 400 20px/1.15 var(--serif); min-width: 0; }
+.chip-no-app { flex: none; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .04em;
+  padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+.chip-no-app.pb { background: var(--up-soft); color: var(--up); }
+.chip-no-app.pde { background: rgba(125,147,184,.16); color: var(--down); }
+.chip-no-app.fora { background: none; border: 1px solid var(--line); color: var(--faint); }
+.formato-card .descricao { font-size: 12.5px; color: var(--text); line-height: 1.45; }
+.formato-card .evidencia { font-size: 11.5px; color: var(--muted); line-height: 1.4;
+  border-left: 2px solid var(--line); padding-left: 8px; }
+
 /* trilho: grupos de navegação e fila da Produção */
 nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .08em; padding: 14px 10px 4px; }
 .fila { margin-top: auto; border-top: 1px solid var(--line-soft); padding: 14px 10px 0; font-size: 12px; color: var(--muted); display: grid; gap: 6px; }
