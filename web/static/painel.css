@@ -289,6 +289,10 @@ video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background:
 /* Shorts entre 901px e 1180px: conta/idade/assist. saem para a etiqueta (e o botão Ligar que
    mora nela) nunca ficar espremida contra a borda da tabela. */
 @media (max-width: 1180px) {
+  /* link numa linha só; nicho, formato, quantos e o botão dividem a linha de baixo */
+  .entrada { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+  .entrada > label:first-child { grid-column: 1 / -1; }
+  .entrada select { min-width: 0; width: 100%; }
   .linha-s { grid-template-columns: 36px minmax(0, 1fr) 86px 70px minmax(130px, 220px); gap: 10px; padding: 10px 14px; }
   .linha-s > :nth-child(3), .linha-s > :nth-child(4), .linha-s > :nth-child(7) { display: none; }
   /* a capa de 128px + a coluna de etapas de 360px, fixas, estouram entre 901 e 1180px —
