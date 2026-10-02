@@ -234,7 +234,7 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
 .ep .capa span { position: absolute; right: 5px; bottom: 4px; font: 10px var(--mono); background: rgba(0,0,0,.7); padding: 1px 5px; border-radius: 3px; }
 .ep h3 { font-size: 14px; font-weight: 600; }
 .ep p { color: var(--faint); font-size: 12px; margin-top: 2px; }
-.etapas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; min-width: 0; }
+.etapas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; min-width: 0; }
 .etapa { font: 10.5px var(--mono); color: var(--faint); min-width: 0; overflow-wrap: normal; word-break: keep-all; }
 .etapa i { display: block; height: 4px; border-radius: 2px; background: var(--line); margin-bottom: 5px; }
 .etapa.ok i { background: var(--ok); } .etapa.ok { color: var(--muted); }
@@ -284,6 +284,30 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
 .cand .decisao.aprovado { color: var(--ok); }
 .cand .decisao.rejeitado { color: var(--warn); }
 
+/* Grade de Shorts (plano B): cartões 9:16 acima da tabela; o vídeo do cartão só carrega os
+   metadados (vitrine) — quem toca é o player do painel. min(150px, 100%) segura 375px: dois
+   cartões por linha sem rolagem horizontal. Nome .grade-shorts (não .grade): .strip .grade já
+   é a linha de grade do strip plot (Comparar). */
+.grade-shorts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 12px; margin-bottom: 22px; }
+.short { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; cursor: pointer; min-width: 0; }
+.short:hover { border-color: var(--line); }
+.short.sel { box-shadow: inset 0 0 0 2px var(--up); }
+.short:focus-visible { outline: 1px solid var(--up); outline-offset: 2px; }
+.short video, .short .sem-video { width: 100%; aspect-ratio: 9/16; display: block; background: #000; object-fit: cover; }
+.short .sem-video { display: grid; place-items: center; font: 11px var(--mono); color: var(--faint); background: var(--raised); }
+.short-info { padding: 9px 10px; display: grid; gap: 4px; min-width: 0; }
+.short-info > div:first-child { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.short-info .n { font: 400 18px var(--serif); flex: none; }
+.short-info .t { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.short-info .status { font: 10.5px var(--mono); color: var(--muted); }
+.short-info .status.pronto { color: var(--ok); }
+.short-info .status.renderizando { color: var(--up); }
+.short-info .status.erro { color: var(--warn); }
+.short-info .decisao { font: 500 10.5px var(--mono); }
+.short-info .decisao.aprovado { color: var(--ok); }
+.short-info .decisao.rejeitado { color: var(--warn); }
+.cand-render { margin-top: 6px; display: flex; min-width: 0; }
+
 .painel { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow: auto;
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; }
 video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background: #000; display: block; cursor: pointer; }
@@ -308,6 +332,13 @@ video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background:
 .seg.vel button { font: 11px var(--mono); padding: 5px 9px; }
 .seg.preroll { margin-top: 8px; }
 .seg.preroll button { font: 11px var(--mono); padding: 5px 9px; }
+/* Short no painel: o mesmo player, com o vídeo 9:16 (contain + teto de altura pra não empurrar
+   rubrica e decisão pra fora do painel sticky). */
+video.short-video { width: 100%; max-height: 70vh; aspect-ratio: 9/16; object-fit: contain; border-radius: 10px;
+  background: #000; display: block; cursor: pointer; }
+.short-acoes { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.short-acoes a.botao { color: var(--text); text-decoration: none; }
+.corte-erro { margin: 10px 0 6px; font-size: 12px; }
 .painel h3 { font: 400 22px/1.15 var(--serif); margin-top: 14px; }
 .painel .meta { font: 11px var(--mono); color: var(--faint); margin-top: 6px; }
 .rubrica { display: grid; gap: 7px; margin: 16px 0; }

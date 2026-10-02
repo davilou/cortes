@@ -6,7 +6,7 @@
 // aberta — é assim que a pílula/fila do trilho aparece em qualquer tela.
 let P = null;            // /api/producao
 let epSel = null;        // id do episódio aberto
-const NOMES_ETAPA = { video: "vídeo", legenda: "transcrição", sinais: "sinais", momentos: "momentos" };
+const NOMES_ETAPA = { video: "vídeo", legenda: "transcrição", sinais: "sinais", momentos: "momentos", render: "render" };
 
 function duracaoFmt(s) {
   if (!s) return "";
@@ -43,7 +43,9 @@ function pedidoNovoEpisodio(form) {
 function htmlEtapas(ep) {
   return `<div class="etapas">${Object.entries(ep.etapas).map(([nome, et]) => {
     const cls = { ok: "ok", rodando: "roda", erro: "erro" }[et.situacao] ?? "";
-    const rotulo = et.situacao === "erro" ? "erro" : NOMES_ETAPA[nome];
+    // render mostra o progresso (k/N) assim que existe corte — é a etapa que leva minutos.
+    const rotulo = et.situacao === "erro" ? "erro"
+      : nome === "render" && ep.render?.total ? `render ${ep.render.prontos}/${ep.render.total}` : NOMES_ETAPA[nome];
     return `<div class="etapa ${cls}" title="${esc(et.erro ?? et.situacao)}"><i></i>${esc(rotulo)}</div>`;
   }).join("")}</div>`;
 }
@@ -181,12 +183,15 @@ async function atualizarProducao() {
     trilhoFila();
     const lista = $("#lista-episodios");
     if (lista) { lista.innerHTML = htmlLista(); ligarLista(); }
-    // Comparar a ASSINATURA inteira de `etapas` (não só a situação de `momentos`): qualquer
-    // etapa que mude — inclusive uma que vire erro — precisa reabrir o detalhe. `antes`/`depois`
-    // leem epSel só agora, depois do await: se Davi trocou de episódio enquanto o fetch estava
-    // em voo, a comparação é sobre o episódio selecionado na resposta, não o de quando ela saiu.
-    const antes = epSel ? JSON.stringify(anteriorP?.episodios.find(e => e.id === epSel)?.etapas) : undefined;
-    const depois = epSel ? JSON.stringify(P.episodios.find(e => e.id === epSel)?.etapas) : undefined;
+    // Comparar a ASSINATURA inteira de `etapas` e do resumo do render (não só a situação de
+    // `momentos`): qualquer etapa que mude — inclusive uma que vire erro — precisa reabrir o
+    // detalhe, e o render fica "rodando" o tempo todo enquanto os cortes andam um a um, então
+    // sem `ep.render` o cartão ficaria parado em "renderizando…". `antes`/`depois` leem epSel
+    // só agora, depois do await: se Davi trocou de episódio enquanto o fetch estava em voo, a
+    // comparação é sobre o episódio selecionado na resposta, não o de quando ela saiu.
+    const assinatura = ep => (ep ? JSON.stringify([ep.etapas, ep.render]) : undefined);
+    const antes = epSel ? assinatura(anteriorP?.episodios.find(e => e.id === epSel)) : undefined;
+    const depois = epSel ? assinatura(P.episodios.find(e => e.id === epSel)) : undefined;
     // Refazer blocoEpisodio a cada 3s reiniciaria o vídeo tocando — só dispara quando a
     // assinatura muda de fato, e só se a tela Episódios estiver com o detalhe montado.
     if (epSel && depois !== undefined && depois !== antes && $("#detalhe-episodio")) {
