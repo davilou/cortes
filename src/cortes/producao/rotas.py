@@ -12,7 +12,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from cortes.episodio import id_do_video, ler_json
+from cortes.episodio import id_do_video
 from cortes.painel.dados import VIDEO_ID
 from cortes.perfil import CRITERIOS
 from cortes.producao import curadoria
@@ -44,15 +44,39 @@ def _pasta(raiz: Path, id: str) -> Path:
     return pasta
 
 
-def _json_ou(arquivo: Path, vazio: Any) -> Any:
-    """Arquivo de etapa ainda não gerado é estado normal (episódio em andamento), não erro."""
-    return ler_json(arquivo) if arquivo.exists() else vazio
+def _meta(pasta: Path) -> dict[str, Any]:
+    """meta.json ainda não gerado é estado normal (vídeo baixando); existente e ruim é erro."""
+    arquivo = pasta / "meta.json"
+    if not arquivo.exists():
+        return {}
+    meta = curadoria.ler_arquivo(arquivo)
+    if not isinstance(meta, dict):
+        raise ErroProducao(f"{arquivo}: deveria ser um objeto")
+    return meta
+
+
+def _candidatos(pasta: Path) -> list[dict[str, Any]]:
+    """Antes da etapa momentos não há candidatos: lista vazia. Arquivo ruim é erro."""
+    return curadoria.candidatos(pasta) if (pasta / "candidatos.json").exists() else []
 
 
 def _resumo(pasta: Path) -> dict[str, Any]:
-    meta = _json_ou(pasta / "meta.json", {})
+    meta = _meta(pasta)
     return {**asdict(ler(pasta)), "titulo": meta.get("titulo"), "canal": meta.get("canal"),
-            "duracao_s": meta.get("duracao_s"), "n_candidatos": len(_json_ou(pasta / "candidatos.json", []))}
+            "duracao_s": meta.get("duracao_s"), "n_candidatos": len(_candidatos(pasta))}
+
+
+def _episodios(raiz: Path) -> list[dict[str, Any]]:
+    """Um episódio com arquivo ruim não some com a lista: vira `{"id", "erro"}`. Os quebrados
+    vêm primeiro (por id), depois os bons do mais novo para o mais antigo."""
+    bons: list[dict[str, Any]] = []
+    quebrados: list[dict[str, Any]] = []
+    for pasta in sorted(a.parent for a in raiz.glob("episodios/*/estado.json")):
+        try:
+            bons.append(_resumo(pasta))
+        except ErroProducao as ex:
+            quebrados.append({"id": pasta.name, "erro": str(ex)})
+    return quebrados + sorted(bons, key=lambda r: r["criado_em"], reverse=True)
 
 
 def _nichos(raiz: Path) -> list[str]:
@@ -86,16 +110,15 @@ def montar(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock,
 def _rotas_leitura(app: FastAPI, raiz: Path, fila: Fila) -> None:
     @app.get("/api/producao")
     def api_producao() -> Any:
-        pastas = [a.parent for a in raiz.glob("episodios/*/estado.json")]
-        eps = sorted((_resumo(p) for p in pastas), key=lambda r: r["criado_em"], reverse=True)
-        return jsonable_encoder({"fila": fila.situacao(), "episodios": eps, "formatos": FORMATOS_RENDER})
+        return jsonable_encoder({"fila": fila.situacao(), "episodios": _episodios(raiz),
+                                 "formatos": FORMATOS_RENDER})
 
     @app.get("/api/episodios/{id}")
     def api_episodio(id: str) -> Any:
         pasta = _pasta(raiz, id)
         feitas = curadoria.decisoes(pasta)
         cands = [{**c, "indice": i, "decisao": feitas.get(i, {}).get("decisao")}
-                 for i, c in enumerate(_json_ou(pasta / "candidatos.json", []))]
+                 for i, c in enumerate(_candidatos(pasta))]
         return jsonable_encoder({**_resumo(pasta), "rubrica": list(CRITERIOS), "motivos": curadoria.MOTIVOS,
                                  "candidatos": cands})
 
@@ -123,11 +146,12 @@ def _rotas_acao(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock,
     @app.post("/api/episodios/{id}/tentar", status_code=202)
     def api_tentar(id: str) -> dict[str, bool]:
         pasta = _pasta(raiz, id)
-        e = ler(pasta)
-        if etapa_com_erro(e) is None:
-            raise ErroProducao(f"episódio {id} não tem etapa com erro")
-        gravar(pasta, reabrir(e))
-        fila.enfileirar(id)
+        with escrita:   # clique duplo: o segundo já não vê erro e recebe 422
+            e = ler(pasta)
+            if etapa_com_erro(e) is None:
+                raise ErroProducao(f"episódio {id} não tem etapa com erro")
+            gravar(pasta, reabrir(e))
+            fila.enfileirar(id)
         return {"enfileirado": True}
 
     @app.post("/api/episodios/{id}/candidatos/{indice}/decisao")

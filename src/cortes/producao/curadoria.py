@@ -46,11 +46,48 @@ def texto_do_trecho(frases: list[Frase], frase_inicio: int, frase_fim: int) -> s
     return " ".join(por_indice[i] for i in range(frase_inicio, frase_fim + 1))
 
 
+def ler_arquivo(arquivo: Path) -> Any:
+    """Lê um JSON de etapa do episódio. Ausente, ilegível ou truncado vira ErroProducao com o
+    caminho — a API responde 422 com a causa, não 500. Quem trata "ainda não gerado" como
+    vazio confere `exists()` antes; aqui ausente é erro."""
+    if not arquivo.exists():
+        raise ErroProducao(f"{arquivo}: não existe (a etapa ainda não gerou este arquivo)")
+    try:
+        return ler_json(arquivo)
+    except (OSError, ValueError) as ex:   # ValueError cobre JSONDecodeError e UnicodeDecodeError
+        raise ErroProducao(f"{arquivo}: ilegível ({type(ex).__name__}: {ex})") from ex
+
+
+def candidatos(pasta: Path) -> list[dict[str, Any]]:
+    arquivo = pasta / _CANDIDATOS
+    if not arquivo.exists():
+        raise ErroProducao(f"episódio {pasta.name} ainda não tem candidatos ({arquivo} não existe)")
+    lista = ler_arquivo(arquivo)
+    if not isinstance(lista, list) or not all(isinstance(c, dict) for c in lista):
+        raise ErroProducao(f"{arquivo}: deveria ser uma lista de candidatos (objetos)")
+    return lista
+
+
 def decisoes(pasta: Path) -> dict[int, dict[str, Any]]:
     arquivo = pasta / _CURADORIA
     if not arquivo.exists():
         return {}
-    return {int(k): v for k, v in ler_json(arquivo).items()}
+    d = ler_arquivo(arquivo)
+    if not isinstance(d, dict) or not all(isinstance(v, dict) for v in d.values()):
+        raise ErroProducao(f"{arquivo}: deveria ser um objeto {{índice: decisão}}")
+    try:
+        return {int(k): v for k, v in d.items()}
+    except ValueError as ex:
+        raise ErroProducao(f"{arquivo}: chave que não é índice ({ex})") from ex
+
+
+def _frases(pasta: Path) -> list[Frase]:
+    arquivo = pasta / _FRASES
+    lista = ler_arquivo(arquivo)
+    try:
+        return [Frase(**f) for f in lista]
+    except TypeError as ex:
+        raise ErroProducao(f"{arquivo}: frase inválida ({ex})") from ex
 
 
 def _numero(c: dict[str, Any], campo: str, arquivo: Path) -> float:
@@ -76,10 +113,10 @@ def _texto_campo(c: dict[str, Any], campo: str, arquivo: Path) -> str:
 
 def _candidato(pasta: Path, indice: int) -> dict[str, Any]:
     arquivo = pasta / _CANDIDATOS
-    candidatos = ler_json(arquivo)
-    if not 0 <= indice < len(candidatos):
-        raise ErroProducao(f"candidato {indice} não existe ({len(candidatos)} candidatos) em {arquivo}")
-    c = candidatos[indice]
+    todos = candidatos(pasta)
+    if not 0 <= indice < len(todos):
+        raise ErroProducao(f"candidato {indice} não existe ({len(todos)} candidatos) em {arquivo}")
+    c = todos[indice]
     return {
         "inicio": _numero(c, "inicio", arquivo), "fim": _numero(c, "fim", arquivo),
         "titulo": _texto_campo(c, "titulo", arquivo),
@@ -143,7 +180,7 @@ def decidir(pasta: Path, raiz: Path, nicho: str, indice: int, decisao: Decisao, 
     feitas = decisoes(pasta)
     if indice in feitas:
         _validar_decisao_antiga(feitas[indice], c, indice)
-    frases = [Frase(**f) for f in ler_json(pasta / _FRASES)]
+    frases = _frases(pasta)
     texto = texto_do_trecho(frases, c["frase_inicio"], c["frase_fim"])
     exemplo: dict[str, Any] = {"episodio": pasta.name, "inicio": c["inicio"], "fim": c["fim"],
                                 "titulo": c["titulo"], "texto": texto}

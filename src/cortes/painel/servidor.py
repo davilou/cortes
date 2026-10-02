@@ -92,6 +92,8 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     async def ciclo(_: FastAPI) -> AsyncIterator[None]:
         fila.iniciar()   # só sob uvicorn (ou `with TestClient`): retoma o que ficou rodando
         yield
+        # Sem fase de desligamento, de propósito: a thread da fila é daemon e morre com o
+        # processo; o que estava "rodando" é reaberto por `recuperar` na próxima subida.
 
     app = FastAPI(title="Painel de contas", lifespan=ciclo)
     # Só 127.0.0.1/localhost: uma página de fora não alcança a API por DNS rebinding.
@@ -104,6 +106,13 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     @app.exception_handler(ErroPainel)
     async def _erro(_: Request, e: ErroPainel) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(e)})
+
+    @app.exception_handler(OSError)
+    async def _erro_disco(_: Request, e: OSError) -> JSONResponse:
+        # ex.: PermissionError após as retentativas do salvar_json (antivírus/indexador
+        # segurando o arquivo). Alto no terminal, causa na resposta; tentar de novo costuma bastar.
+        traceback.print_exception(e)
+        return JSONResponse(status_code=503, content={"detail": f"falha de disco: {type(e).__name__}: {e}"})
 
     @app.exception_handler(ErroProducao)
     async def _erro_producao(_: Request, e: ErroProducao) -> JSONResponse:

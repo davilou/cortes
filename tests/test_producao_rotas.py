@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -172,3 +173,73 @@ def test_fila_sobe_com_o_servidor(cfg: Config) -> None:
             time.sleep(0.02)
     assert rodadas == ["video", "legenda", "sinais", "momentos"]
     assert concluido(ler(pasta))
+
+
+def test_candidatos_truncado_e_422_no_detalhe_e_marcado_na_lista(cfg: Config) -> None:
+    pasta = preparar_concluido(cfg)
+    (pasta / "candidatos.json").write_text('[{"titulo": ', encoding="utf-8")
+    c, _ = montar(cfg)
+    r = c.get("/api/episodios/abcdefghijk")
+    detalhe = r.json()["detail"]
+    assert r.status_code == 422 and "candidatos.json" in detalhe and "ilegível" in detalhe
+    ep = c.get("/api/producao").json()["episodios"][0]
+    assert ep["id"] == "abcdefghijk" and "candidatos.json" in ep["erro"] and set(ep) == {"id", "erro"}
+
+
+def test_episodio_quebrado_nao_esconde_os_outros(cfg: Config) -> None:
+    preparar_concluido(cfg)
+    c, _ = montar(cfg)
+    c.post("/api/episodios", json={**NOVO, "link": "https://youtu.be/zzzzzzzzzzz"})
+    quebrado = cfg.raiz / "episodios" / "mmmmmmmmmmm"
+    quebrado.mkdir()
+    (quebrado / "estado.json").write_text("{", encoding="utf-8")
+    eps = c.get("/api/producao").json()["episodios"]
+    assert [e["id"] for e in eps] == ["mmmmmmmmmmm", "zzzzzzzzzzz", "abcdefghijk"]   # zzz é o mais novo
+    assert "estado inválido" in eps[0]["erro"] and eps[2]["titulo"] == "Ep"
+
+
+def test_curadoria_truncada_e_422(cfg: Config) -> None:
+    pasta = preparar_concluido(cfg)
+    (pasta / "curadoria.json").write_text('{"0": {"decisao"', encoding="utf-8")
+    c, _ = montar(cfg)
+    r = c.get("/api/episodios/abcdefghijk")
+    assert r.status_code == 422 and "curadoria.json" in r.json()["detail"]
+    r = c.post("/api/episodios/abcdefghijk/candidatos/0/decisao", json={"decisao": "aprovado"})
+    assert r.status_code == 422 and "curadoria.json" in r.json()["detail"]
+
+
+def test_decisao_sem_candidatos_e_422(cfg: Config) -> None:
+    c, _ = montar(cfg)
+    c.post("/api/episodios", json=NOVO)
+    assert c.get("/api/episodios/abcdefghijk").json()["candidatos"] == []
+    r = c.post("/api/episodios/abcdefghijk/candidatos/0/decisao", json={"decisao": "aprovado"})
+    assert r.status_code == 422 and "ainda não tem candidatos" in r.json()["detail"]
+
+
+def test_tentar_em_clique_duplo_so_um_passa(cfg: Config) -> None:
+    pasta = preparar_concluido(cfg)
+    gravar(pasta, marcar(ler(pasta), "momentos", "erro", AGORA, "falhou"))
+    c, fila = montar(cfg)
+    status: list[int] = []
+
+    def tentar() -> None:
+        status.append(c.post("/api/episodios/abcdefghijk/tentar").status_code)
+
+    fios = [threading.Thread(target=tentar) for _ in range(6)]
+    for f in fios:
+        f.start()
+    for f in fios:
+        f.join(timeout=10)
+    assert sorted(status) == [202, 422, 422, 422, 422, 422]
+    assert fila.situacao()["na_fila"] == ["abcdefghijk"]
+
+
+def test_falha_de_disco_e_503_com_a_causa(cfg: Config, monkeypatch: pytest.MonkeyPatch) -> None:
+    def negado(pasta: Path, e: EstadoEpisodio) -> None:
+        raise PermissionError(13, "acesso negado", str(pasta / "estado.json"))
+
+    monkeypatch.setattr("cortes.producao.rotas.gravar", negado)
+    c, fila = montar(cfg)
+    r = c.post("/api/episodios", json=NOVO)
+    assert r.status_code == 503 and "PermissionError" in r.json()["detail"]
+    assert fila.situacao()["na_fila"] == []
