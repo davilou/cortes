@@ -115,3 +115,15 @@ def test_sugere_pasta_com_prefixo_de_formato_alcanca_casamento_total() -> None:
               CorteConhecido("testes/conversa-com-comediante-extra",
                               "conversa-com-comediante-extra", None, None)]
     assert sugerir("A conversa com o comediante", cortes)[0].caminho == "testes/f7-conversa-comediante"
+
+
+def test_corte_de_episodio_usa_o_titulo_do_corte_json(tmp_path: Path) -> None:
+    from cortes.render.corte import gravar_corte, novo_corte, pasta_corte
+    ep = tmp_path / "episodios" / "abcdefghijk"
+    ep.mkdir(parents=True)
+    (ep / "meta.json").write_text('{"canal": "PrimoCast"}', encoding="utf-8")
+    gravar_corte(pasta_corte(ep, 3),
+                 novo_corte(3, {"inicio": 1, "fim": 30, "titulo": "O comediante que mais vende"}, "f7"))
+    [c] = listar_cortes(tmp_path, {"f7"})
+    assert (c.nome, c.formato, c.podcast) == ("O comediante que mais vende", "f7", "PrimoCast")
+    assert sugerir("comediante que mais vende #shorts", [c])[0] == c

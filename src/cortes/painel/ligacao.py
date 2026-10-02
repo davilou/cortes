@@ -1,8 +1,7 @@
 """Cortes conhecidos no disco e sugestão do corte pelo título do Short (spec painel §4.2).
 
-Limite conhecido: cortes em `episodios/*/cortes/<n>` têm nome numérico (o `<n>` da pasta),
-então `sugerir` não consegue casá-los pelo título até a curadoria escrever um título para o
-corte — a tela sempre pede confirmação antes de ligar o Short a um corte.
+Cortes em `episodios/*/cortes/<n>` usam o título do `corte.json` como nome, para casar com o
+título do Short. A tela sempre pede confirmação antes de ligar.
 """
 import json
 import re
@@ -14,6 +13,8 @@ from pathlib import Path
 
 from cortes.episodio import ler_json
 from cortes.painel.dados import ErroPainel
+from cortes.producao.estado import ErroProducao
+from cortes.render.corte import ARQUIVO, ler_corte
 
 _FORMATO = re.compile(r"^(f\d+)-")
 _FORA_DE_TESTES = {"comum"}   # código compartilhado, não é corte
@@ -50,6 +51,17 @@ def _podcast_do_episodio(meta: Path) -> str:
     return canal
 
 
+def _corte_de_episodio(raiz: Path, pasta: Path, formatos: Collection[str], podcast: str) -> CorteConhecido:
+    if not (pasta / ARQUIVO).exists():
+        return _corte(raiz, pasta, formatos, podcast)
+    try:
+        c = ler_corte(pasta)
+    except ErroProducao as ex:
+        raise ErroPainel(str(ex)) from ex
+    return CorteConhecido(pasta.relative_to(raiz).as_posix(), c.titulo,
+                          c.formato if c.formato in formatos else None, podcast)
+
+
 def listar_cortes(raiz: Path, formatos: Collection[str]) -> list[CorteConhecido]:
     cortes: list[CorteConhecido] = []
     testes = raiz / "testes"
@@ -61,7 +73,7 @@ def listar_cortes(raiz: Path, formatos: Collection[str]) -> list[CorteConhecido]
         if p.is_dir():
             meta = p.parent.parent / "meta.json"
             podcast = _podcast_do_episodio(meta)
-            cortes.append(_corte(raiz, p, formatos, podcast))
+            cortes.append(_corte_de_episodio(raiz, p, formatos, podcast))
     return cortes
 
 
