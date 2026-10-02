@@ -1,6 +1,7 @@
 """Processos externos do render (ffmpeg, Python da visão, HyperFrames) atrás de um executor
 injetável — os testes passam um falso; nada de rede, GPU ou render de verdade fora do `lento`."""
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -13,13 +14,30 @@ class ErroRender(RuntimeError):
     """Falha no render de um corte. A mensagem traz o passo e o fim do log."""
 
 
+def _matar_arvore(p: "subprocess.Popen[str]") -> None:
+    """Mata o processo e toda a árvore de filhos/netos que ele abriu. No Windows,
+    `Popen.kill()` mata só o `npx.cmd`, e `node`/`chromium` (netos) continuam vivos com os
+    pipes de stdout/stderr abertos — por isso o `communicate()` seguinte travaria para
+    sempre. `taskkill /T` mata a árvore inteira pelo PID raiz."""
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
+    else:
+        p.kill()
+
+
+_FLAGS = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+
+
 def rodar_processo(args: list[str], cwd: Path | None) -> tuple[int, str]:
+    p = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, encoding="utf-8", errors="replace", creationflags=_FLAGS)
     try:
-        r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=TIMEOUT_S)
+        saida, _ = p.communicate(timeout=TIMEOUT_S)
     except subprocess.TimeoutExpired as ex:
+        _matar_arvore(p)
+        p.communicate()   # agora retorna: a árvore que segurava os pipes está morta
         raise ErroRender(f"{args[0]} passou de {TIMEOUT_S // 60} min e foi interrompido") from ex
-    return r.returncode, r.stdout + r.stderr
+    return p.returncode, saida
 
 
 def exigir(rodar: Rodar, args: list[str], cwd: Path | None, passo: str) -> str:
