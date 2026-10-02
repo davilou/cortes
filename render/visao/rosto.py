@@ -1,11 +1,14 @@
-"""Rosto por amostra de um trecho, ciente de troca de câmera.
+"""Rostos por amostra de um trecho (até 3), cientes de troca de câmera.
 
 Roda no Python do ComfyUI (tem cv2 e onnxruntime); o app chama por subprocesso
 (src/cortes/render/rosto.py). Portado de testes/comum/rosto.py.
 
 Uso: <python com onnxruntime> rosto.py <trecho.mp4> <modelo.onnx> <saida.json>
-Grava {"largura", "altura", "pontos": [{"t", "x", "y", "corte"}]} em pixels da fonte;
-corte=true no primeiro ponto depois de uma troca de câmera. Rosto em menos da metade das
+Grava (formato 2):
+  {"formato": 2, "largura", "altura", "cortes": [instantes reais das trocas de câmera],
+   "amostras": [{"t", "rostos": [{"x", "y", "r", "conf"}]}]}
+em pixels da fonte; `r` é o raio do rosto. Até MAX_ROSTOS por amostra, como o `detect_faces` do
+OpenSeeFace: os maiores picos do mapa de calor acima do limiar. Rosto em menos da metade das
 amostras → sai com código 1 e a causa no stderr (trilha não confiável).
 """
 import json
@@ -25,15 +28,25 @@ _MEAN = -np.array([0.485, 0.456, 0.406], np.float32) / np.array([0.229, 0.224, 0
 _STD = 1.0 / (np.array([0.229, 0.224, 0.225], np.float32) * 255.0)
 
 
-def detectar(frame: np.ndarray, sessao: ort.InferenceSession) -> tuple[float, float] | None:
+MAX_ROSTOS = 3
+
+
+def detectar(frame: np.ndarray, sessao: ort.InferenceSession) -> list[dict]:
+    altura, largura = frame.shape[:2]
     im = cv2.resize(frame, (224, 224), interpolation=cv2.INTER_LINEAR)[:, :, ::-1] * _STD + _MEAN
     saida, maxpool = sessao.run([], {"input": np.transpose(im[None].astype(np.float32), (0, 3, 1, 2))})
-    mapa = np.where(saida[0, 0] == maxpool[0, 0], saida[0, 0], 0)
-    k = int(np.argmax(mapa))
-    if mapa.flat[k] < LIMIAR:
-        return None
-    y, x = divmod(k, 56)
-    return x * 4 * frame.shape[1] / 224, y * 4 * frame.shape[0] / 224
+    calor, raio = saida[0, 0], saida[0, 1]
+    picos = np.where(calor == maxpool[0, 0], calor, 0)
+    rostos: list[dict] = []
+    for k in np.argsort(picos.ravel())[::-1][:MAX_ROSTOS]:
+        conf = float(picos.flat[k])
+        if conf < LIMIAR:
+            break
+        y, x = divmod(int(k), 56)
+        r = float(raio[y, x]) * 112
+        rostos.append({"x": round(x * 4 * largura / 224), "y": round(y * 4 * altura / 224),
+                       "r": round(r * largura / 224), "conf": round(conf, 3)})
+    return rostos
 
 
 def _cortes_validos(brutos: list[float]) -> list[float]:
@@ -59,35 +72,33 @@ def cortes_de_camera(video: Path) -> list[float]:
     return _cortes_validos(brutos)
 
 
-def amostrar(video: Path, sessao: ort.InferenceSession, cortes: list[float]) -> tuple[int, int, list[dict], int]:
+def amostrar(video: Path, sessao: ort.InferenceSession, cortes: list[float]) -> tuple[int, int, list[dict]]:
     cap = cv2.VideoCapture(str(video))
     fps = cap.get(cv2.CAP_PROP_FPS)
     largura, altura = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     dur = cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps
-    tempos = sorted({round(k * PASSO_S, 3) for k in range(int(dur / PASSO_S))} | {round(c + 0.05, 3) for c in cortes})
-    pontos: list[dict] = []
-    ultimo: int | None = None
+    tempos = sorted({round(k * PASSO_S, 3) for k in range(int(dur / PASSO_S))}
+                    | {round(c + 0.05, 3) for c in cortes})
+    amostras: list[dict] = []
     for t in tempos:
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(t * fps))
         ok, frame = cap.read()
-        if not ok or (r := detectar(frame, sessao)) is None:
-            continue
-        n = sum(1 for c in cortes if c <= t)
-        pontos.append({"t": round(t, 2), "x": round(r[0]), "y": round(r[1]), "corte": ultimo is not None and n != ultimo})
-        ultimo = n
-    return largura, altura, pontos, len(tempos)
+        amostras.append({"t": round(t, 2), "rostos": detectar(frame, sessao) if ok else []})
+    return largura, altura, amostras
 
 
 def main() -> None:
     trecho, modelo, saida = (Path(a) for a in sys.argv[1:4])
     sessao = ort.InferenceSession(str(modelo), providers=["CPUExecutionProvider"])
     cortes = cortes_de_camera(trecho)
-    largura, altura, pontos, n = amostrar(trecho, sessao, cortes)
-    if len(pontos) < 0.5 * n:
-        sys.exit(f"rosto em só {len(pontos)} de {n} amostras — trilha não confiável")
-    saida.write_text(json.dumps({"largura": largura, "altura": altura, "pontos": pontos,
-                                 "cortes": cortes}), encoding="utf-8")
-    print(f"rosto em {len(pontos)}/{n} amostras; {sum(p['corte'] for p in pontos)} trocas de câmera")
+    largura, altura, amostras = amostrar(trecho, sessao, cortes)
+    com_rosto = sum(1 for a in amostras if a["rostos"])
+    if com_rosto < 0.5 * len(amostras):
+        sys.exit(f"rosto em só {com_rosto} de {len(amostras)} amostras — trilha não confiável")
+    saida.write_text(json.dumps({"formato": 2, "largura": largura, "altura": altura, "cortes": cortes,
+                                 "amostras": amostras}), encoding="utf-8")
+    varios = sum(1 for a in amostras if len(a["rostos"]) > 1)
+    print(f"rosto em {com_rosto}/{len(amostras)} amostras; {varios} com 2+ rostos; {len(cortes)} trocas de câmera")
 
 
 if __name__ == "__main__":
