@@ -43,7 +43,10 @@ def corte_de(pasta: Path, n: int) -> Corte:
 
 
 def palavras_do_episodio(pasta: Path) -> list[Palavra]:
-    return [Palavra(**p) for p in ler_json(pasta / "palavras.json")]
+    arq = pasta / "palavras.json"
+    if not arq.exists():
+        raise ErroProducao(f"{arq}: não existe (a transcrição deste episódio ainda não rodou)")
+    return [Palavra(**p) for p in ler_json(arq)]
 
 
 def _palavras_json(todas: list[Palavra], c: Corte) -> list[dict[str, Any]]:
@@ -106,8 +109,8 @@ def situacao_previa(previas: Previas, d: Path, id: str, c: Corte) -> dict[str, A
         return {"situacao": "pronta", "erro": None, "url": url}
     if url is None:
         return {"situacao": "ausente", "erro": None, "url": None}
-    novo = idx.stat().st_mtime >= (d / ARQUIVO).stat().st_mtime
-    return {"situacao": "pronta" if novo else "desatualizada", "erro": None, "url": url}
+    desatualizada = c.alterado and idx.stat().st_mtime < (d / ARQUIVO).stat().st_mtime
+    return {"situacao": "desatualizada" if desatualizada else "pronta", "erro": None, "url": url}
 
 
 def _versoes(id: str, d: Path, n: int) -> list[dict[str, Any]]:
@@ -192,7 +195,11 @@ def _rotas_leitura(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previ
 
     @app.get("/api/episodios/{id}/cortes/{n}/planos/{k}/pessoas/{j}")
     def api_miniatura(id: str, n: int, k: int, j: int) -> FileResponse:
-        d = pasta_corte(pasta_de(id), n)
+        pasta = pasta_de(id)
+        c = corte_de(pasta, n)
+        if not editavel(previas, id, c):   # o rosto pode estar sendo medido de novo (item 2)
+            raise ErroProducao(f"corte {n} está sendo preparado; espere terminar para ver as miniaturas")
+        d = pasta_corte(pasta, n)
         rp = rosto_do_corte(d)
         if rp is None:
             raise ErroProducao(f"corte {n} ainda sem rosto medido")

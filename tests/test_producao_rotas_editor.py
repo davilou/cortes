@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from cortes.painel.servidor import Config, criar_app
 from cortes.producao.estado import EstadoEpisodio
 from cortes.producao.fila import Fila
 from cortes.producao.previas import Previas
-from cortes.render.corte import Corte, concluir, gravar_corte, novo_corte, pasta_corte
+from cortes.render.corte import Corte, Edicoes, concluir, gravar_corte, ler_corte, novo_corte, pasta_corte
 from cortes.render.previa import RUNTIME
 from tests.test_producao_rotas import preparar_concluido
 
@@ -69,8 +70,17 @@ def test_estado_do_editor(cfg: Config) -> None:
     assert d["editavel"] is True and d["formatos"] == ["f7", "f1"]
 
 
-def test_previa_desatualizada_quando_o_corte_e_mais_novo(cfg: Config) -> None:
+def test_previa_pronta_quando_nao_alterado_mesmo_com_corte_json_mais_novo(cfg: Config) -> None:
+    """O render grava o index.html e só DEPOIS o corte.json (`concluir`); sem edição pendente
+    (`alterado is False`) o index.html mais velho não quer dizer desatualizado — item 3."""
     a = Ambiente(cfg)
+    os.utime(a.d / "projeto" / "index.html", (1, 1))
+    assert a.c.get(f"{EP}/cortes/0/editor").json()["previa"]["situacao"] == "pronta"
+
+
+def test_previa_desatualizada_quando_alterado_e_index_mais_velho_que_o_corte(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    gravar_corte(a.d, replace(ler_corte(a.d), alterado=True))
     os.utime(a.d / "projeto" / "index.html", (1, 1))
     assert a.c.get(f"{EP}/cortes/0/editor").json()["previa"]["situacao"] == "desatualizada"
 
@@ -134,3 +144,52 @@ def test_edicao_recusada_com_o_corte_na_fila(cfg: Config) -> None:
 def test_pedir_previa(cfg: Config) -> None:
     a = Ambiente(cfg)
     assert a.c.post(f"{EP}/cortes/0/previa").json()["previa"]["situacao"] == "preparando"
+
+
+def test_rosto_formato_velho_abre_o_editor_com_planos_vazios_e_rosto_erro(cfg: Config) -> None:
+    """rosto.json do plano B (formato 1) não pode derrubar o editor (GET/POST 422) — item 1."""
+    a = Ambiente(cfg)
+    (a.d / "rosto.json").write_text(json.dumps({"largura": 1920, "altura": 1080, "cortes": [],
+        "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}), encoding="utf-8")
+    d = a.c.get(f"{EP}/cortes/0/editor").json()
+    assert d["planos"] == [] and "meça o rosto de novo" in d["rosto_erro"]
+
+
+def test_editar_titulo_funciona_com_rosto_formato_velho(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    (a.d / "rosto.json").write_text(json.dumps({"largura": 1920, "altura": 1080, "cortes": [],
+        "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}), encoding="utf-8")
+    d = a.c.post(f"{EP}/cortes/0/editar", json={"titulo": "Novo título"}).json()
+    assert d["corte"]["titulo"] == "Novo título" and d["rosto_erro"] is not None
+
+
+def test_escolha_antiga_fica_invalida_quando_a_pessoa_nao_existe_mais(cfg: Config) -> None:
+    """edicoes.rostos pode sobreviver a uma nova medição do rosto e apontar pra pessoa que não
+    existe mais no plano — a tela usa o padrão e avisa, em vez de quebrar — item 4."""
+    a = Ambiente(cfg)
+    c = ler_corte(a.d)
+    gravar_corte(a.d, replace(c, edicoes=Edicoes(rostos={1: 5})))
+    d = a.c.get(f"{EP}/cortes/0/editor").json()
+    plano1 = next(p for p in d["planos"] if p["k"] == 1)
+    assert plano1["escolha"] == plano1["padrao"] and plano1["escolha_invalida"] is True
+
+
+def test_palavras_json_ausente_e_erro_claro(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    (a.pasta / "palavras.json").unlink()
+    d = a.c.get(f"{EP}/cortes/0/editor").json()
+    assert "transcrição deste episódio ainda não rodou" in d["detail"]
+
+
+def test_miniatura_recusada_com_o_corte_na_fila(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    a.c.post(f"{EP}/cortes/0/renderizar", json={})
+    r = a.c.get(f"{EP}/cortes/0/planos/1/pessoas/1")
+    assert r.status_code == 422 and "preparado" in r.json()["detail"]
+
+
+def test_miniatura_recusada_com_a_previa_preparando(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    a.previas.pedir("abcdefghijk", 0)
+    r = a.c.get(f"{EP}/cortes/0/planos/1/pessoas/1")
+    assert r.status_code == 422 and "preparado" in r.json()["detail"]
