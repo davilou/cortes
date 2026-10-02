@@ -19,11 +19,20 @@ def caminho_template(raiz: Path, formato: str) -> Path:
 
 
 def montar_html(tpl: str, valores: dict[str, str]) -> str:
-    html = tpl
-    for k, v in valores.items():
-        html = html.replace("{{" + k + "}}", v)
-    if sobra := _PLACEHOLDER.findall(html):
-        raise ErroRender(f"placeholders sem valor: {sorted(set(sobra))}")
+    """Uma passada só: o texto de um valor (ex.: legenda com `{{` literal) não é reprocessado
+    como placeholder, diferente de substituir chave por chave em sequência."""
+    faltando: set[str] = set()
+
+    def _troca(m: re.Match[str]) -> str:
+        chave = m.group(0)[2:-2]
+        if chave not in valores:
+            faltando.add(m.group(0))
+            return m.group(0)
+        return valores[chave]
+
+    html = _PLACEHOLDER.sub(_troca, tpl)
+    if faltando:
+        raise ErroRender(f"placeholders sem valor: {sorted(faltando)}")
     return html
 
 

@@ -16,6 +16,11 @@ def test_placeholder_sobrando_e_erro() -> None:
         montar_html("<p>{{DUR}} {{QW}}</p>", {"DUR": "3"})
 
 
+def test_valor_com_placeholder_literal_nao_e_reprocessado() -> None:
+    html = montar_html("<p>{{LEGENDAS}} {{CORTES}}</p>", {"LEGENDAS": "{{CORTES}}", "CORTES": "[1]"})
+    assert html == "<p>{{CORTES}} [1]</p>"
+
+
 def test_formato_sem_template_e_erro() -> None:
     with pytest.raises(ErroRender, match="formato 'f4'"):
         caminho_template(REPO, "f4")
