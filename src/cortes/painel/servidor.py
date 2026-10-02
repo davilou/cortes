@@ -117,6 +117,18 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     app.state.fila = fila
     escrita = threading.Lock()   # ler-validar-gravar de contas.yaml, publicados.jsonl e curadoria
 
+    _handlers(app)
+    _rotas_leitura(app, cfg, estado)
+    _rotas_acao(app, cfg, estado, escrita, executar, abrir, agora)
+    rotas_producao.montar(app, cfg.raiz, fila, escrita, agora, previas, rodar)
+    formatos_rotas.montar(app, cfg.raiz)
+    app.mount("/", StaticFiles(directory=cfg.estatico, html=True), name="web")
+    return app
+
+
+def _handlers(app: FastAPI) -> None:
+    """Exception handlers das rotas: cada erro de domínio vira JSON com a causa (sem default
+    silencioso); extraído de `criar_app` para caber no teto de 50 linhas por função."""
     @app.exception_handler(ErroPainel)
     async def _erro(_: Request, e: ErroPainel) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(e)})
@@ -135,13 +147,6 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     @app.exception_handler(ErroRender)
     async def _erro_render(_: Request, e: ErroRender) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(e)})
-
-    _rotas_leitura(app, cfg, estado)
-    _rotas_acao(app, cfg, estado, escrita, executar, abrir, agora)
-    rotas_producao.montar(app, cfg.raiz, fila, escrita, agora, previas, rodar)
-    formatos_rotas.montar(app, cfg.raiz)
-    app.mount("/", StaticFiles(directory=cfg.estatico, html=True), name="web")
-    return app
 
 
 def verificar_render(cfg: Config) -> str:
