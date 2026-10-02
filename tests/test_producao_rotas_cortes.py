@@ -46,6 +46,16 @@ def test_renderizar_recusa(cfg: Config) -> None:
     assert "momentos" in c.post(f"{EP}/cortes/0/renderizar", json={}).json()["detail"]
 
 
+def test_renderizar_recusa_com_etapa_render_em_erro(cfg: Config) -> None:
+    pasta = preparar_concluido(cfg)
+    gravar(pasta, marcar(ler(pasta), "render", "erro", AGORA, "falhou"))
+    c, _ = montar(cfg)
+    r = c.post(f"{EP}/cortes/0/renderizar", json={})
+    assert r.status_code == 422
+    assert "tentar de novo" in r.json()["detail"]
+    assert not (pasta / "cortes" / "0" / "corte.json").exists()
+
+
 def test_detalhe_traz_cortes_e_resumo(cfg: Config) -> None:
     pasta = preparar_concluido(cfg)
     gravar_corte(pasta_corte(pasta, 0), concluir(novo_corte(0, CAND, "f7")))

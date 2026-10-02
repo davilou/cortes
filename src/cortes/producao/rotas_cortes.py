@@ -49,6 +49,8 @@ def pedir_render(pasta: Path, indice: int, formato: str | None) -> None:
     e = ler(pasta)
     if e.etapas["momentos"].situacao != "ok":
         raise ErroProducao(f"episódio {e.id} ainda não tem os momentos; espere a etapa terminar")
+    if e.etapas["render"].situacao == "erro":
+        raise ErroProducao("a etapa render deste episódio está com erro; use 'tentar de novo' no episódio")
     cands = curadoria.candidatos(pasta)
     if not 0 <= indice < len(cands):
         raise ErroProducao(f"candidato {indice} não existe (o episódio tem {len(cands)})")
