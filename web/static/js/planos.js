@@ -11,10 +11,14 @@ function htmlPessoas(ed, p) {
 }
 
 function htmlPlanos(ed) {
+  if (ed.rosto_erro) return `<p class="sub erro-txt" title="${esc(ed.rosto_erro)}">não deu para ler os
+    rostos: ${esc(ed.rosto_erro)} — a prévia refaz a medição</p>`;
   if (!ed.planos.length) return `<p class="sub">Os planos aparecem quando a prévia ficar pronta.</p>`;
   return `<div class="planos">${ed.planos.map(p => `<div class="plano">
       <span class="num">${tempo(p.ini)}–${tempo(p.fim)}</span>
-      <div class="pessoas">${htmlPessoas(ed, p)}</div></div>`).join("")}</div>`;
+      <div class="pessoas">${htmlPessoas(ed, p)}</div>
+      ${p.escolha_invalida ? `<span class="sub erro-txt">escolha antiga não vale mais — escolha de novo</span>` : ""}
+      </div>`).join("")}</div>`;
 }
 
 // rosto: [plano, pessoa] (API: PedidoEdicao.rosto). Clicar na já escolhida não faz nada.

@@ -21,7 +21,7 @@ from cortes.render.edicao import Edicao, aplicar, indices_do_corte, mascarar
 from cortes.render.miniatura import gerar_miniatura
 from cortes.render.montagem import FORMATOS
 from cortes.render.previa import com_runtime
-from cortes.render.processo import Rodar
+from cortes.render.processo import ErroRender, Rodar
 from cortes.render.rosto import Plano, Rosto, ler_rosto, planos
 from cortes.tipos import Palavra
 
@@ -66,22 +66,36 @@ def rosto_do_corte(d: Path) -> tuple[Rosto, list[Plano]] | None:
     return r, planos(r)
 
 
-def _planos_json(id: str, d: Path, c: Corte) -> list[dict[str, Any]]:
-    rp = rosto_do_corte(d)
+def _plano_json(id: str, c: Corte, v: int, p: Plano) -> dict[str, Any]:
+    escolhida = c.edicoes.rostos.get(p.k)
+    invalida = escolhida is not None and not 0 <= escolhida < len(p.pessoas)
+    escolha = p.padrao if escolhida is None or invalida else escolhida
+    return {"k": p.k, "ini": p.ini, "fim": p.fim, "padrao": p.padrao, "escolha": escolha,
+            "escolha_invalida": invalida,
+            "pessoas": [{"j": j, "x": s.x, "y": s.y, "n": s.n,
+                         "miniatura": f"{_url(id, c.indice)}/planos/{p.k}/pessoas/{j}?v={v}"}
+                        for j, s in enumerate(p.pessoas)]}
+
+
+def _planos_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str | None]:
+    """ErroRender (ex.: rosto.json de formato velho, plano B) não pode derrubar o editor — fica
+    visível em `rosto_erro`; a prévia refaz a medição e resolve."""
+    try:
+        rp = rosto_do_corte(d)
+    except ErroRender as ex:
+        return [], str(ex)
     if rp is None:
-        return []
+        return [], None
     marca = d / "recorte.json"
     v = int(marca.stat().st_mtime) if marca.exists() else 0
-    return [{"k": p.k, "ini": p.ini, "fim": p.fim, "padrao": p.padrao,
-             "escolha": c.edicoes.rostos.get(p.k, p.padrao),
-             "pessoas": [{"j": j, "x": s.x, "y": s.y, "n": s.n,
-                          "miniatura": f"{_url(id, c.indice)}/planos/{p.k}/pessoas/{j}?v={v}"}
-                         for j, s in enumerate(p.pessoas)]} for p in rp[1]]
+    return [_plano_json(id, c, v, p) for p in rp[1]], None
 
 
 def situacao_previa(previas: Previas, d: Path, id: str, c: Corte) -> dict[str, Any]:
-    """Memória da thread primeiro; sem ela (painel reiniciado), o disco: index.html mais novo que o
-    corte.json = pronta, mais velho = desatualizada, ausente = ausente."""
+    """Memória da thread primeiro; sem ela (painel reiniciado), o disco. Sem edição salva desde o
+    último render (`alterado is False`) a prévia está sempre pronta — o render grava o index.html e
+    só DEPOIS o corte.json (`concluir`), então o mtime do index.html fica mais velho mesmo sem nada
+    desatualizado; comparar os dois só faz sentido quando existe edição pendente (`alterado`)."""
     idx = d / "projeto" / "index.html"
     mem = previas.situacao(id, c.indice)
     url = (f"{_url(id, c.indice)}/previa/index.html?v={int(idx.stat().st_mtime * 1000)}"
@@ -112,9 +126,10 @@ def estado_editor(pasta: Path, n: int, previas: Previas) -> dict[str, Any]:
     i0, i1 = indices_do_corte(todas, c.inicio, c.fim)
     meta = ler_json(pasta / "meta.json") if (pasta / "meta.json").exists() else {}
     abertura = " ".join(p.texto for p in todas[i0:i0 + PALAVRAS_AVISO])
+    planos_json, rosto_erro = _planos_json(id, d, c)
     return {"corte": asdict(c), "episodio": {"id": id, "titulo": meta.get("titulo")},
             "palavras": _palavras_json(todas, c), "inicio_palavra": i0, "fim_palavra": i1,
-            "aviso_inicio": comeca_no_meio(abertura), "planos": _planos_json(id, d, c),
+            "aviso_inicio": comeca_no_meio(abertura), "planos": planos_json, "rosto_erro": rosto_erro,
             "previa": situacao_previa(previas, d, id, c), "versoes": _versoes(id, d, n),
             "formatos": list(FORMATOS), "editavel": editavel(previas, id, c)}
 
@@ -144,8 +159,10 @@ def _exigir_editavel(previas: Previas, id: str, c: Corte) -> None:
 def editar(pasta: Path, n: int, pedido: PedidoEdicao, previas: Previas) -> None:
     c = corte_de(pasta, n)
     _exigir_editavel(previas, pasta.name, c)
-    rp = rosto_do_corte(pasta_corte(pasta, n))
-    pessoas_por_plano = [len(p.pessoas) for p in rp[1]] if rp else []
+    pessoas_por_plano: list[int] = []
+    if pedido.rosto is not None:   # só lê o rosto.json quando a edição precisa dele (item 1)
+        rp = rosto_do_corte(pasta_corte(pasta, n))
+        pessoas_por_plano = [len(p.pessoas) for p in rp[1]] if rp else []
     novo = aplicar(c, pedido.edicao(), palavras_do_episodio(pasta), pessoas_por_plano)
     if novo != c:
         gravar_corte(pasta_corte(pasta, n), novo)
