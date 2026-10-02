@@ -29,11 +29,19 @@ class Conta:
     perfil_studio: str
 
 
+# valores aceitos no campo 'no_app' de um formato (aba Formatos do painel, spec §?)
+NO_APP_VALIDOS = ("plano B", "plano D", "plano E", "fora")
+
+
 @dataclass(frozen=True)
 class Formato:
     id: str
     nome: str
     obs: str
+    descricao: str = ""
+    evidencia: str = ""
+    no_app: str | None = None   # um de NO_APP_VALIDOS, ou None se não avaliado ainda
+    demo: str | None = None     # caminho relativo à raiz, sempre dentro de 'testes/', terminando em '.mp4'
 
 
 @dataclass(frozen=True)
@@ -129,7 +137,42 @@ def _formato(arquivo: Path, fid: str, f: Any) -> Formato:
     obs = f.get("obs", "")
     if not isinstance(obs, str):
         raise ErroPainel(f"{arquivo}: formato '{fid}' campo 'obs' deve ser texto")
-    return Formato(fid, f["nome"], obs)
+    descricao = _texto_opcional(arquivo, fid, f, "descricao")
+    evidencia = _texto_opcional(arquivo, fid, f, "evidencia")
+    no_app = _no_app(arquivo, fid, f.get("no_app"))
+    demo = _demo(arquivo, fid, f.get("demo"))
+    return Formato(fid, f["nome"], obs, descricao, evidencia, no_app, demo)
+
+
+def _texto_opcional(arquivo: Path, fid: str, f: dict[str, Any], campo: str) -> str:
+    v = f.get(campo, "")
+    if not isinstance(v, str):
+        raise ErroPainel(f"{arquivo}: formato '{fid}' campo '{campo}' deve ser texto")
+    return v
+
+
+def _no_app(arquivo: Path, fid: str, v: Any) -> str | None:
+    if v is None:
+        return None
+    if not isinstance(v, str) or v not in NO_APP_VALIDOS:
+        raise ErroPainel(f"{arquivo}: formato '{fid}' campo 'no_app' deve ser um de {NO_APP_VALIDOS}: {v!r}")
+    return v
+
+
+def _demo(arquivo: Path, fid: str, v: Any) -> str | None:
+    """Caminho relativo à raiz do repo, sempre dentro de 'testes/' e terminando em '.mp4' —
+    evita que um YAML malicioso faça a rota de demo servir qualquer arquivo do disco."""
+    if v is None:
+        return None
+    if not isinstance(v, str):
+        raise ErroPainel(f"{arquivo}: formato '{fid}' campo 'demo' deve ser texto")
+    partes = Path(v).parts
+    if Path(v).is_absolute() or ".." in partes or partes[0] != "testes":
+        raise ErroPainel(f"{arquivo}: formato '{fid}' campo 'demo' deve ser um caminho relativo "
+                         f"dentro de 'testes/': {v!r}")
+    if not v.endswith(".mp4"):
+        raise ErroPainel(f"{arquivo}: formato '{fid}' campo 'demo' deve terminar em '.mp4': {v!r}")
+    return v
 
 
 def carregar_temas(pasta_nichos: Path) -> frozenset[str]:

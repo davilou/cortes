@@ -36,6 +36,19 @@ def test_estado(cfg: Config) -> None:
     assert e["formatos"]["f7"]["nome"] == "Conversa" and e["temas"] == ["humor"]
     assert e["nichos"] == ["financas"] and e["rodando"] is False
     assert e["contas"][0]["mediana_7d"] == pytest.approx(200 * 7 / 8) and e["contas"][0]["medidos"] == 3
+    # f7 não tem 'demo' configurado no YAML da fixture: tem_demo é False, nunca ausente.
+    assert e["formatos"]["f7"]["tem_demo"] is False
+
+
+def test_estado_tem_demo_confere_o_arquivo_no_disco(cfg: Config) -> None:
+    (cfg.raiz / "contas" / "formatos.yaml").write_text(
+        'formatos:\n  f7: {nome: Conversa, demo: "testes/f7-conversa-comediante/v.mp4"}\n', encoding="utf-8")
+    e = cliente(cfg).get("/api/estado").json()
+    assert e["formatos"]["f7"]["demo"] == "testes/f7-conversa-comediante/v.mp4"
+    assert e["formatos"]["f7"]["tem_demo"] is False   # configurado mas o arquivo não existe
+    (cfg.raiz / "testes" / "f7-conversa-comediante" / "v.mp4").write_bytes(b"x")
+    e2 = cliente(cfg).get("/api/estado").json()
+    assert e2["formatos"]["f7"]["tem_demo"] is True
 
 
 def test_host_de_fora_e_recusado(cfg: Config) -> None:

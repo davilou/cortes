@@ -1,9 +1,57 @@
 formatos:
-  f1: {nome: Falante puro, obs: controle}
-  f2: {nome: Motion fixo, obs: sem dado direto}
-  f3: {nome: Motion dinâmico, obs: troca de imagem por fala}
-  f4: {nome: B-roll real, obs: risco alto de Content ID}
-  f5: {nome: Gameplay embaixo, obs: R2 sem efeito em finanças}
-  f6: {nome: Estilo Hormozi, obs: contraprova R1+R2}
-  f7: {nome: Conversa com reações, obs: sinal mais forte da R2}
-  f8: {nome: 16:9 desfocado, obs: anti-controle}
+  f1:
+    nome: Falante puro
+    obs: controle
+    descricao: "Só o rosto de quem fala, recortado em 9:16 com legenda; o enquadramento muda só quando a câmera do episódio troca."
+    evidencia: "Controle. Layout mais comum entre os top da R2 (58%)."
+    no_app: "plano B"
+    demo: "testes/f1-falante-95-carteiras/f1-falante-95-carteiras-v2.mp4"
+  f2:
+    nome: Motion fixo
+    obs: sem dado direto
+    descricao: "Grafismos animados num layout fixo enquanto a pessoa fala."
+    evidencia: "Sem dado direto na pesquisa."
+    no_app: "fora"
+    demo: "testes/short-400mil/short-400mil-v2.mp4"
+  f3:
+    nome: Motion dinâmico
+    obs: troca de imagem por fala
+    descricao: "Painéis e grafismos que trocam no ritmo da fala (números, lista, mapa, chat)."
+    evidencia: "Mais trocas de plano separam top de meio (R2 9×3); caso Hype Automotivo."
+    no_app: "plano E"
+    demo: "testes/short-400mil-dinamica/short-400mil-dinamica-v2.mp4"
+  f4:
+    nome: B-roll real
+    obs: risco alto de Content ID
+    descricao: "Imagens reais do que está sendo dito, na metade de cima ou em tela cheia."
+    evidencia: "'Acontecimento' 14%×7% (pista). Fonte do YouTube: risco alto de Content ID."
+    no_app: "plano D"
+    demo: "testes/f4-broll-liquidez/f4-broll-liquidez-v2.mp4"
+  f5:
+    nome: Gameplay embaixo
+    obs: R2 sem efeito em finanças
+    descricao: "Quem fala em cima e um vídeo de gameplay 'satisfatório' embaixo — versão com pausas cortadas e trilha."
+    evidencia: "Sem efeito em finanças na R2 (10% em todos os grupos); talvez sirva a humor."
+    no_app: "fora"
+    demo: "testes/d2-gameplay-ficou-rico/d2-gameplay-ficou-rico.mp4"
+  f6:
+    nome: Estilo Hormozi
+    obs: contraprova R1+R2
+    descricao: "Legenda grande palavra a palavra com destaque colorido — versão com pausas cortadas e trilha."
+    evidencia: "Destaque colorido aparece mais quanto pior o grupo (35·48·65%) — contraprova."
+    no_app: "fora"
+    demo: "testes/d2-hormozi-netflix/d2-hormozi-netflix.mp4"
+  f7:
+    nome: Conversa com reações
+    obs: sinal mais forte da R2
+    descricao: "Alterna entre quem fala e quem reage, seguindo as trocas de câmera do próprio episódio — versão com pausas cortadas e trilha."
+    evidencia: "Sinal mais forte da R2: mostrar a outra pessoa separa top de meio (10×1)."
+    no_app: "plano B"
+    demo: "testes/d2-conversa-comediante/d2-conversa-comediante.mp4"
+  f8:
+    nome: 16:9 desfocado
+    obs: anti-controle
+    descricao: "O vídeo 16:9 inteiro no meio, com o mesmo vídeo desfocado ao fundo."
+    evidencia: "Anti-controle: zero virais na R1 e na R2."
+    no_app: "fora"
+    demo: "testes/f8-desfoque-20-vezes/f8-desfoque-20-vezes.mp4"

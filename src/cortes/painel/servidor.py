@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from cortes.episodio import id_do_video
-from cortes.painel import coleta
+from cortes.painel import coleta, formatos_rotas
 from cortes.painel.comparacao import comparaveis, confusoes, dimensao, grupos, matriz
 from cortes.painel.dados import ErroPainel, carregar_contas, carregar_vocabulario, ler_yaml
 from cortes.painel.ligacao import listar_cortes, sugerir
@@ -121,6 +121,7 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     _rotas_leitura(app, cfg, estado)
     _rotas_acao(app, cfg, estado, escrita, executar, abrir, agora)
     rotas_producao.montar(app, cfg.raiz, fila, escrita, agora)
+    formatos_rotas.montar(app, cfg.raiz)
     app.mount("/", StaticFiles(directory=cfg.estatico, html=True), name="web")
     return app
 
@@ -145,7 +146,9 @@ def _rotas_leitura(app: FastAPI, cfg: Config, estado: EstadoColeta) -> None:
                    "coleta": estado.resultados.get(c.id), **asdict(base[c.id]),
                    "ligados": sum(1 for p in pubs if p.conta == c.id)} for c in voc.contas.values()]
         nichos = sorted(p.parent.name for p in (cfg.raiz / "nichos").glob("*/perfil.yaml"))
-        return jsonable_encoder({"contas": contas, "rodando": estado.rodando, "formatos": voc.formatos,
+        formatos = {fid: {**asdict(f), "tem_demo": (cfg.raiz / f.demo).is_file() if f.demo else False}
+                    for fid, f in voc.formatos.items()}
+        return jsonable_encoder({"contas": contas, "rodando": estado.rodando, "formatos": formatos,
                                  "temas": sorted(voc.temas), "nichos": nichos, "erro_coleta": estado.erro,
                                  "podcasts": sorted({p.etiquetas.podcast for p in pubs})})
 

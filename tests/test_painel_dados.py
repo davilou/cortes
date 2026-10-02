@@ -115,6 +115,56 @@ def test_formato_obs_nao_texto(tmp_path: Path) -> None:
         carregar_formatos(escrever(tmp_path, "f.yaml", "formatos:\n  f1: {nome: X, obs: null}\n"))
 
 
+def test_formato_campos_novos_tem_padrao(tmp_path: Path) -> None:
+    f = carregar_formatos(escrever(tmp_path, "f.yaml", "formatos:\n  f1: {nome: X}\n"))
+    assert f["f1"].descricao == "" and f["f1"].evidencia == ""
+    assert f["f1"].no_app is None and f["f1"].demo is None
+
+
+def test_formato_campos_novos_preenchidos(tmp_path: Path) -> None:
+    texto = ('formatos:\n  f1: {nome: X, descricao: "a câmera troca", evidencia: "58%", '
+             'no_app: "plano B", demo: "testes/f1/v2.mp4"}\n')
+    f = carregar_formatos(escrever(tmp_path, "f.yaml", texto))
+    assert f["f1"].descricao == "a câmera troca" and f["f1"].evidencia == "58%"
+    assert f["f1"].no_app == "plano B" and f["f1"].demo == "testes/f1/v2.mp4"
+
+
+def test_formato_descricao_nao_texto(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="'descricao' deve ser texto"):
+        carregar_formatos(escrever(tmp_path, "f.yaml", "formatos:\n  f1: {nome: X, descricao: 1}\n"))
+
+
+def test_formato_evidencia_nao_texto(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="'evidencia' deve ser texto"):
+        carregar_formatos(escrever(tmp_path, "f.yaml", "formatos:\n  f1: {nome: X, evidencia: 1}\n"))
+
+
+def test_formato_no_app_invalido(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="'no_app' deve ser um de"):
+        carregar_formatos(escrever(tmp_path, "f.yaml", 'formatos:\n  f1: {nome: X, no_app: "plano Z"}\n'))
+
+
+def test_formato_demo_fora_de_testes(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="dentro de 'testes/'"):
+        carregar_formatos(escrever(tmp_path, "f.yaml", 'formatos:\n  f1: {nome: X, demo: "outra/v.mp4"}\n'))
+
+
+def test_formato_demo_path_traversal(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="dentro de 'testes/'"):
+        carregar_formatos(escrever(tmp_path, "f.yaml",
+                                   'formatos:\n  f1: {nome: X, demo: "testes/../segredo.mp4"}\n'))
+
+
+def test_formato_demo_absoluto(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="dentro de 'testes/'"):
+        carregar_formatos(escrever(tmp_path, "f.yaml", 'formatos:\n  f1: {nome: X, demo: "/etc/passwd"}\n'))
+
+
+def test_formato_demo_sem_mp4(tmp_path: Path) -> None:
+    with pytest.raises(ErroPainel, match="terminar em '.mp4'"):
+        carregar_formatos(escrever(tmp_path, "f.yaml", 'formatos:\n  f1: {nome: X, demo: "testes/v.mov"}\n'))
+
+
 def test_temas_unem_bonus_e_penalidade_dos_nichos(tmp_path: Path) -> None:
     criar_nicho(tmp_path, "financas")
     criar_nicho(tmp_path, "humor", PERFIL.replace('humor: "faz rir"', 'trocadilho: "jogo de palavras"'))
