@@ -206,12 +206,16 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
 .ep-abrir { display: grid; grid-template-columns: 128px minmax(0,1fr); gap: 18px; align-items: center; min-width: 0; cursor: pointer; }
 .ep-abrir:focus-visible { outline: 1px solid var(--up); outline-offset: 2px; border-radius: 7px; }
 .ep.quebrado { grid-template-columns: 1fr; grid-template-areas: none; border-color: rgba(232,193,90,.35); }
+/* .ep-abrir leva grid-area:abrir no mobile (ver @media 900px) — sem área "abrir" definida
+   aqui (grid-template-areas: none, acima), isso teria que cair pra auto sozinho; explícito
+   evita depender desse fallback. */
+.ep.quebrado .ep-abrir { grid-area: auto; }
 .ep .capa { aspect-ratio: 16/9; border-radius: 7px; background: linear-gradient(135deg, #2a2420, #1a1d22) center / cover; position: relative; }
 .ep .capa span { position: absolute; right: 5px; bottom: 4px; font: 10px var(--mono); background: rgba(0,0,0,.7); padding: 1px 5px; border-radius: 3px; }
 .ep h3 { font-size: 14px; font-weight: 600; }
 .ep p { color: var(--faint); font-size: 12px; margin-top: 2px; }
 .etapas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; min-width: 0; }
-.etapa { font: 10.5px var(--mono); color: var(--faint); min-width: 0; overflow-wrap: anywhere; }
+.etapa { font: 10.5px var(--mono); color: var(--faint); min-width: 0; overflow-wrap: normal; word-break: keep-all; }
 .etapa i { display: block; height: 4px; border-radius: 2px; background: var(--line); margin-bottom: 5px; }
 .etapa.ok i { background: var(--ok); } .etapa.ok { color: var(--muted); }
 .etapa.erro i { background: var(--warn); } .etapa.erro { color: var(--warn); }
@@ -253,11 +257,15 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
 .cand .t { font-weight: 600; font-size: 13px; }
 .cand .j { color: var(--faint); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cand > div { min-width: 0; }
-.cand .decisao { font: 500 11px var(--mono); }
+/* 11.5px (não os 13px padrão de .num): h:mm:ss sem zero à esquerda ("1:23:45") ainda cabe
+   folgado nas colunas estreitas de início/duração sem herdar o tamanho usado na tabela de grupos. */
+.cand .num { font-size: 11.5px; }
+.cand .decisao { font: 500 11px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cand .decisao.aprovado { color: var(--ok); }
 .cand .decisao.rejeitado { color: var(--warn); }
 
-.painel { position: sticky; top: 20px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; }
+.painel { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow: auto;
+  background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; }
 video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background: #000; display: block; }
 .painel h3 { font: 400 22px/1.15 var(--serif); margin-top: 14px; }
 .painel .meta { font: 11px var(--mono); color: var(--faint); margin-top: 6px; }
@@ -287,9 +295,12 @@ video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background:
      encolhe as duas pra caber sem rolagem horizontal. */
   .ep { grid-template-columns: minmax(0,1fr) minmax(170px,220px) 150px; gap: 12px; }
   .ep-abrir { grid-template-columns: 96px minmax(0,1fr); gap: 12px; }
-  /* o painel de 360px fixo ao lado da coluna de candidatos aperta demais nessa faixa —
-     encolhe pra 300px (ainda com minmax, não fixo: ver .detalhe abaixo em 900px). */
-  .detalhe { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); }
+  /* painel com teto mais baixo que o resto do app (300px) — ver na mensagem do commit a conta
+     de por que 300px deixava o título de .cand espremido nessa faixa. */
+  .detalhe { grid-template-columns: minmax(0, 1fr) minmax(220px, 230px); }
+  /* "auto" na 5ª coluna cresceria com o texto da decisão ("rejeitado"); travada em 46px. */
+  .cand { grid-template-columns: 40px 58px 44px minmax(0,1fr) minmax(0,46px); gap: 8px; padding: 10px 12px; }
+  .etapa { font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 @media (max-width: 900px) {
@@ -335,7 +346,16 @@ video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background:
      numa coluna só, "nota · início · dur · título" já enche a linha em 375px. */
   .detalhe { grid-template-columns: 1fr; }
   .detalhe > div:first-child { order: 2; }
-  .painel { order: 1; position: static; }
-  .cand { grid-template-columns: 44px 56px 46px 1fr; }
-  .cand .j, .cand .decisao { display: none; }
+  /* sem sticky (não há o que fixar numa coluna que ocupa a largura toda) e sem o teto de
+     altura do desktop — o painel empilhado rola com a página, não dentro de si mesmo. */
+  .painel { order: 1; position: static; max-height: none; overflow: visible; }
+  .cand { grid-template-columns: 40px 50px 40px 1fr 18px; gap: 6px; padding: 9px 10px; }
+  .cand .j, .cand-justif-extra, .cand.cab > span:last-child { display: none; }
+  /* a decisão continua visível (✓/✕), só compacta: o rótulo por extenso ("aprovado") não cabe
+     ao lado de 4 colunas numéricas em 375px — font-size:0 esconde o texto sem tirá-lo da árvore
+     de acessibilidade, e aria-label (posto no HTML) é o nome que o leitor de tela anuncia. */
+  .cand .decisao { font-size: 0; width: 18px; text-align: center; overflow: visible; }
+  .cand .decisao::before { font-size: 13px; }
+  .cand .decisao.aprovado::before { content: "✓"; color: var(--ok); }
+  .cand .decisao.rejeitado::before { content: "✕"; color: var(--warn); }
 }

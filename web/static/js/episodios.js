@@ -132,7 +132,7 @@ async function selecionarEpisodio(id) {
   const lista = $("#lista-episodios");
   if (lista) { lista.innerHTML = htmlLista(); ligarLista(); }
   await mostrarDetalhe(id, desenhar.n);
-  $(`[data-ep="${id}"]`)?.focus();
+  $(`[data-ep="${CSS.escape(id)}"]`)?.focus();
   if (devoContinuarPolling()) agendarProducao();
 }
 
@@ -170,16 +170,20 @@ function agendarProducao() {
 // e o detalhe — nunca a entrada, pra não perder o que Davi está digitando. Chamado uma vez na
 // subida (inicio.js) e depois se reagenda sozinho enquanto houver trabalho.
 async function atualizarProducao() {
-  const antes = epSel ? P?.episodios.find(e => e.id === epSel)?.etapas?.momentos?.situacao : undefined;
+  const anteriorP = P;   // snapshot de antes do fetch — comparado contra o P novo pelo epSel de AGORA
   try {
     P = await api("/api/producao");
     trilhoFila();
     const lista = $("#lista-episodios");
     if (lista) { lista.innerHTML = htmlLista(); ligarLista(); }
-    // Quando a etapa `momentos` do episódio aberto muda de situação (ex. rodando → ok), o
-    // detalhe precisa aparecer — mas só nesse caso: refazer blocoEpisodio a cada 3s reiniciaria
-    // o vídeo tocando. E só se a tela Episódios estiver com o detalhe montado.
-    const depois = epSel ? P.episodios.find(e => e.id === epSel)?.etapas?.momentos?.situacao : undefined;
+    // Comparar a ASSINATURA inteira de `etapas` (não só a situação de `momentos`): qualquer
+    // etapa que mude — inclusive uma que vire erro — precisa reabrir o detalhe. `antes`/`depois`
+    // leem epSel só agora, depois do await: se Davi trocou de episódio enquanto o fetch estava
+    // em voo, a comparação é sobre o episódio selecionado na resposta, não o de quando ela saiu.
+    const antes = epSel ? JSON.stringify(anteriorP?.episodios.find(e => e.id === epSel)?.etapas) : undefined;
+    const depois = epSel ? JSON.stringify(P.episodios.find(e => e.id === epSel)?.etapas) : undefined;
+    // Refazer blocoEpisodio a cada 3s reiniciaria o vídeo tocando — só dispara quando a
+    // assinatura muda de fato, e só se a tela Episódios estiver com o detalhe montado.
     if (epSel && depois !== undefined && depois !== antes && $("#detalhe-episodio")) {
       await mostrarDetalhe(epSel, desenhar.n);
     }

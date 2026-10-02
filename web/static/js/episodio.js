@@ -9,21 +9,28 @@ let candSel = 0;
 const NOMES_RUBRICA = { gancho_3s: "Gancho 3 s", autocontido: "Autocontido", espanto: "Espanto",
   historia_ou_virada: "História/virada", fechamento: "Fechamento" };
 const nota10 = n => (n / 10).toFixed(1).replace(".", ",");
-const tempo = s => new Date(s * 1000).toISOString().slice(s >= 3600 ? 11 : 14, 19);
+// notas vão de 1 a 5: a barra usa 0%–100% nos extremos (1 → 0%, 5 → 100%), não um múltiplo de n.
+const rubPct = n => (n == null ? 0 : Math.max(0, (n - 1) * 25));
+function tempo(s) {
+  const iso = new Date(s * 1000).toISOString();
+  // h:mm:ss sem zero à esquerda na hora (1:23:45, não 01:23:45); abaixo de 1h fica mm:ss.
+  return s >= 3600 ? iso.slice(11, 19).replace(/^0/, "") : iso.slice(14, 19);
+}
 
 function htmlCandidatos(D) {
   return `<div class="candidatos">
-    <div class="cand cab"><span>Nota</span><span>Início</span><span>Dur.</span><span>Candidato e justificativa</span><span></span></div>
+    <div class="cand cab"><span>Nota</span><span>Início</span><span>Dur.</span>
+      <span>Candidato<span class="cand-justif-extra"> e justificativa</span></span><span></span></div>
     ${D.candidatos.map(c => `<div class="cand ${c.indice === candSel ? "sel" : ""}" data-cand="${c.indice}" tabindex="0" role="button" aria-pressed="${c.indice === candSel}">
       <span class="n ${c.nota_final >= 80 ? "up" : ""}">${nota10(c.nota_final)}</span>
       <span class="num">${tempo(c.inicio)}</span><span class="num">${tempo(c.fim - c.inicio)}</span>
       <div><div class="t">${esc(c.titulo)}</div><div class="j">${esc(c.justificativa)}</div></div>
-      <span class="decisao ${esc(c.decisao ?? "")}">${c.decisao ? esc(c.decisao) : ""}</span></div>`).join("")}</div>`;
+      <span class="decisao ${esc(c.decisao ?? "")}"${c.decisao ? ` title="${esc(c.decisao)}" aria-label="${esc(c.decisao)}"` : ""}>${c.decisao ? esc(c.decisao) : ""}</span></div>`).join("")}</div>`;
 }
 
 function htmlPainel(D, c) {
   const rub = D.rubrica.map(k => `<div class="rub"><span>${esc(NOMES_RUBRICA[k] ?? k)}</span>
-    <div class="b"><i style="width:${(c.notas[k] ?? 0) * 20}%"></i></div><span>${c.notas[k] ?? "—"}</span></div>`).join("");
+    <div class="b"><i style="width:${rubPct(c.notas[k])}%"></i></div><span>${c.notas[k] ?? "—"}</span></div>`).join("");
   const decidido = c.decisao ? `<p class="sub">Decidido: <b>${esc(c.decisao)}</b></p>` :
     `<div class="decide"><button class="botao mini ok" data-decide="aprovado">✓ Aprovar</button>
       <button class="botao mini no" data-decide="rejeitado">✕ Rejeitar</button></div>
@@ -40,19 +47,31 @@ function htmlPainel(D, c) {
 }
 
 // O fragmento #t= só posiciona o vídeo na carga inicial; depois disso o navegador não respeita
-// mais o recorte (pausar/arrastar a barra escapa do trecho). timeupdate reimpõe os dois limites
-// o tempo todo: ao dar play fora do trecho, volta pro início; ao alcançar o fim, pausa ali.
+// mais o recorte (pausar/arrastar a barra escapa do trecho). timeupdate reimpõe os dois limites:
+// ao dar play fora do trecho, volta pro início; ao alcançar o fim tocando, pausa ali — sem forçar
+// currentTime de volta (isso faria o controle de progresso "pular" visualmente a cada tick).
 function ligarVideo(v, c) {
   v.onplay = () => { if (v.currentTime < c.inicio || v.currentTime >= c.fim) v.currentTime = c.inicio; };
-  v.ontimeupdate = () => { if (v.currentTime >= c.fim) { v.pause(); v.currentTime = c.fim; } };
+  v.ontimeupdate = () => { if (!v.paused && v.currentTime >= c.fim) v.pause(); };
+}
+
+// Todos os controles de decisão do painel (aprovar, rejeitar, e os do motivo) — desabilitados
+// juntos durante o POST, porque qualquer um que ficasse ativo daria pra disparar uma segunda
+// decisão (ou trocar o motivo) enquanto a primeira ainda está em voo.
+function controlesDecisao(painel) {
+  return [...$$("[data-decide]", painel), $("#motivo-ok", painel), $("#motivo-cat", painel), $("#motivo-txt", painel)]
+    .filter(Boolean);
 }
 
 async function decidir(D, c, decisao, motivo, botoes) {
+  const meu = desenhar.n;   // lido ANTES do await: uma navegação durante o POST não deve redesenhar aqui
   botoes.forEach(b => { b.disabled = true; });
   try {
     await post(`/api/episodios/${encodeURIComponent(D.id)}/candidatos/${c.indice}/decisao`, { decisao, motivo });
+    if (meu !== desenhar.n || D.id !== epSel) return;
     await blocoEpisodio(D.id, desenhar.n);
   } catch (e) {
+    if (meu !== desenhar.n || D.id !== epSel) return;
     avisar(e.message);
     botoes.forEach(b => { b.disabled = false; });
   }
@@ -63,7 +82,7 @@ function ligarPainel(D, c) {
   $$("[data-decide]", painel).forEach(b => {
     b.onclick = () => {
       if (b.dataset.decide === "aprovado") {
-        decidir(D, c, "aprovado", null, $$("[data-decide]", painel));
+        decidir(D, c, "aprovado", null, controlesDecisao(painel));
       } else {
         $(".motivo", painel).hidden = false;
         $("#motivo-cat").focus();
@@ -74,15 +93,27 @@ function ligarPainel(D, c) {
   if (ok) ok.onclick = () => {
     const txt = $("#motivo-txt").value.trim();
     const motivo = txt ? `${$("#motivo-cat").value}: ${txt}` : $("#motivo-cat").value;
-    decidir(D, c, "rejeitado", motivo, [ok, $("#motivo-cat"), $("#motivo-txt")]);
+    decidir(D, c, "rejeitado", motivo, controlesDecisao(painel));
   };
   ligarVideo($("video.trecho", painel), c);
 }
 
 async function blocoEpisodio(id, meu) {
-  const D = await api(`/api/episodios/${encodeURIComponent(id)}`);
-  if (meu !== desenhar.n) return;
+  let D;
+  try {
+    D = await api(`/api/episodios/${encodeURIComponent(id)}`);
+  } catch (e) {
+    // Falha no fetch não deixa o detalhe antigo (de outro episódio) na tela — limpa e mostra o erro.
+    if (meu !== desenhar.n || id !== epSel) return;
+    const alvo = $("#detalhe-episodio");
+    if (alvo) alvo.innerHTML = `<div class="detalhe-erro"><h2>Não foi possível carregar o episódio</h2><p>${esc(e.message)}</p></div>`;
+    return;
+  }
+  // meu !== desenhar.n descarta resposta de navegação anterior; id !== epSel descarta resposta
+  // de um episódio que não é mais o selecionado (ex. troca rápida enquanto o fetch está em voo).
+  if (meu !== desenhar.n || id !== epSel) return;
   const alvo = $("#detalhe-episodio");
+  if (!alvo) return;
   if (!D.candidatos.length) {
     alvo.innerHTML = Object.values(D.etapas).some(et => et.situacao === "erro") ? ""
       : vazio("Procurando os momentos…", "Os candidatos aparecem aqui quando a etapa 'momentos' terminar.");
@@ -104,4 +135,7 @@ async function blocoEpisodio(id, meu) {
     };
   });
   ligarPainel(D, c);
+  // Todo redesenho local (seleção de candidato, decisão) troca o HTML inteiro do detalhe — sem
+  // isso o foco cairia pro <body> a cada clique/Enter, quebrando a navegação por teclado.
+  $(`[data-cand="${candSel}"]`, alvo)?.focus();
 }
