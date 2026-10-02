@@ -10,7 +10,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const fx = v => v == null ? "—" : v.toFixed(1).replace(".", ",") + "×";
 const pct = v => Math.round(v) + "%";
 const mil = v => Math.round(v).toLocaleString("pt-BR");
-const thumb = id => `https://i.ytimg.com/vi/${esc(id)}/hqdefault.jpg`;
+const thumb = id => `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
 const handleDe = id => E.contas.find(c => c.id === id)?.handle ?? id;
 const nomeFormato = id => E.formatos[id]?.nome ?? id;
 const dataHora = iso => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });

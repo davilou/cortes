@@ -6,6 +6,10 @@
   --serif: "Instrument Serif", Georgia, serif;
 }
 * { box-sizing: border-box; margin: 0; }
+/* [hidden] é sobrescrito por qualquer seletor de classe (.fila, .erro-coleta…) que declare
+   `display` — regra de UA perde pra regra de autor mesmo com especificidade menor. Garantir
+   aqui, globalmente, que hidden sempre esconde. */
+[hidden] { display: none !important; }
 body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
 button, input, select { font: inherit; color: inherit; }
 .app { display: grid; grid-template-columns: 208px 1fr; min-height: 100vh; }
@@ -182,8 +186,6 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
 .fila { margin-top: auto; border-top: 1px solid var(--line-soft); padding: 14px 10px 0; font-size: 12px; color: var(--muted); display: grid; gap: 6px; }
 .fila b { color: var(--text); font-weight: 500; }
 .fila button { justify-self: start; }
-.barra { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
-.barra i { display: block; height: 100%; background: var(--up); }
 
 /* tela Episódios (Produção) */
 .entrada { margin-top: 22px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px;
@@ -195,16 +197,21 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
 .botao.mini { padding: 6px 10px; font-size: 12px; font-weight: 500; border-radius: 7px; }
 
 .episodios { display: grid; gap: 10px; margin-top: 18px; }
-.ep { display: grid; grid-template-columns: 128px 1fr 360px auto; gap: 18px; align-items: center; padding: 12px;
-  background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; cursor: pointer; }
+.ep { display: grid; grid-template-columns: minmax(0,1fr) 360px 150px; gap: 18px; align-items: center; padding: 12px;
+  background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; }
 .ep.sel { border-color: rgba(255,122,47,.5); box-shadow: inset 2px 0 0 var(--up); }
-.ep:focus-visible { outline: 1px solid var(--up); outline-offset: 2px; }
+/* O card não é mais, ele mesmo, o role=button: só a capa+título (.ep-abrir) é — "tentar de
+   novo" é irmão, não filho, do role=button (ARIA não aninha interativo dentro de interativo;
+   ver nota em episodios.js/ligarLista). */
+.ep-abrir { display: grid; grid-template-columns: 128px minmax(0,1fr); gap: 18px; align-items: center; min-width: 0; cursor: pointer; }
+.ep-abrir:focus-visible { outline: 1px solid var(--up); outline-offset: 2px; border-radius: 7px; }
+.ep.quebrado { grid-template-columns: 1fr; grid-template-areas: none; border-color: rgba(232,193,90,.35); }
 .ep .capa { aspect-ratio: 16/9; border-radius: 7px; background: linear-gradient(135deg, #2a2420, #1a1d22) center / cover; position: relative; }
 .ep .capa span { position: absolute; right: 5px; bottom: 4px; font: 10px var(--mono); background: rgba(0,0,0,.7); padding: 1px 5px; border-radius: 3px; }
 .ep h3 { font-size: 14px; font-weight: 600; }
 .ep p { color: var(--faint); font-size: 12px; margin-top: 2px; }
-.etapas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-.etapa { font: 10.5px var(--mono); color: var(--faint); }
+.etapas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; min-width: 0; }
+.etapa { font: 10.5px var(--mono); color: var(--faint); min-width: 0; overflow-wrap: anywhere; }
 .etapa i { display: block; height: 4px; border-radius: 2px; background: var(--line); margin-bottom: 5px; }
 .etapa.ok i { background: var(--ok); } .etapa.ok { color: var(--muted); }
 .etapa.erro i { background: var(--warn); } .etapa.erro { color: var(--warn); }
@@ -215,14 +222,25 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
   animation: etapa-roda 1.1s linear infinite; }
 @keyframes etapa-roda { from { background-position: 0 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .etapa.roda i { animation: none; background: var(--up); opacity: .6; } }
-.ep .resumo { text-align: right; font: 12px var(--mono); color: var(--muted); }
+.ep .resumo { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font: 12px var(--mono);
+  color: var(--muted); min-width: 0; }
 .ep .resumo b { display: block; font: 400 24px var(--serif); color: var(--text); }
+/* texto de erro longo (etapa ou episódio quebrado): trunca com "…" na célula, a causa
+   completa só no title. */
+.erro-txt { display: block; width: 100%; max-width: 100%; color: var(--warn); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detalhe-erro { margin-top: 18px; padding: 14px 16px; border-radius: 10px; background: rgba(232,193,90,.08);
+  border: 1px solid rgba(232,193,90,.35); color: var(--warn); font-size: 13px; line-height: 1.5; }
+.detalhe-erro h2 { font: 400 20px var(--serif); color: var(--text); margin-bottom: 6px; }
 
 /* Shorts entre 901px e 1180px: conta/idade/assist. saem para a etiqueta (e o botão Ligar que
    mora nela) nunca ficar espremida contra a borda da tabela. */
 @media (max-width: 1180px) {
   .linha-s { grid-template-columns: 36px minmax(0, 1fr) 86px 70px minmax(130px, 220px); gap: 10px; padding: 10px 14px; }
   .linha-s > :nth-child(3), .linha-s > :nth-child(4), .linha-s > :nth-child(7) { display: none; }
+  /* a capa de 128px + a coluna de etapas de 360px, fixas, estouram entre 901 e 1180px —
+     encolhe as duas pra caber sem rolagem horizontal. */
+  .ep { grid-template-columns: minmax(0,1fr) minmax(170px,220px) 150px; gap: 12px; }
+  .ep-abrir { grid-template-columns: 96px minmax(0,1fr); gap: 12px; }
 }
 
 @media (max-width: 900px) {
@@ -254,13 +272,11 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
   .gaveta { padding: 20px 16px; }
 
   /* Episódios: entrada empilha e cada ep vira capa+título em cima, etapas e resumo embaixo —
-     sem isso as 128px+360px fixas do grid de desktop estourariam os 375px e dariam rolagem
+     sem isso as colunas fixas do grid de desktop estourariam os 375px e dariam rolagem
      horizontal. */
   .entrada { grid-template-columns: 1fr; }
-  .ep { grid-template-columns: 72px 1fr; grid-template-areas: "capa tit" "etapas etapas" "resumo resumo";
-    row-gap: 8px; }
-  .ep .capa { grid-area: capa; }
-  .ep > div:nth-child(2) { grid-area: tit; }
+  .ep { grid-template-columns: 1fr; grid-template-areas: "abrir" "etapas" "resumo"; row-gap: 8px; }
+  .ep-abrir { grid-area: abrir; grid-template-columns: 72px minmax(0,1fr); }
   .ep .etapas { grid-area: etapas; }
-  .ep .resumo { grid-area: resumo; text-align: left; }
+  .ep .resumo { grid-area: resumo; align-items: flex-start; }
 }

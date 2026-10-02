@@ -37,4 +37,8 @@ $("#atualizar-todas-m").onclick = () => atualizar(null);
 carregar().then(() => {
   if (E.rodando) { desenhar(); acompanhar().catch(e => avisar(e.message)); }
   else desenhar();
+  // A fila da Produção roda em qualquer tela (pílula e caixa no rodapé do trilho), não só
+  // em Episódios — dispara uma vez aqui; atualizarProducao() se reagenda sozinha enquanto
+  // houver trabalho (episodios.js).
+  atualizarProducao().catch(e => avisar(e.message));
 }).catch(e => avisar(e.message));
