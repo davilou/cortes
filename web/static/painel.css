@@ -478,3 +478,15 @@ hyperframes-player.previa, .previa.vazia { display: block; width: 100%; max-widt
 .acoes-pal input { flex: 1 1 120px; }
 .aviso-inicio { font-size: 12.5px; color: var(--warn); border-left: 2px solid var(--warn); padding: 4px 0 4px 10px; margin-top: 10px; }
 .col-transcricao .sub { margin-top: 10px; }
+
+/* Editor: quem aparece — miniatura por pessoa, uma linha por plano de câmera. */
+.planos { display: grid; gap: 10px; }
+.plano { display: grid; gap: 6px; }
+.plano .num { text-align: left; font-size: 11.5px; color: var(--muted); }
+.pessoas { display: flex; gap: 8px; flex-wrap: wrap; }
+.pessoas .sub { margin-top: 0; }
+.pessoa { padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #000; cursor: pointer; }
+.pessoa img { display: block; width: 64px; height: 64px; object-fit: cover; }
+.pessoa.sel { box-shadow: 0 0 0 2px var(--up); border-color: var(--up); }
+.pessoa:focus-visible { outline: 1px solid var(--up); outline-offset: 2px; }
+.pessoa:disabled { cursor: default; opacity: .6; }
