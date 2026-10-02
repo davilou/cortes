@@ -7,6 +7,7 @@ import pytest
 from cortes.llm import ErroLLM
 from cortes.producao.estado import EstadoEpisodio, gravar, ler, marcar, novo
 from cortes.producao.fila import Fila
+from cortes.render.corte import cortes_do_episodio
 
 AGORA = datetime(2026, 10, 2, 9)
 
@@ -103,6 +104,24 @@ def test_retomar_restaura_a_pausa_se_nao_conseguir_reabrir(tmp_path: Path) -> No
     situacao = f.situacao()
     assert situacao["pausada"] is not None
     assert "limite de uso" in (situacao["pausada"] or "")
+
+
+def test_recuperar_isola_falha_de_um_episodio_e_segue_com_os_outros(tmp_path: Path) -> None:
+    """Um `cortes/0/corte.json` ilegível não pode derrubar a subida inteira: `recuperar`
+    registra a falha desse episódio e segue enfileirando os outros."""
+    ruim = episodio(tmp_path, "ruimepisod1")
+    (ruim / "cortes" / "0").mkdir(parents=True)
+    (ruim / "cortes" / "0" / "corte.json").write_text("{isso nao e json", encoding="utf-8")
+    boa = episodio(tmp_path, "boaepisodi1")
+
+    def _nada(nome: str, pasta: Path, e: EstadoEpisodio) -> None:
+        return None
+
+    f = Fila(tmp_path, _nada, lambda: AGORA, antes=lambda pasta: cortes_do_episodio(pasta))
+    f.recuperar()
+    assert f.situacao()["na_fila"] == ["boaepisodi1"]
+    assert "ruimepisod1" in f.situacao()["falhas"]
+    assert ler(boa).etapas["video"].situacao == "pendente"
 
 
 def test_enfileirar_limpa_falha_registrada(tmp_path: Path) -> None:

@@ -186,6 +186,20 @@ def test_candidatos_truncado_e_422_no_detalhe_e_marcado_na_lista(cfg: Config) ->
     assert ep["id"] == "abcdefghijk" and "candidatos.json" in ep["erro"] and set(ep) == {"id", "erro"}
 
 
+def test_corte_json_ruim_nao_derruba_api_producao(cfg: Config) -> None:
+    """Um `cortes/0/corte.json` ilegível vira erro de ÉSSE episódio (resumo_render →
+    cortes_do_episodio → ErroProducao), capturado pelo `except ErroProducao` que já existe
+    em `_episodios` — não pode tirar os outros episódios da lista."""
+    pasta = preparar_concluido(cfg)
+    ruim = pasta / "cortes" / "0"
+    ruim.mkdir(parents=True)
+    (ruim / "corte.json").write_text("{isso nao e json", encoding="utf-8")
+    c, _ = montar(cfg)
+    eps = c.get("/api/producao").json()["episodios"]
+    assert eps[0]["id"] == "abcdefghijk" and "erro" in eps[0] and "corte.json" in eps[0]["erro"]
+    assert set(eps[0]) == {"id", "erro"}
+
+
 def test_episodio_quebrado_nao_esconde_os_outros(cfg: Config) -> None:
     preparar_concluido(cfg)
     c, _ = montar(cfg)

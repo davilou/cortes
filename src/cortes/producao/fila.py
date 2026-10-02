@@ -118,13 +118,24 @@ class Fila:
     def recuperar(self) -> None:
         """Na subida: o que ficou 'rodando' volta a pendente e entra na fila. Chamar só
         na inicialização do processo — `iniciar` já faz isso uma vez.
+
+        Um episódio cujo `antes`/`ler` falhe (ex.: `cortes/0/corte.json` ilegível) não pode
+        derrubar a subida inteira: a falha fica em `situacao()["falhas"]` (mesmo padrão de
+        `_registrar_falha_inesperada`) e a varredura segue para os outros episódios.
         """
         for arquivo in sorted(self._raiz.glob("episodios/*/estado.json")):
-            self._antes(arquivo.parent)
-            e = ler(arquivo.parent)
-            if concluido(e) or etapa_com_erro(e):
+            id = arquivo.parent.name
+            try:
+                self._antes(arquivo.parent)
+                e = ler(arquivo.parent)
+                if concluido(e) or etapa_com_erro(e):
+                    continue
+                gravar(arquivo.parent, reabrir(e))
+            except Exception as ex:
+                traceback.print_exc()
+                with self._trava:
+                    self._falhas[id] = f"{type(ex).__name__}: {ex}"
                 continue
-            gravar(arquivo.parent, reabrir(e))
             self.enfileirar(e.id)
 
     def processar(self, id: str) -> None:
