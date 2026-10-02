@@ -49,9 +49,27 @@ def _fundir(gs: list[list[Palavra]]) -> list[list[Palavra]]:
     return gs
 
 
+def _sem_duracao_zero(gs: list[list[Palavra]]) -> list[list[Palavra]]:
+    """Um grupo cuja janela ficaria com duração ≤ 0 (o próximo começa no mesmo instante ou antes —
+    palavras remapeadas pro mesmo ponto) funde no anterior; sem anterior (é o primeiro), funde no
+    seguinte. `_fundir` já cobre o caso comum (início próximo); isso só sobra quando a fusão normal
+    não rolou por passar de `JUNTA_MAX` palavras."""
+    k = 0
+    while k < len(gs) - 1:
+        if gs[k + 1][0].inicio - gs[k][0].inicio <= 0:
+            if k > 0:
+                gs[k - 1] += gs.pop(k)
+                k -= 1
+            else:
+                gs[0] += gs.pop(1)
+        else:
+            k += 1
+    return gs
+
+
 def grupos(ws: list[Palavra], dur: float) -> list[Grupo]:
     """Fecham em pontuação (2+ palavras) ou em 5 palavras; cada um fica até o próximo, no máx. 2,6 s."""
-    gs = _fundir(_brutos(ws))
+    gs = _sem_duracao_zero(_fundir(_brutos(ws)))
     res: list[Grupo] = []
     for k, g in enumerate(gs):
         a = g[0].inicio
