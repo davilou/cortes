@@ -18,6 +18,10 @@ from cortes.tipos import Palavra
 
 ESTATICO = Path(__file__).resolve().parents[2] / "web" / "static"
 SKILL_ANALYTICS = Path.home() / ".claude" / "skills" / "youtube-analytics" / "scripts"
+COMFYUI = Path("C:/Users/User/Documents/IA Local/ComfyUI")
+PY_VISAO = COMFYUI / "venv" / "Scripts" / "python.exe"
+MODELO_ROSTO = (COMFYUI / "custom_nodes" / "tts_audio_suite" / "engines" / "video" / "openseeface" / "models"
+                / "mnv3_detection_opt.onnx")
 
 
 def _etapa(nome: str, pronto: bool) -> bool:
@@ -51,9 +55,10 @@ def rodar_detectar(url: str, nicho: str, modelo: str) -> Path:
     return d
 
 
-def rodar_painel(porta: int, skill: Path, raiz: Path) -> None:
+def rodar_painel(porta: int, skill: Path, raiz: Path, py_visao: Path, modelo_rosto: Path) -> None:
     try:
-        app = criar_app(Config(raiz=raiz, skill_dir=skill, estatico=ESTATICO))
+        app = criar_app(Config(raiz=raiz, skill_dir=skill, estatico=ESTATICO, py_visao=py_visao,
+                               modelo_rosto=modelo_rosto))
     except ErroPainel as e:   # configuração inválida: a mensagem já diz arquivo e campo
         sys.exit(f"erro: {e}")
     print(f"painel em http://127.0.0.1:{porta}", flush=True)
@@ -74,8 +79,12 @@ def main() -> None:
     pn.add_argument("--skill", type=Path, default=SKILL_ANALYTICS,
                      help="pasta scripts/ da skill youtube-analytics")
     pn.add_argument("--raiz", type=Path, default=Path.cwd(), help="pasta com contas/, nichos/, testes/")
+    pn.add_argument("--py-visao", type=Path, default=PY_VISAO,
+                     help="Python com onnxruntime (venv do ComfyUI)")
+    pn.add_argument("--modelo-rosto", type=Path, default=MODELO_ROSTO,
+                     help="detector de rosto do OpenSeeFace")
     args = ap.parse_args()
     if args.comando == "detectar":
         rodar_detectar(args.url, args.nicho, args.modelo)
     elif args.comando == "painel":
-        rodar_painel(args.porta, args.skill, args.raiz)
+        rodar_painel(args.porta, args.skill, args.raiz, args.py_visao, args.modelo_rosto)

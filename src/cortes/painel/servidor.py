@@ -1,4 +1,5 @@
 """Servidor local do painel: rotas JSON finas sobre as funções puras + a página estática."""
+import shutil
 import threading
 import traceback
 from collections.abc import AsyncIterator, Callable
@@ -28,15 +29,20 @@ from cortes.producao import rotas as rotas_producao
 from cortes.producao.estado import ErroProducao
 from cortes.producao.etapas import Dependencias, rodar_etapa
 from cortes.producao.fila import Fila
+from cortes.producao.render import reabrir_render
+from cortes.render.montagem import FORMATOS, caminho_template
+from cortes.render.pipeline import SCRIPT_ROSTO, DepRender
 
 HOSTS_LOCAIS = ("127.0.0.1", "localhost")
 
 
 @dataclass(frozen=True)
 class Config:
-    raiz: Path        # onde ficam contas/, nichos/, testes/, episodios/
-    skill_dir: Path   # scripts/ da skill youtube-analytics
-    estatico: Path    # web/static
+    raiz: Path          # onde ficam contas/, nichos/, testes/, episodios/
+    skill_dir: Path     # scripts/ da skill youtube-analytics
+    estatico: Path      # web/static
+    py_visao: Path      # Python com onnxruntime e cv2 (venv do ComfyUI) para o detector de rosto
+    modelo_rosto: Path  # mnv3_detection_opt.onnx do OpenSeeFace
 
     @property
     def contas_yaml(self) -> Path:
@@ -86,7 +92,8 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
               agora: Callable[[], datetime] = datetime.now, fila: Fila | None = None) -> FastAPI:
     carregar_vocabulario(cfg.raiz)       # configuração inválida: não sobe
     coleta.verificar_skill(cfg.skill_dir)
-    fila = fila if fila is not None else _fila_real(cfg, agora)
+    npx = verificar_render(cfg)
+    fila = fila if fila is not None else _fila_real(cfg, agora, npx)
 
     @asynccontextmanager
     async def ciclo(_: FastAPI) -> AsyncIterator[None]:
@@ -126,9 +133,25 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     return app
 
 
-def _fila_real(cfg: Config, agora: Callable[[], datetime]) -> Fila:
-    dep = Dependencias()
-    return Fila(cfg.raiz, lambda nome, pasta, e: rodar_etapa(nome, pasta, e, cfg.raiz, dep), agora)
+def verificar_render(cfg: Config) -> str:
+    """Configuração do render ausente → o servidor não sobe e diz o que falta (spec produção §8).
+    Devolve o caminho do npx (no Windows, npx.cmd)."""
+    faltas = [f"{nome} não está no PATH" for nome in ("ffmpeg", "npx") if shutil.which(nome) is None]
+    arquivos = [("Python da visão (--py-visao)", cfg.py_visao),
+                ("modelo do rosto (--modelo-rosto)", cfg.modelo_rosto),
+                ("detector de rosto", cfg.raiz / SCRIPT_ROSTO)]
+    arquivos += [("template", caminho_template(cfg.raiz, f)) for f in FORMATOS]
+    faltas += [f"{rotulo} não existe: {p}" for rotulo, p in arquivos if not p.exists()]
+    npx = shutil.which("npx")
+    if faltas or npx is None:
+        raise ErroPainel("render sem configuração: " + "; ".join(faltas))
+    return npx
+
+
+def _fila_real(cfg: Config, agora: Callable[[], datetime], npx: str) -> Fila:
+    dep = Dependencias(render=DepRender(cfg.py_visao, cfg.modelo_rosto, npx))
+    return Fila(cfg.raiz, lambda nome, pasta, e: rodar_etapa(nome, pasta, e, cfg.raiz, dep), agora,
+               antes=lambda pasta: reabrir_render(pasta, agora()))
 
 
 def _rotas_leitura(app: FastAPI, cfg: Config, estado: EstadoColeta) -> None:

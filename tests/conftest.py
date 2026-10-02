@@ -37,7 +37,12 @@ def cfg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Config:
     (skill / "src").mkdir(parents=True)
     (skill / "src" / "cli.mjs").write_text("", encoding="utf-8")
     (skill / "node_modules").mkdir()
-    c = Config(raiz=tmp_path, skill_dir=skill, estatico=estatico)
+    for arq in ("render/formatos/falante.tpl", "render/formatos/conversa.tpl", "render/visao/rosto.py",
+                "visao/python.exe", "visao/rosto.onnx"):
+        (tmp_path / arq).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / arq).write_text("", encoding="utf-8")
+    c = Config(raiz=tmp_path, skill_dir=skill, estatico=estatico, py_visao=tmp_path / "visao" / "python.exe",
+               modelo_rosto=tmp_path / "visao" / "rosto.onnx")
     videos = tuple(
         VideoRetrato(f"vid{i}xxxxxxx", f"O comediante {i}", date(2026, 10, 1), 30.0, 100 * i, 80.0, 24.0, 1)
         for i in range(1, 4))

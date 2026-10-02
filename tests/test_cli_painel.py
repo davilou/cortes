@@ -12,5 +12,5 @@ def test_painel_com_configuracao_invalida_sai_com_mensagem(monkeypatch: pytest.M
 
     monkeypatch.setattr(cli, "criar_app", quebra)
     with pytest.raises(SystemExit) as saida:
-        cli.rodar_painel(8790, Path("skill"), Path("raiz"))
+        cli.rodar_painel(8790, Path("skill"), Path("raiz"), Path("python.exe"), Path("rosto.onnx"))
     assert saida.value.code == "erro: contas.yaml: falta a chave 'contas'"

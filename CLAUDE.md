@@ -27,3 +27,7 @@ rodá-los: `.venv/Scripts/python -m pytest -q -m lento` (a transcrição de verd
 
 Spec em `docs/superpowers/specs/2026-10-01-painel-contas-design.md`. Usa a skill
 `youtube-analytics` (export do Studio) por subprocesso; contas em `contas/contas.yaml`.
+
+O painel também renderiza os Shorts (plano B) e não sobe sem: `ffmpeg` e `npx` no PATH, o
+Python do ComfyUI (`--py-visao`) e o detector de rosto do OpenSeeFace (`--modelo-rosto`).
+Render real fica fora do check: `.venv/Scripts/python -m pytest -m lento`.

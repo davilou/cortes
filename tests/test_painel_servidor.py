@@ -1,5 +1,6 @@
 import json
 import threading
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -144,7 +145,24 @@ def test_dimensao_invalida(cfg: Config) -> None:
 
 def test_nao_sobe_sem_a_skill(cfg: Config) -> None:
     with pytest.raises(ErroPainel, match="cli.mjs"):
-        criar_app(Config(cfg.raiz, cfg.raiz / "nada", cfg.estatico))
+        criar_app(replace(cfg, skill_dir=cfg.raiz / "nada"))
+
+
+def test_nao_sobe_sem_o_python_da_visao(cfg: Config) -> None:
+    with pytest.raises(ErroPainel, match="Python da visão"):
+        criar_app(replace(cfg, py_visao=cfg.raiz / "nada.exe"))
+
+
+def test_nao_sobe_sem_ffmpeg(cfg: Config, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("shutil.which", lambda nome: None if nome == "ffmpeg" else "C:/fake/x.exe")
+    with pytest.raises(ErroPainel, match="ffmpeg não está no PATH"):
+        criar_app(cfg)
+
+
+def test_nao_sobe_sem_template(cfg: Config) -> None:
+    (cfg.raiz / "render" / "formatos" / "falante.tpl").unlink()
+    with pytest.raises(ErroPainel, match="falante.tpl"):
+        criar_app(cfg)
 
 
 def test_publicados_gravado_em_disco(cfg: Config) -> None:
