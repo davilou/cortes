@@ -1,0 +1,115 @@
+"""Corte de um episódio: o candidato que vira Short, o formato e o status do render (spec §4.3).
+
+episodios/<id>/cortes/<indice>/corte.json. O `indice` é o do candidato em candidatos.json, então a
+curadoria do plano A (curadoria.json, por índice) vale para o Short. Aprovado e rejeitado ficam lá,
+não aqui (uma decisão, um arquivo); o status deste arquivo é só o do render.
+"""
+from dataclasses import asdict, dataclass, replace
+from pathlib import Path
+from typing import Any, Literal, cast
+
+from cortes.episodio import ler_json, salvar_json
+from cortes.producao.estado import ErroProducao
+
+Status = Literal["na_fila", "renderizando", "pronto", "erro"]
+STATUS = ("na_fila", "renderizando", "pronto", "erro")
+ARQUIVO = "corte.json"
+PLANEJADO = "planejado.json"   # marcador: os N melhores já foram postos na fila (uma vez por episódio)
+
+
+@dataclass(frozen=True)
+class Corte:
+    indice: int
+    inicio: float
+    fim: float
+    formato: str
+    titulo: str
+    status: Status
+    versao: int = 0            # última versão pronta (short-v<versao>.mp4); 0 = nenhuma
+    erro: str | None = None
+
+
+def pasta_corte(pasta_ep: Path, indice: int) -> Path:
+    return pasta_ep / "cortes" / str(indice)
+
+
+def video(pasta_ep: Path, c: Corte) -> Path | None:
+    return pasta_corte(pasta_ep, c.indice) / f"short-v{c.versao}.mp4" if c.versao else None
+
+
+def novo_corte(indice: int, cand: dict[str, Any], formato: str) -> Corte:
+    return Corte(indice, float(cand["inicio"]), float(cand["fim"]), formato, str(cand["titulo"]), "na_fila")
+
+
+def melhores(cands: list[dict[str, Any]], n: int) -> list[int]:
+    return sorted(range(len(cands)), key=lambda i: (-float(cands[i]["nota_final"]), i))[:n]
+
+
+def iniciar(c: Corte) -> Corte:
+    return replace(c, status="renderizando", erro=None)
+
+
+def concluir(c: Corte) -> Corte:
+    return replace(c, status="pronto", versao=c.versao + 1, erro=None)
+
+
+def falhar(c: Corte, msg: str) -> Corte:
+    """A versão anterior (se houver) continua valendo: o MP4 dela não foi tocado (spec §8)."""
+    return replace(c, status="erro", erro=msg)
+
+
+def reenfileirar(c: Corte, formato: str) -> Corte:
+    if c.status in ("na_fila", "renderizando"):
+        raise ErroProducao(f"corte {c.indice} já está na fila do render")
+    return replace(c, status="na_fila", formato=formato, erro=None)
+
+
+def proximo(cortes: list[Corte]) -> Corte | None:
+    """Quem ficou 'renderizando' numa queda volta primeiro; depois a fila pela ordem do índice
+    (candidatos.json vem da maior nota para a menor)."""
+    pendentes = [c for c in cortes if c.status in ("renderizando", "na_fila")]
+    return min(pendentes, key=lambda c: (c.status != "renderizando", c.indice), default=None)
+
+
+def gravar_corte(d: Path, c: Corte) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    salvar_json(d / ARQUIVO, asdict(c))
+
+
+def _campo(x: dict[str, Any], nome: str, tipo: type | tuple[type, ...]) -> Any:
+    """Bool é recusado mesmo onde se espera número (em Python, True é um int)."""
+    v = x[nome]
+    if not isinstance(v, tipo) or isinstance(v, bool):
+        raise ValueError(f"campo '{nome}' deveria ser {getattr(tipo, '__name__', tipo)}, veio {v!r}")
+    return v
+
+
+def ler_corte(d: Path) -> Corte:
+    arq = d / ARQUIVO
+    try:
+        x = ler_json(arq)
+        if x["status"] not in STATUS:
+            raise ValueError(f"status '{x['status']}' inválido; use um de {STATUS}")
+        if x["erro"] is not None and not isinstance(x["erro"], str):
+            raise ValueError("campo 'erro' deveria ser texto ou nulo")
+        return Corte(_campo(x, "indice", int), float(_campo(x, "inicio", (int, float))),
+                     float(_campo(x, "fim", (int, float))), _campo(x, "formato", str),
+                     _campo(x, "titulo", str), cast(Status, x["status"]), _campo(x, "versao", int), x["erro"])
+    except (OSError, KeyError, TypeError, ValueError) as ex:
+        raise ErroProducao(f"{arq}: corte inválido ({ex})") from ex
+
+
+def cortes_do_episodio(pasta_ep: Path) -> list[Corte]:
+    arqs = sorted((pasta_ep / "cortes").glob(f"*/{ARQUIVO}"), key=lambda a: int(a.parent.name))
+    return [ler_corte(a.parent) for a in arqs]
+
+
+def planejar(pasta_ep: Path, formato: str, n: int, cands: list[dict[str, Any]]) -> None:
+    """Põe os N melhores na fila do render, uma vez por episódio. Um corte que já existe (Renderizar
+    manual antes do automático) fica como está."""
+    (pasta_ep / "cortes").mkdir(parents=True, exist_ok=True)
+    for i in melhores(cands, n):
+        d = pasta_corte(pasta_ep, i)
+        if not (d / ARQUIVO).exists():
+            gravar_corte(d, novo_corte(i, cands[i], formato))
+    salvar_json(pasta_ep / "cortes" / PLANEJADO, {"n": n, "formato": formato})
