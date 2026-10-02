@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Produção de Shorts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0e10; --surface: #15171a; --raised: #1c1f23; --line: #262a30; --line-soft: #1e2126;
+  --text: #ece7df; --muted: #8b9099; --faint: #5b6068;
+  --up: #ff7a2f; --up-soft: rgba(255,122,47,.16); --down: #7d93b8; --warn: #e8c15a; --ok: #5fbf8a;
+  --mono: "JetBrains Mono", ui-monospace, monospace; --sans: "Instrument Sans", system-ui, sans-serif;
+  --serif: "Instrument Serif", Georgia, serif;
+}
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+button, input, select { font: inherit; color: inherit; }
+.app { display: grid; grid-template-columns: 208px 1fr; min-height: 100vh; }
+
+nav { border-right: 1px solid var(--line-soft); padding: 22px 14px; display: flex; flex-direction: column; gap: 4px; }
+.marca { font: italic 26px/1 var(--serif); padding: 0 10px 22px; }
+.marca b { font-style: normal; color: var(--up); }
+nav a { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 7px;
+  color: var(--muted); text-decoration: none; font-weight: 500; }
+nav a.ativo { background: var(--raised); color: var(--text); }
+nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .08em; padding: 14px 10px 4px; }
+.cont { font: 500 11px var(--mono); background: var(--up-soft); color: var(--up); padding: 1px 7px; border-radius: 99px; }
+.fila { margin-top: auto; border-top: 1px solid var(--line-soft); padding: 14px 10px 0; font-size: 12px; color: var(--muted); display: grid; gap: 6px; }
+.fila b { color: var(--text); font-weight: 500; }
+.barra { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.barra i { display: block; height: 100%; background: var(--up); }
+
+main { padding: 28px 36px 60px; min-width: 0; }
+h1 { font: 400 40px/1 var(--serif); letter-spacing: -.015em; }
+h1 em { color: var(--muted); }
+.sub { color: var(--muted); margin-top: 8px; font-size: 13px; }
+
+/* entrada */
+.entrada { margin-top: 22px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px;
+  display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 10px; align-items: end; }
+.entrada label { display: grid; gap: 5px; font-size: 11px; color: var(--faint); font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.entrada input, .entrada select { background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px;
+  font: 14px var(--sans); color: var(--text); text-transform: none; letter-spacing: 0; }
+.entrada input.link { font-size: 15px; }
+.botao { padding: 11px 16px; border-radius: 9px; border: 1px solid var(--line); background: none; font-weight: 600; cursor: pointer; }
+.botao.primario { background: var(--up); border-color: var(--up); color: #1a0d05; }
+.botao.mini { padding: 6px 10px; font-size: 12px; font-weight: 500; border-radius: 7px; }
+
+/* episódios */
+.episodios { display: grid; gap: 10px; margin-top: 18px; }
+.ep { display: grid; grid-template-columns: 128px 1fr 360px auto; gap: 18px; align-items: center; padding: 12px;
+  background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; cursor: pointer; }
+.ep.sel { border-color: rgba(255,122,47,.5); box-shadow: inset 2px 0 0 var(--up); }
+.ep .capa { aspect-ratio: 16/9; border-radius: 7px; background: linear-gradient(135deg, #2a2420, #1a1d22); position: relative; }
+.ep .capa span { position: absolute; right: 5px; bottom: 4px; font: 10px var(--mono); background: rgba(0,0,0,.7); padding: 1px 5px; border-radius: 3px; }
+.ep h3 { font-size: 14px; font-weight: 600; }
+.ep p { color: var(--faint); font-size: 12px; margin-top: 2px; }
+.etapas { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.etapa { font: 10.5px var(--mono); color: var(--faint); }
+.etapa i { display: block; height: 4px; border-radius: 2px; background: var(--line); margin-bottom: 5px; }
+.etapa.ok i { background: var(--ok); } .etapa.ok { color: var(--muted); }
+.etapa.roda i { background: linear-gradient(90deg, var(--up) 62%, var(--line) 62%); } .etapa.roda { color: var(--up); }
+.etapa.erro i { background: var(--warn); } .etapa.erro { color: var(--warn); }
+.ep .resumo { text-align: right; font: 12px var(--mono); color: var(--muted); }
+.ep .resumo b { display: block; font: 400 24px var(--serif); color: var(--text); }
+
+/* detalhe */
+.detalhe > * { min-width: 0; }
+.detalhe { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; margin-top: 28px; align-items: start; }
+.secao { display: flex; justify-content: space-between; align-items: end; margin-bottom: 12px; }
+.secao h2 { font: 400 26px/1 var(--serif); }
+.secao h2 em { color: var(--muted); }
+.grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+.short { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; cursor: pointer; }
+.short.sel { border-color: var(--up); }
+.short .tela { aspect-ratio: 9/16; position: relative; background: linear-gradient(180deg, #23201d 0%, #121417 100%);
+  display: flex; flex-direction: column; justify-content: flex-end; padding: 12px; }
+.short .tela .leg { font: 700 14px/1.2 var(--sans); text-align: center; text-shadow: 0 2px 6px #000; margin-bottom: 24%; }
+.nota { position: absolute; top: 10px; left: 10px; background: rgba(13,14,16,.82); border: 1px solid var(--line);
+  border-radius: 8px; padding: 3px 8px 4px; font: 400 22px/1 var(--serif); }
+.nota small { font: 10px var(--mono); color: var(--muted); margin-left: 2px; }
+.nota.alta { color: var(--up); border-color: rgba(255,122,47,.45); }
+.status { position: absolute; top: 10px; right: 10px; font: 500 10px var(--mono); padding: 3px 7px; border-radius: 99px;
+  background: rgba(13,14,16,.82); border: 1px solid var(--line); color: var(--muted); }
+.status.pronto { color: var(--ok); border-color: rgba(95,191,138,.4); }
+.status.aprovado { color: #1a0d05; background: var(--ok); border-color: var(--ok); }
+.status.roda { color: var(--up); }
+.short .play { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; color: rgba(236,231,223,.85); }
+.short .rodando { position: absolute; left: 12px; right: 12px; bottom: 12px; }
+.short .info { padding: 10px 12px 12px; }
+.short .info h4 { font-size: 13px; font-weight: 600; line-height: 1.25; }
+.short .info p { font: 11px var(--mono); color: var(--faint); margin-top: 4px; }
+.short .acoes { display: flex; gap: 6px; padding: 0 12px 12px; }
+.short .acoes button { flex: 1; }
+.chip { font: 10.5px var(--mono); padding: 2px 7px; border-radius: 99px; background: var(--raised); color: var(--muted); }
+
+.candidatos { margin-top: 26px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
+.cand { display: grid; grid-template-columns: 54px 70px 60px 1fr auto; gap: 14px; align-items: center; padding: 11px 16px;
+  border-top: 1px solid var(--line-soft); }
+.cand:first-child { border-top: 0; }
+.cand.cab { font: 500 10.5px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+.cand .n { font: 400 22px var(--serif); }
+.cand .t { font-weight: 600; font-size: 13px; }
+.cand .j { color: var(--faint); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.num { font: 12px var(--mono); color: var(--muted); }
+
+/* painel do short */
+.painel { position: sticky; top: 20px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; }
+.painel .video { aspect-ratio: 9/16; max-height: 430px; margin: 0 auto 14px; border-radius: 10px;
+  background: linear-gradient(180deg, #2b2621, #101215); position: relative; display: flex; align-items: flex-end; justify-content: center; }
+.painel .video .leg { font: 700 17px/1.2 var(--sans); text-align: center; padding: 0 16px; margin-bottom: 26%; text-shadow: 0 2px 6px #000; }
+.painel .video .tempo { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 3px; background: rgba(255,255,255,.2); border-radius: 2px; }
+.painel .video .tempo i { display: block; width: 34%; height: 100%; background: var(--up); border-radius: 2px; }
+.painel h3 { font: 400 22px/1.15 var(--serif); }
+.painel .meta { font: 11px var(--mono); color: var(--faint); margin-top: 6px; }
+.rubrica { display: grid; gap: 7px; margin: 16px 0; }
+.rub { display: grid; grid-template-columns: 112px 1fr 22px; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); }
+.rub .b { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.rub .b i { display: block; height: 100%; background: var(--up); }
+.rub span:last-child { font: 12px var(--mono); color: var(--text); text-align: right; }
+.porque { font-size: 12.5px; color: #cfc8bd; border-left: 2px solid var(--up); padding: 4px 0 4px 10px; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+.decide { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 16px; }
+.decide .ok { border-color: rgba(95,191,138,.5); color: var(--ok); }
+.decide .no { border-color: rgba(232,193,90,.4); color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav>
+    <div class="marca">cortes<b>.</b></div>
+    <div class="grupo">Produção</div>
+    <a href="#" class="ativo">Episódios <span class="cont">3</span></a>
+    <div class="grupo">Retorno</div>
+    <a href="#">Contas</a>
+    <a href="#">Shorts</a>
+    <a href="#">Comparar</a>
+    <div class="fila">
+      <div><b>Fila</b> · 1 rodando · 4 na fila</div>
+      <div>Render “Ele recusou 2 milhões” · f7</div>
+      <div class="barra"><i style="width:62%"></i></div>
+    </div>
+  </nav>
+
+  <main>
+    <h1>Produção <em>— do episódio ao Short</em></h1>
+    <p class="sub">Cole o link do episódio. O app baixa vídeo e legenda do YouTube, acha os momentos e renderiza os melhores sozinho.</p>
+
+    <form class="entrada" onsubmit="return false">
+      <label>Link do episódio<input class="link" placeholder="https://www.youtube.com/watch?v=…" value="https://www.youtube.com/watch?v=c5xqNNWFT9w"></label>
+      <label>Nicho<select><option>financas</option></select></label>
+      <label>Formato<select><option>f7 · Conversa</option><option>f1 · Falante</option></select></label>
+      <label>Shorts<select><option>5 melhores</option><option>3 melhores</option><option>10 melhores</option></select></label>
+      <button class="botao primario">Gerar Shorts</button>
+    </form>
+
+    <div class="episodios">
+      <div class="ep sel">
+        <div class="capa"><span>1:35:15</span></div>
+        <div><h3>Como Maurício Meirelles ganha dinheiro fora dos palcos</h3><p>PrimoCast · 536 · adicionado hoje 09:12</p></div>
+        <div class="etapas">
+          <div class="etapa ok"><i></i>vídeo</div><div class="etapa ok"><i></i>legenda</div>
+          <div class="etapa ok"><i></i>sinais</div><div class="etapa ok"><i></i>momentos</div>
+          <div class="etapa roda"><i></i>render 3/5</div>
+        </div>
+        <div class="resumo"><b>14</b>candidatos</div>
+      </div>
+      <div class="ep">
+        <div class="capa"><span>2:02:40</span></div>
+        <div><h3>Quanto ganha um médico nos EUA</h3><p>Flow Podcast · na fila</p></div>
+        <div class="etapas">
+          <div class="etapa roda"><i></i>vídeo</div><div class="etapa"><i></i>legenda</div>
+          <div class="etapa"><i></i>sinais</div><div class="etapa"><i></i>momentos</div><div class="etapa"><i></i>render</div>
+        </div>
+        <div class="resumo"><b>—</b>na fila</div>
+      </div>
+      <div class="ep">
+        <div class="capa"><span>58:02</span></div>
+        <div><h3>O erro que quebrou minha empresa</h3><p>Inteligência Ltda · ontem</p></div>
+        <div class="etapas">
+          <div class="etapa ok"><i></i>vídeo</div><div class="etapa erro"><i></i>sem legenda pt</div>
+          <div class="etapa"><i></i>sinais</div><div class="etapa"><i></i>momentos</div><div class="etapa"><i></i>render</div>
+        </div>
+        <div class="resumo"><button class="botao mini">tentar de novo</button></div>
+      </div>
+    </div>
+
+    <div class="detalhe">
+      <div>
+        <div class="secao"><h2>Shorts <em>— Maurício Meirelles</em></h2><span class="num">5 renderizando · nota = rubrica do detector (0–10)</span></div>
+        <div class="grade">
+          <div class="short sel">
+            <div class="tela"><span class="nota alta">8,7<small>/10</small></span><span class="status pronto">pronto</span>
+              <div class="play">▶</div><div class="leg">ele vende mais<br>que o Whindersson</div></div>
+            <div class="info"><h4>O comediante que mais vende no Brasil</h4><p>0:26 · <span class="chip">f7</span></p></div>
+            <div class="acoes"><button class="botao mini">✓</button><button class="botao mini">✕</button><button class="botao mini">Editar</button></div>
+          </div>
+          <div class="short">
+            <div class="tela"><span class="nota alta">8,4<small>/10</small></span><span class="status aprovado">aprovado</span>
+              <div class="play">▶</div><div class="leg">recusei 2 milhões<br>de reais</div></div>
+            <div class="info"><h4>Ele recusou 2 milhões por um show</h4><p>0:41 · <span class="chip">f7</span></p></div>
+            <div class="acoes"><button class="botao mini">✓</button><button class="botao mini">✕</button><button class="botao mini">Editar</button></div>
+          </div>
+          <div class="short">
+            <div class="tela"><span class="nota">7,9<small>/10</small></span><span class="status pronto">pronto</span>
+              <div class="play">▶</div><div class="leg">o cachê de stand-up<br>é assim</div></div>
+            <div class="info"><h4>Quanto ganha um comediante por show</h4><p>0:33 · <span class="chip">f7</span></p></div>
+            <div class="acoes"><button class="botao mini">✓</button><button class="botao mini">✕</button><button class="botao mini">Editar</button></div>
+          </div>
+          <div class="short">
+            <div class="tela"><span class="nota">7,6<small>/10</small></span><span class="status roda">render 62%</span>
+              <div class="rodando"><div class="barra"><i style="width:62%"></i></div></div></div>
+            <div class="info"><h4>A piada que custou um contrato</h4><p>0:29 · <span class="chip">f7</span></p></div>
+          </div>
+          <div class="short">
+            <div class="tela"><span class="nota">7,2<small>/10</small></span><span class="status">na fila</span></div>
+            <div class="info"><h4>Aposentar aos 40 sendo artista</h4><p>0:52 · <span class="chip">f7</span></p></div>
+          </div>
+        </div>
+
+        <div class="candidatos">
+          <div class="cand cab"><span>Nota</span><span>Início</span><span>Dur.</span><span>Candidato e justificativa</span><span></span></div>
+          <div class="cand"><span class="n">6,9</span><span class="num">48:12</span><span class="num">0:37</span>
+            <div><div class="t">O contrato com a Netflix</div><div class="j">número concreto na primeira frase; fecha com virada — mas começa com “e aí” (corrigido para a frase anterior)</div></div>
+            <button class="botao mini">Renderizar</button></div>
+          <div class="cand"><span class="n">6,5</span><span class="num">1:02:40</span><span class="num">0:44</span>
+            <div><div class="t">Investir em imóvel sendo autônomo</div><div class="j">autocontido, utilidade; pouco espanto (pesquisa: utilidade pura rende menos)</div></div>
+            <button class="botao mini">Renderizar</button></div>
+          <div class="cand"><span class="n">6,1</span><span class="num">1:15:03</span><span class="num">0:28</span>
+            <div><div class="t">O primeiro show lotado</div><div class="j">história com virada; gancho fraco nos 3 s</div></div>
+            <button class="botao mini">Renderizar</button></div>
+        </div>
+      </div>
+
+      <aside class="painel">
+        <div class="video"><div class="leg">ele vende mais<br>que o Whindersson</div><div class="tempo"><i></i></div></div>
+        <h3>O comediante que mais vende no Brasil</h3>
+        <p class="meta">PrimoCast 536 · 1:12:48 → 1:13:14 · f7 Conversa · nota 8,7</p>
+        <div class="rubrica">
+          <div class="rub"><span>Gancho 3 s</span><div class="b"><i style="width:90%"></i></div><span>4,5</span></div>
+          <div class="rub"><span>Autocontido</span><div class="b"><i style="width:100%"></i></div><span>5</span></div>
+          <div class="rub"><span>Espanto</span><div class="b"><i style="width:80%"></i></div><span>4</span></div>
+          <div class="rub"><span>História/virada</span><div class="b"><i style="width:60%"></i></div><span>3</span></div>
+          <div class="rub"><span>Fechamento</span><div class="b"><i style="width:80%"></i></div><span>4</span></div>
+        </div>
+        <p class="porque">Abre com comparação direta a um famoso e um número de bilheteria; a resposta fecha a pergunta sem depender do resto do episódio.</p>
+        <div class="tags"><span class="chip">personagem_famoso_citado</span><span class="chip">dinheiro_alheio_quanto_ganha</span><span class="chip">humor</span></div>
+        <div class="decide"><button class="botao mini ok">✓ Aprovar</button><button class="botao mini no">✕ Rejeitar</button><button class="botao mini">Editar</button></div>
+        <div class="decide" style="grid-template-columns:1fr 1fr"><button class="botao mini">⬇ Baixar MP4</button><button class="botao mini">Copiar título</button></div>
+      </aside>
+    </div>
+  </main>
+</div>
+</body>
+</html>
