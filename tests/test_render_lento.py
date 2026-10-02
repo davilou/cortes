@@ -9,7 +9,10 @@ import pytest
 
 from cortes.cli import MODELO_ROSTO, PY_VISAO
 from cortes.render.corte import novo_corte
+from cortes.render.miniatura import gerar_miniatura
 from cortes.render.pipeline import DepRender, renderizar_corte
+from cortes.render.processo import rodar_processo
+from cortes.render.rosto import ler_rosto, planos
 
 REPO = Path(__file__).resolve().parents[1]
 EP = Path(os.environ.get("CORTES_EP_REF", str(REPO / "episodios" / "c5xqNNWFT9w")))
@@ -31,8 +34,36 @@ def test_render_real_do_comediante(tmp_path: Path) -> None:
     npx = shutil.which("npx")
     assert npx
     renderizar_corte(pasta, novo_corte(0, cand, "f7"), tmp_path, DepRender(PY_VISAO, MODELO_ROSTO, npx))
-    mp4 = pasta / "cortes" / "0" / "short-v1.mp4"
+    d = pasta / "cortes" / "0"
+    mp4 = d / "short-v1.mp4"
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(mp4)]
     dur = float(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)
-    segs = json.loads((pasta / "cortes" / "0" / "recorte.json").read_text(encoding="utf-8"))["segmentos"]
+    segs = json.loads((d / "recorte.json").read_text(encoding="utf-8"))["segmentos"]
     assert abs(dur - sum(b - a for a, b in segs)) < 0.5
+
+    # ler_rosto recusa qualquer coisa que não seja o formato 2 (ErroRender); chegar aqui já confirma.
+    rosto = ler_rosto(d / "rosto.json")
+    pls = planos(rosto)
+    assert pls
+    trecho = d / "projeto" / "assets" / "trecho.mp4"
+    for p in pls:
+        for j in range(len(p.pessoas)):
+            mini = d / "miniaturas" / f"p{p.k}-{j}.jpg"
+            gerar_miniatura(trecho, mini, p, j, rosto.largura, rosto.altura, rodar_processo)
+            assert mini.exists() and mini.stat().st_size > 0
+
+    print(f"planos: {len(pls)}")
+    for p in pls:
+        pessoas_str = ", ".join(f"x={s.x:.0f} n={s.n}" for s in p.pessoas)
+        print(f"  plano {p.k} [{p.ini:.2f}-{p.fim:.2f}]: {len(p.pessoas)} pessoa(s) ({pessoas_str})")
+    print(f"duração do mp4: {dur:.2f}s")
+
+    destino = Path(os.environ.get(
+        "CORTES_LENTO_DESTINO",
+        str(Path.home() / "AppData" / "Local" / "Temp" / "claude"
+            / "C--Users-User-Documents-Vibe-Code-Cortes"
+            / "165e2e17-e97e-488c-8e1b-81559876ad87" / "scratchpad" / "lento-c")))
+    destino.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(mp4, destino / "short-v1.mp4")
+    if (d / "miniaturas").exists():
+        shutil.copytree(d / "miniaturas", destino / "miniaturas", dirs_exist_ok=True)
