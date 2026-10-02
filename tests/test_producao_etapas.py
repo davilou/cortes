@@ -142,8 +142,9 @@ def test_nicho_inexistente_falha_com_caminho(tmp_path: Path) -> None:
     e = novo("abcdefghijk", "u", "humor", 5, "f7", AGORA)
     (pasta / "palavras.json").write_text(json.dumps([asdict_palavra("oi.", 0, 1)]), encoding="utf-8")
     (pasta / "sinais.json").write_text('{"janela_s": 0.5, "energia": [0.1, 0.1]}', encoding="utf-8")
-    with pytest.raises(Exception, match="humor"):
+    with pytest.raises(ErroProducao, match="humor") as exc:
         rodar_etapa("momentos", pasta, e, tmp_path, Falsas().dep())
+    assert "perfil.yaml" in str(exc.value)
 
 
 def test_etapa_desconhecida(tmp_path: Path) -> None:
