@@ -2,6 +2,7 @@
 navegador (o projeto HyperFrames do corte com o runtime injetado), miniaturas dos rostos por plano
 e as versões renderizadas. `pasta_de` vem de rotas.py (valida o id do episódio)."""
 import re
+import threading
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
@@ -9,13 +10,14 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse, Response
+from pydantic import BaseModel
 
 from cortes.episodio import ler_json
 from cortes.producao.estado import ErroProducao
 from cortes.producao.previas import Previas
 from cortes.regra_inicio import comeca_no_meio
-from cortes.render.corte import ARQUIVO, Corte, ler_corte, pasta_corte
-from cortes.render.edicao import indices_do_corte, mascarar
+from cortes.render.corte import ARQUIVO, Corte, gravar_corte, ler_corte, pasta_corte
+from cortes.render.edicao import Edicao, aplicar, indices_do_corte, mascarar
 from cortes.render.miniatura import gerar_miniatura
 from cortes.render.montagem import FORMATOS
 from cortes.render.previa import com_runtime
@@ -117,8 +119,43 @@ def estado_editor(pasta: Path, n: int, previas: Previas) -> dict[str, Any]:
             "formatos": list(FORMATOS), "editavel": editavel(previas, id, c)}
 
 
-def montar(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previas, rodar: Rodar) -> None:
+class PedidoEdicao(BaseModel):
+    inicio_palavra: int | None = None
+    fim_palavra: int | None = None
+    titulo: str | None = None
+    formato: str | None = None
+    legenda: dict[int, str | None] = {}
+    mascarar: dict[int, bool] = {}
+    mascarar_palavroes: bool = False
+    rosto: tuple[int, int] | None = None
+
+    def edicao(self) -> Edicao:
+        return Edicao(self.inicio_palavra, self.fim_palavra, self.titulo, self.formato, dict(self.legenda),
+                      dict(self.mascarar), self.mascarar_palavroes, self.rosto)
+
+
+def _exigir_editavel(previas: Previas, id: str, c: Corte) -> None:
+    if c.status in ("na_fila", "renderizando"):
+        raise ErroProducao(f"corte {c.indice} está na fila do render; espere terminar para editar")
+    if previas.preparando(id, c.indice):
+        raise ErroProducao(f"a prévia do corte {c.indice} está sendo preparada; espere terminar")
+
+
+def editar(pasta: Path, n: int, pedido: PedidoEdicao, previas: Previas) -> None:
+    c = corte_de(pasta, n)
+    _exigir_editavel(previas, pasta.name, c)
+    rp = rosto_do_corte(pasta_corte(pasta, n))
+    pessoas_por_plano = [len(p.pessoas) for p in rp[1]] if rp else []
+    novo = aplicar(c, pedido.edicao(), palavras_do_episodio(pasta), pessoas_por_plano)
+    if novo != c:
+        gravar_corte(pasta_corte(pasta, n), novo)
+        previas.pedir(pasta.name, n)
+
+
+def montar(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previas, rodar: Rodar,
+          escrita: threading.Lock) -> None:
     _rotas_leitura(app, pasta_de, previas, rodar)
+    _rotas_edicao(app, pasta_de, previas, escrita)
 
 
 def _rotas_leitura(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previas, rodar: Rodar) -> None:
@@ -150,3 +187,22 @@ def _rotas_leitura(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previ
             trecho = d / "projeto" / "assets" / "trecho.mp4"
             gerar_miniatura(trecho, arq, pls[k], j, r.largura, r.altura, rodar)
         return FileResponse(arq, media_type="image/jpeg")
+
+
+def _rotas_edicao(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previas,
+                  escrita: threading.Lock) -> None:
+    @app.post("/api/episodios/{id}/cortes/{n}/editar")
+    def api_editar(id: str, n: int, pedido: PedidoEdicao) -> Any:
+        pasta = pasta_de(id)
+        with escrita:
+            editar(pasta, n, pedido, previas)
+        return estado_editor(pasta, n, previas)
+
+    @app.post("/api/episodios/{id}/cortes/{n}/previa")
+    def api_pedir_previa(id: str, n: int) -> Any:
+        pasta = pasta_de(id)
+        with escrita:
+            c = corte_de(pasta, n)
+            _exigir_editavel(previas, id, c)
+            previas.pedir(id, n)
+        return estado_editor(pasta, n, previas)

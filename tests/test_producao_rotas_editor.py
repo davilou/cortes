@@ -97,3 +97,40 @@ def test_video_por_versao(cfg: Config) -> None:
     a = Ambiente(cfg)
     assert a.c.get(f"{EP}/cortes/0/video", params={"versao": 1}).content == b"v1"
     assert a.c.get(f"{EP}/cortes/0/video", params={"versao": 2}).status_code == 422
+
+
+def test_editar_inicio_pede_previa_e_marca_alterado(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    d = a.c.post(f"{EP}/cortes/0/editar", json={"inicio_palavra": 2}).json()
+    assert d["corte"]["inicio"] == 2.0 and d["corte"]["alterado"] is True
+    assert d["previa"]["situacao"] == "preparando" and d["editavel"] is False
+    assert "preparada" in a.c.post(f"{EP}/cortes/0/renderizar", json={}).json()["detail"]
+    a.previas.processar("abcdefghijk", 0)
+    assert a.montados[0].inicio == 2.0
+    assert a.c.get(f"{EP}/cortes/0/editor").json()["previa"]["situacao"] == "pronta"
+
+
+def test_editar_legenda_e_palavroes(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    d = a.c.post(f"{EP}/cortes/0/editar", json={"legenda": {"5": "10"}, "mascarar_palavroes": True}).json()
+    textos = {p["i"]: p["texto"] for p in d["palavras"]}
+    assert textos[5] == "10" and textos[4] == "p*rra,"
+
+
+def test_escolher_pessoa(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    d = a.c.post(f"{EP}/cortes/0/editar", json={"rosto": [1, 1]}).json()
+    assert d["planos"][1]["escolha"] == 1
+    a.previas.processar("abcdefghijk", 0)   # a edição pediu prévia; sem isso a próxima é recusada
+    assert "pessoa 3" in a.c.post(f"{EP}/cortes/0/editar", json={"rosto": [1, 3]}).json()["detail"]
+
+
+def test_edicao_recusada_com_o_corte_na_fila(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    a.c.post(f"{EP}/cortes/0/renderizar", json={})
+    assert "fila" in a.c.post(f"{EP}/cortes/0/editar", json={"titulo": "Novo"}).json()["detail"]
+
+
+def test_pedir_previa(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    assert a.c.post(f"{EP}/cortes/0/previa").json()["previa"]["situacao"] == "preparando"

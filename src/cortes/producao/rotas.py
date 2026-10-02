@@ -112,7 +112,7 @@ def montar(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock, agora:
     _rotas_leitura(app, raiz, fila)
     _rotas_acao(app, raiz, fila, escrita, agora)
     rotas_cortes.montar(app, lambda id: _pasta(raiz, id), fila, escrita, previas)
-    rotas_editor.montar(app, lambda id: _pasta(raiz, id), previas, rodar)
+    rotas_editor.montar(app, lambda id: _pasta(raiz, id), previas, rodar, escrita)
 
 
 def _rotas_leitura(app: FastAPI, raiz: Path, fila: Fila) -> None:
