@@ -85,6 +85,9 @@ def _campo(x: dict[str, Any], nome: str, tipo: type | tuple[type, ...]) -> Any:
 
 
 def ler_corte(d: Path) -> Corte:
+    """`indice` tem que bater com o nome da pasta (uma fonte da verdade só); `versao` não pode ser
+    negativa; `status == "pronto"` exige `versao >= 1` (pronto sem MP4 nenhum não existe); `inicio`
+    tem que ser menor que `fim`."""
     arq = d / ARQUIVO
     try:
         x = ler_json(arq)
@@ -92,15 +95,33 @@ def ler_corte(d: Path) -> Corte:
             raise ValueError(f"status '{x['status']}' inválido; use um de {STATUS}")
         if x["erro"] is not None and not isinstance(x["erro"], str):
             raise ValueError("campo 'erro' deveria ser texto ou nulo")
-        return Corte(_campo(x, "indice", int), float(_campo(x, "inicio", (int, float))),
-                     float(_campo(x, "fim", (int, float))), _campo(x, "formato", str),
-                     _campo(x, "titulo", str), cast(Status, x["status"]), _campo(x, "versao", int), x["erro"])
+        indice = _campo(x, "indice", int)
+        if indice != int(d.name):
+            raise ValueError(f"indice {indice} não bate com a pasta '{d.name}'")
+        inicio, fim = float(_campo(x, "inicio", (int, float))), float(_campo(x, "fim", (int, float)))
+        if inicio >= fim:
+            raise ValueError(f"inicio {inicio} deveria ser menor que fim {fim}")
+        versao = _campo(x, "versao", int)
+        if versao < 0:
+            raise ValueError(f"versao {versao} não pode ser negativa")
+        status = cast(Status, x["status"])
+        if status == "pronto" and versao < 1:
+            raise ValueError("status 'pronto' exige versao >= 1")
+        return Corte(indice, inicio, fim, _campo(x, "formato", str), _campo(x, "titulo", str),
+                     status, versao, x["erro"])
     except (OSError, KeyError, TypeError, ValueError) as ex:
         raise ErroProducao(f"{arq}: corte inválido ({ex})") from ex
 
 
+def _indice_da_pasta(arq: Path) -> int:
+    try:
+        return int(arq.parent.name)
+    except ValueError as ex:
+        raise ErroProducao(f"{arq.parent}: nome de pasta não é um índice numérico ({ex})") from ex
+
+
 def cortes_do_episodio(pasta_ep: Path) -> list[Corte]:
-    arqs = sorted((pasta_ep / "cortes").glob(f"*/{ARQUIVO}"), key=lambda a: int(a.parent.name))
+    arqs = sorted((pasta_ep / "cortes").glob(f"*/{ARQUIVO}"), key=_indice_da_pasta)
     return [ler_corte(a.parent) for a in arqs]
 
 

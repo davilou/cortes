@@ -72,6 +72,58 @@ def test_corte_invalido(tmp_path: Path) -> None:
         ler_corte(d)
 
 
+def _corte_json(**sobrescreve: object) -> dict[str, object]:
+    base: dict[str, object] = {"indice": 2, "inicio": 10.0, "fim": 40.0, "formato": "f7",
+                               "titulo": "T", "status": "na_fila", "versao": 0, "erro": None}
+    return {**base, **sobrescreve}
+
+
+def test_indice_do_json_tem_que_bater_com_a_pasta(tmp_path: Path) -> None:
+    d = pasta_corte(tmp_path, 2)
+    d.mkdir(parents=True)
+    (d / "corte.json").write_text(json.dumps(_corte_json(indice=3)), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="corte.json"):
+        ler_corte(d)
+
+
+def test_versao_negativa_e_erro(tmp_path: Path) -> None:
+    d = pasta_corte(tmp_path, 2)
+    d.mkdir(parents=True)
+    (d / "corte.json").write_text(json.dumps(_corte_json(versao=-1)), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="corte.json"):
+        ler_corte(d)
+
+
+def test_status_pronto_exige_versao_maior_ou_igual_a_1(tmp_path: Path) -> None:
+    d = pasta_corte(tmp_path, 2)
+    d.mkdir(parents=True)
+    (d / "corte.json").write_text(json.dumps(_corte_json(status="pronto", versao=0)), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="corte.json"):
+        ler_corte(d)
+
+
+def test_inicio_tem_que_ser_menor_que_fim(tmp_path: Path) -> None:
+    d = pasta_corte(tmp_path, 2)
+    d.mkdir(parents=True)
+    (d / "corte.json").write_text(json.dumps(_corte_json(inicio=40.0, fim=40.0)), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="corte.json"):
+        ler_corte(d)
+
+
+def test_cortes_do_episodio_com_pasta_nao_numerica_e_erro_de_producao(tmp_path: Path) -> None:
+    d = tmp_path / "cortes" / "abc"
+    d.mkdir(parents=True)
+    (d / "corte.json").write_text(json.dumps(_corte_json(indice=0)), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="abc"):
+        cortes_do_episodio(tmp_path)
+
+
+def test_cortes_do_episodio_ordena_por_indice_numerico(tmp_path: Path) -> None:
+    gravar_corte(pasta_corte(tmp_path, 10), novo_corte(10, CANDS[1], "f7"))
+    gravar_corte(pasta_corte(tmp_path, 2), novo_corte(2, CANDS[2], "f7"))
+    assert [c.indice for c in cortes_do_episodio(tmp_path)] == [2, 10]
+
+
 def test_planejar_uma_vez_sem_pisar_no_manual(tmp_path: Path) -> None:
     gravar_corte(pasta_corte(tmp_path, 1), novo_corte(1, CANDS[1], "f1"))   # Renderizar manual antes
     planejar(tmp_path, "f7", 2, CANDS)
