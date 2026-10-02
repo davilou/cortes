@@ -15,11 +15,13 @@ from pydantic import BaseModel
 from cortes.episodio import id_do_video
 from cortes.painel.dados import VIDEO_ID
 from cortes.perfil import CRITERIOS
-from cortes.producao import curadoria
+from cortes.producao import curadoria, rotas_cortes
 from cortes.producao.estado import ErroProducao, etapa_com_erro, gravar, ler, novo, reabrir
 from cortes.producao.fila import Fila
+from cortes.render.corte import cortes_do_episodio
+from cortes.render.montagem import FORMATOS
 
-FORMATOS_RENDER = ("f7", "f1")   # planos D e E acrescentam f4 e f3
+FORMATOS_RENDER = FORMATOS   # render/montagem.py; planos D e E acrescentam f4 e f3
 N_SHORTS_MAX = 10
 
 
@@ -63,7 +65,8 @@ def _candidatos(pasta: Path) -> list[dict[str, Any]]:
 def _resumo(pasta: Path) -> dict[str, Any]:
     meta = _meta(pasta)
     return {**asdict(ler(pasta)), "titulo": meta.get("titulo"), "canal": meta.get("canal"),
-            "duracao_s": meta.get("duracao_s"), "n_candidatos": len(_candidatos(pasta))}
+            "duracao_s": meta.get("duracao_s"), "n_candidatos": len(_candidatos(pasta)),
+            "render": rotas_cortes.resumo_render(pasta)}
 
 
 def _episodios(raiz: Path) -> list[dict[str, Any]]:
@@ -106,6 +109,7 @@ def montar(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock,
     escreve nos exemplos do nicho e não trava nada sozinha)."""
     _rotas_leitura(app, raiz, fila)
     _rotas_acao(app, raiz, fila, escrita, agora)
+    rotas_cortes.montar(app, lambda id: _pasta(raiz, id), fila, escrita)
 
 
 def _rotas_leitura(app: FastAPI, raiz: Path, fila: Fila) -> None:
@@ -118,10 +122,11 @@ def _rotas_leitura(app: FastAPI, raiz: Path, fila: Fila) -> None:
     def api_episodio(id: str) -> Any:
         pasta = _pasta(raiz, id)
         feitas = curadoria.decisoes(pasta)
-        cands = [{**c, "indice": i, "decisao": feitas.get(i, {}).get("decisao")}
+        status = {c.indice: c.status for c in cortes_do_episodio(pasta)}
+        cands = [{**c, "indice": i, "decisao": feitas.get(i, {}).get("decisao"), "corte": status.get(i)}
                  for i, c in enumerate(_candidatos(pasta))]
         return jsonable_encoder({**_resumo(pasta), "rubrica": list(CRITERIOS), "motivos": curadoria.MOTIVOS,
-                                 "candidatos": cands})
+                                 "candidatos": cands, "cortes": rotas_cortes.cortes_json(pasta)})
 
     @app.get("/api/episodios/{id}/video")
     def api_video(id: str) -> FileResponse:
