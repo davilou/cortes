@@ -42,6 +42,26 @@ def test_pausa_barulhenta_fica() -> None:   # 10 dB abaixo da fala (riso, reaç�
     assert segmentos_sem_pausa(audio, TAXA) == [(0.0, 3.0)]
 
 
+def test_silencio_na_borda_inicial_so_avanca_o_cursor() -> None:
+    audio = np.concatenate([silencio(1), tom(2)])
+    assert segmentos_sem_pausa(audio, TAXA) == [(0.88, 3.0)]
+
+
+def test_silencio_na_borda_final_fecha_o_ultimo_segmento() -> None:
+    audio = np.concatenate([tom(2), silencio(1)])
+    assert segmentos_sem_pausa(audio, TAXA) == [(0.0, 2.12)]
+
+
+def test_silencio_nas_duas_bordas() -> None:
+    audio = np.concatenate([silencio(1), tom(2), silencio(1)])
+    assert segmentos_sem_pausa(audio, TAXA) == [(0.88, 3.12)]
+
+
+def test_audio_todo_silencioso_e_erro() -> None:
+    with pytest.raises(ErroRender, match="só silêncio"):
+        segmentos_sem_pausa(silencio(2), TAXA)
+
+
 def test_remapear_leva_tempo_da_pausa_para_a_emenda() -> None:
     segs = [(0.0, 1.12), (1.88, 3.0)]
     assert [remapear(t, segs) for t in (0.5, 1.5, 2.0, 5.0)] == [0.5, 1.12, 1.24, 2.24]

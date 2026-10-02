@@ -51,19 +51,42 @@ def _corridas(marcas: NDArray[np.bool_]) -> list[tuple[int, int]]:
     return res
 
 
+SILENCIO_ABS_DB = -60.0   # abaixo disso não tem sinal nenhum (não é "fala baixa", é digital silence)
+
+
 def segmentos_sem_pausa(audio: NDArray[np.float32], taxa: int = TAXA) -> list[Segmento]:
-    """Trechos a manter, em segundos desde o início do áudio."""
+    """Trechos a manter, em segundos desde o início do áudio.
+
+    Pausa que começa no quadro 0 (silêncio inicial) só avança o cursor — não grava o segmento
+    (0, quase-zero) que isso geraria. Pausa que vai até o fim do áudio fecha o último segmento em
+    `ta + RESPIRO` e não grava um segmento final à parte (sem isso sobrava um resíduo de
+    `RESPIRO` segundos no fim). Áudio inteiramente silencioso é erro: não há trecho para manter.
+    """
     db = _db_por_quadro(audio, taxa)
+    if float(db.max()) < SILENCIO_ABS_DB:
+        raise ErroRender("áudio do trecho é só silêncio; nada para manter")
     silencio = db < float(np.percentile(db, PERCENTIL_FALA)) - SILENCIO_DB
+    total_quadros = len(db)
     manter: list[Segmento] = []
     cursor = 0.0
+    fechado = False
     for a, b in _corridas(silencio):
         ta, tb = a * QUADRO_S, b * QUADRO_S
         if tb - ta <= PAUSA_MIN:
             continue
-        manter.append((round(cursor, 3), round(ta + RESPIRO, 3)))
-        cursor = tb - RESPIRO
-    manter.append((round(cursor, 3), round(len(audio) / taxa, 3)))
+        no_comeco, no_fim = a == 0, b == total_quadros
+        if no_comeco and no_fim:
+            raise ErroRender("áudio do trecho é só silêncio; nada para manter")
+        if no_comeco:
+            cursor = tb - RESPIRO
+        elif no_fim:
+            manter.append((round(cursor, 3), round(ta + RESPIRO, 3)))
+            fechado = True
+        else:
+            manter.append((round(cursor, 3), round(ta + RESPIRO, 3)))
+            cursor = tb - RESPIRO
+    if not fechado:
+        manter.append((round(cursor, 3), round(len(audio) / taxa, 3)))
     return manter
 
 
