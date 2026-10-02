@@ -191,7 +191,7 @@ humor; em finanças só vira sinal auxiliar). Picos de energia marcam candidatos
    sem referente no trecho). Implementada em código + confirmada pelo LLM.
    “Então” fica de fora da regra dura de propósito: em PT-BR falado costuma abrir história ("Então, eu vendi a casa").
 3. **Pontuação** via `llm` (§7): uma chamada por episódio com a transcrição inteira
-   segmentada, o perfil e os exemplos bons/ruins; devolve até 20 candidatos com nota
+   segmentada, o perfil e os exemplos bons/ruins; devolve até 12 candidatos (o app fica com os 10 melhores depois dos filtros — Davi, 2026-10-02) com nota
    por critério da rubrica, `filtro_tema` (sim/não — permite cortar podcast genérico),
    justificativa, título sugerido e início/fim.
 4. **Nota final** = soma ponderada da rubrica + bônus/penalidades + ajuste pelos sinais

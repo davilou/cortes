@@ -14,6 +14,7 @@ PONTOS_ENERGIA = 3.0
 PERCENTIL_ENERGIA = 0.75
 ABERTURA_S = 3.0
 SOBREPOSICAO_MAX = 0.5   # fração do menor trecho que pode coincidir com um já aceito
+MAX_ACEITOS = 10         # Davi, 2026-10-02: 10 cortes por episódio bastam (o prompt pede alguns a mais)
 _PONTUACAO = str.maketrans("", "", ".,;:!?…\"'“”")
 
 
@@ -77,7 +78,8 @@ def _sobreposto(c: Candidato, aceitos: list[Candidato]) -> Candidato | None:
 
 
 def converter(bruto: dict[str, Any], frases: list[Frase], perfil: Perfil,
-              energia: list[float]) -> tuple[list[Candidato], list[dict[str, Any]]]:
+              energia: list[float],
+              limite: int = MAX_ACEITOS) -> tuple[list[Candidato], list[dict[str, Any]]]:
     limiar = percentil(energia, PERCENTIL_ENERGIA)
     pontuados: list[tuple[Candidato, dict[str, Any]]] = []
     descartes: list[dict[str, Any]] = []
@@ -92,6 +94,8 @@ def converter(bruto: dict[str, Any], frases: list[Frase], perfil: Perfil,
     for c, b in pontuados:
         if (a := _sobreposto(c, aceitos)) is not None:
             descartes.append({**b, "motivo": f"sobrepõe F{a.frase_inicio}-F{a.frase_fim}"})
+        elif len(aceitos) >= limite:
+            descartes.append({**b, "motivo": f"fora dos {limite} melhores"})
         else:
             aceitos.append(c)
     return aceitos, descartes

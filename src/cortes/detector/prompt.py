@@ -5,7 +5,7 @@ from typing import Any
 from cortes.perfil import CRITERIOS, Perfil
 from cortes.tipos import Frase
 
-MAX_CANDIDATOS = 20
+CANDIDATOS_PEDIDOS = 12   # pede um pouco mais que MAX_ACEITOS (10): os filtros descartam alguns
 MAX_EXEMPLOS = 10
 
 SISTEMA = (
@@ -53,7 +53,8 @@ def montar_prompt(frases: list[Frase], perfil: Perfil) -> str:
 {formatar_transcricao(frases)}
 
 TAREFA
-Encontre até {MAX_CANDIDATOS} trechos SOBRE O TEMA abaixo, procurando no episódio inteiro, do início ao fim.
+Encontre até {CANDIDATOS_PEDIDOS} trechos SOBRE O TEMA abaixo,
+procurando no episódio inteiro, do início ao fim.
 
 TEMA DO NICHO ({perfil.nicho}): {perfil.filtro_tema}
 dentro_do_tema=true se o trecho é sobre o tema; false se não é.
@@ -109,4 +110,4 @@ def schema_candidatos(perfil: Perfil) -> dict[str, Any]:
         },
     }
     return {"type": "object", "additionalProperties": False, "required": ["candidatos"],
-            "properties": {"candidatos": {"type": "array", "maxItems": MAX_CANDIDATOS, "items": item}}}
+            "properties": {"candidatos": {"type": "array", "maxItems": CANDIDATOS_PEDIDOS, "items": item}}}

@@ -27,6 +27,13 @@ def bruto(ini: int, fim: int, notas: int = 4, dentro_do_tema: bool = True,
             "bonus": bonus or [], "penalidades": pen or [], "titulo": "t"}
 
 
+def test_fica_so_com_os_melhores_e_registra_o_resto() -> None:
+    aceitos, descartes = converter({"candidatos": [bruto(3, 4, notas=3), bruto(0, 2, notas=5)]},
+                                   FRASES, PERFIL, ENERGIA_CONSTANTE, limite=1)
+    assert [c.frase_inicio for c in aceitos] == [0]
+    assert descartes[0]["frase_inicio"] == 3 and descartes[0]["motivo"] == "fora dos 1 melhores"
+
+
 def test_nota_ponderada_vai_de_0_a_100() -> None:
     assert nota_ponderada(dict.fromkeys(CRITERIOS, 1), PERFIL.rubrica) == 0.0
     assert nota_ponderada(dict.fromkeys(CRITERIOS, 5), PERFIL.rubrica) == 100.0
