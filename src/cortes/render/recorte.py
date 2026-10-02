@@ -141,9 +141,16 @@ def recortar(video: Path, destino: Path, ini: float, segs: list[Segmento], rodar
     parcial.replace(destino)
 
 
+TIMEOUT_WAV_S = 120
+
+
 def ler_trecho_wav(audio: Path, ini: float, dur: float) -> NDArray[np.float32]:
-    r = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{ini:.3f}", "-t", f"{dur:.3f}", "-i", str(audio),
-                        "-ac", "1", "-ar", str(TAXA), "-f", "f32le", "-"], capture_output=True)
+    args = ["ffmpeg", "-v", "error", "-ss", f"{ini:.3f}", "-t", f"{dur:.3f}", "-i", str(audio),
+            "-ac", "1", "-ar", str(TAXA), "-f", "f32le", "-"]
+    try:
+        r = subprocess.run(args, capture_output=True, timeout=TIMEOUT_WAV_S)
+    except subprocess.TimeoutExpired as ex:
+        raise ErroRender(f"ffmpeg passou de {TIMEOUT_WAV_S // 60} min e foi interrompido") from ex
     if r.returncode != 0:
         raise ErroRender(f"ffmpeg falhou ao ler {audio}: {r.stderr.decode(errors='replace')[-CAUDA:]}")
     return np.frombuffer(r.stdout, dtype=np.float32)

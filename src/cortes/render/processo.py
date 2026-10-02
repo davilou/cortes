@@ -6,6 +6,7 @@ from pathlib import Path
 
 Rodar = Callable[[list[str], Path | None], tuple[int, str]]   # (args, cwd) → (código, stdout+stderr)
 CAUDA = 1500   # caracteres do fim do log que vão para a mensagem de erro (a tela mostra)
+TIMEOUT_S = 20 * 60   # render de 1-4 min por Short; acima disso algo travou (rede do CDN ou npx interativo)
 
 
 class ErroRender(RuntimeError):
@@ -13,7 +14,11 @@ class ErroRender(RuntimeError):
 
 
 def rodar_processo(args: list[str], cwd: Path | None) -> tuple[int, str]:
-    r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=TIMEOUT_S)
+    except subprocess.TimeoutExpired as ex:
+        raise ErroRender(f"{args[0]} passou de {TIMEOUT_S // 60} min e foi interrompido") from ex
     return r.returncode, r.stdout + r.stderr
 
 

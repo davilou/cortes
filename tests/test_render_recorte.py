@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,7 @@ from cortes.render.processo import ErroRender
 from cortes.render.recorte import (
     args_recorte,
     duracao,
+    ler_trecho_wav,
     palavras_sem_pausa,
     recortar,
     remapear,
@@ -78,6 +80,15 @@ def test_args_do_recorte_buscam_antes_e_cortam_relativo() -> None:
     assert args[:8] == ["ffmpeg", "-v", "error", "-y", "-ss", "100.000", "-t", "3.000"]
     fc = args[args.index("-filter_complex") + 1]
     assert "trim=0.000:1.120" in fc and "trim=1.880:3.000" in fc and fc.endswith("concat=n=2:v=1:a=1[v][a]")
+
+
+def test_ler_trecho_wav_que_trava_e_erro_claro(monkeypatch: pytest.MonkeyPatch) -> None:
+    def trava(*a: object, **kw: object) -> None:
+        raise subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=120)
+
+    monkeypatch.setattr(subprocess, "run", trava)
+    with pytest.raises(ErroRender, match="passou de 2 min"):
+        ler_trecho_wav(Path("audio.wav"), 0.0, 1.0)
 
 
 def test_recortar_grava_por_parcial_e_falha_alto(tmp_path: Path) -> None:
