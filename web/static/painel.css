@@ -334,8 +334,10 @@ video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background:
 .seg.preroll button { font: 11px var(--mono); padding: 5px 9px; }
 /* Short no painel: o mesmo player, com o vídeo 9:16 (contain + teto de altura pra não empurrar
    rubrica e decisão pra fora do painel sticky). */
-video.short-video { width: 100%; max-height: 70vh; aspect-ratio: 9/16; object-fit: contain; border-radius: 10px;
-  background: #000; display: block; cursor: pointer; }
+/* Altura manda (70vh) e a largura sai do 9:16 — com width: 100% a caixa ficava larga e o vídeo
+   ganhava faixas pretas nas laterais quando o painel é mais largo que 70vh × 9/16. */
+video.short-video { height: 70vh; width: auto; max-width: 100%; aspect-ratio: 9/16; object-fit: contain;
+  border-radius: 10px; background: #000; display: block; margin: 0 auto; cursor: pointer; }
 .short-acoes { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
 .short-acoes a.botao { color: var(--text); text-decoration: none; }
 .corte-erro { margin: 10px 0 6px; font-size: 12px; }
