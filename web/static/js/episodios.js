@@ -7,6 +7,8 @@
 let P = null;            // /api/producao
 let epSel = null;        // id do episódio aberto
 const NOMES_ETAPA = { video: "vídeo", legenda: "legenda", sinais: "sinais", momentos: "momentos" };
+// Formato do que "Mostrar transcrição" copia: linha de tempo, depois o texto do bloco.
+const EXEMPLO_TRANSCRICAO = "0:10\nFala galera, tudo beleza pessoal?\n0:18\nHoje tem, hoje o bicho vai pegar…";
 
 function duracaoFmt(s) {
   if (!s) return "";
@@ -32,7 +34,21 @@ function htmlEntrada() {
     <label>Nicho<select name="nicho">${nichos}</select></label>
     <label>Formato<select name="formato">${formatos}</select></label>
     <label>Shorts<select name="n_shorts"><option value="3">3 melhores</option><option value="5" selected>5 melhores</option><option value="10">10 melhores</option></select></label>
-    <button class="botao primario">Gerar Shorts</button></form>`;
+    <button class="botao primario">Gerar Shorts</button>
+    <details class="colar-transcricao"><summary>Colar transcrição do YouTube (opcional)</summary>
+      <p>Use quando o YouTube bloquear a legenda: copie em 'Mostrar transcrição' com os tempos.</p>
+      <textarea name="transcricao" rows="8" spellcheck="false" aria-label="Transcrição do YouTube com os tempos"
+        placeholder="${esc(EXEMPLO_TRANSCRICAO)}"></textarea>
+    </details></form>`;
+}
+
+// Corpo do POST /api/episodios: `transcricao` só vai se tiver algo além de espaço — vazia
+// não é "sem transcrição" pro servidor (ele recusaria com "sem palavras").
+function pedidoNovoEpisodio(form) {
+  const { transcricao, ...d } = Object.fromEntries(new FormData(form));
+  const corpo = { ...d, n_shorts: Number(d.n_shorts) };
+  if (transcricao.trim()) corpo.transcricao = transcricao;
+  return corpo;
 }
 
 function htmlEtapas(ep) {
@@ -46,13 +62,14 @@ function htmlEtapas(ep) {
 function htmlEpisodio(ep) {
   const erroEtapa = Object.values(ep.etapas).find(et => et.situacao === "erro")?.erro;
   const dur = duracaoFmt(ep.duracao_s);
+  const colada = ep.fonte_legenda === "colada" ? `<span class="chip colada">transcrição colada</span>` : "";
   const resumo = erroEtapa
     ? `<span class="erro-txt" title="${esc(erroEtapa)}">${esc(erroEtapa)}</span><button class="botao mini" data-tentar="${esc(ep.id)}">tentar de novo</button>`
     : `<b>${ep.n_candidatos || "—"}</b>${ep.n_candidatos ? "candidatos" : "processando"}`;
   return `<div class="ep ${ep.id === epSel ? "sel" : ""}">
     <div class="ep-abrir" data-ep="${esc(ep.id)}" tabindex="0" role="button" aria-pressed="${ep.id === epSel}">
       <div class="capa" style="background-image:url('${thumb(ep.id)}')"><span>${esc(dur)}</span></div>
-      <div><h3>${esc(ep.titulo ?? ep.url)}</h3><p>${esc(ep.canal ?? "")} · ${esc(dataHora(ep.criado_em))}</p></div>
+      <div><h3>${esc(ep.titulo ?? ep.url)}</h3><p>${esc(ep.canal ?? "")} · ${esc(dataHora(ep.criado_em))}</p>${colada}</div>
     </div>
     ${htmlEtapas(ep)}<div class="resumo">${resumo}</div></div>`;
 }
@@ -209,9 +226,8 @@ async function telaEpisodios(meu) {
   $("#entrada").onsubmit = async ev => {
     ev.preventDefault();
     const b = ev.submitter; b.disabled = true;
-    const d = Object.fromEntries(new FormData(ev.target));
     try {
-      const r = await post("/api/episodios", { ...d, n_shorts: Number(d.n_shorts) });
+      const r = await post("/api/episodios", pedidoNovoEpisodio(ev.target));
       epSel = r.id; ev.target.reset(); await desenhar();
     } catch (e) { avisar(e.message); } finally { b.disabled = false; }
   };

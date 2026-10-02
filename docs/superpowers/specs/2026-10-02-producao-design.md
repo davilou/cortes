@@ -82,7 +82,16 @@ palavra (`tStartMs` do evento + `tOffsetMs` do segmento). Regras:
 - sem faixa `pt` → o episódio para com "vídeo sem legenda em português no YouTube";
 - marcas de troca de locutor (`>>`) e palavrões censurados (`[ __ ]`) são descartados; o
   YouTube começa a palavra ~0,2–0,4 s depois do Whisper (dar folga na borda inicial do corte,
-  plano B).
+  plano B);
+- **transcrição colada** (saída quando o YouTube bloqueia o download com HTTP 429): na entrada,
+  Davi pode colar o texto de "Mostrar transcrição" — linha de tempo (`0:10`, `1:00:03`) seguida
+  do texto do bloco, em uma ou mais linhas. A API valida (parse completo, até 5 MB, mínimo 50
+  palavras; erro diz a linha) antes de criar o episódio e grava `transcricao.txt`; a etapa
+  legenda usa esse arquivo em vez de baixar (`producao/transcricao_colada.py`). Só o início do
+  bloco (~5–7 s) tem tempo: as palavras são distribuídas no bloco pelo tamanho (mesma regra da
+  legenda manual), o último bloco dura nº de palavras × 0,35 s (~2,8 palavras/s). Precisão por
+  palavra estimada em ~±0,3 s — basta para achar momentos; para a legenda queimada do plano B,
+  considerar refinar (alinhamento forçado com o áudio ou Whisper só no trecho do corte).
 
 ### 4.3 Dados por episódio
 
