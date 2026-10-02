@@ -52,7 +52,12 @@ class Previas:
         """Síncrono (testável). Tira este pedido da fila antes de montar — como `_proximo` faria
         na thread real — para que um pedido novo que chegue DURANTE o preparo (via `pedir`)
         apareça de volta na fila e mantenha 'preparando': o resultado deste preparo seria de um
-        estado antigo."""
+        estado antigo.
+
+        A montagem lê o `corte.json` do disco NO MOMENTO em que roda (via `ler_corte`), não no
+        momento do `pedir`. Por isso quem pede uma prévia por causa de uma mudança no corte
+        (início/fim, legenda, rosto…) precisa GRAVAR o `corte.json` novo ANTES de chamar `pedir` —
+        chamar na ordem inversa faz a prévia montar com o corte antigo."""
         with self._trava:
             if (id, n) in self._pedidos:
                 self._pedidos.remove((id, n))
