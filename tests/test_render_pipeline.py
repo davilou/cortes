@@ -9,7 +9,8 @@ from cortes.render.corte import concluir, novo_corte
 from cortes.render.pipeline import DepRender, janela, renderizar_corte
 
 REPO = Path(__file__).resolve().parents[1]
-ROSTO = {"largura": 1920, "altura": 1080, "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}
+ROSTO = {"largura": 1920, "altura": 1080, "cortes": [],
+        "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}
 
 
 class Falso:

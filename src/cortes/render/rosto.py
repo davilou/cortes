@@ -56,7 +56,7 @@ def ler_rosto(arquivo: Path) -> Rosto:
         pontos = tuple(_ponto(p) for p in d["pontos"])
         if not pontos:
             raise ValueError("nenhum ponto de rosto")
-        return Rosto(largura, altura, pontos, _cortes(d.get("cortes", [])))
+        return Rosto(largura, altura, pontos, _cortes(d["cortes"]))
     except (OSError, KeyError, TypeError, ValueError) as ex:
         raise ErroRender(f"{arquivo}: rosto inválido ({ex})") from ex
 

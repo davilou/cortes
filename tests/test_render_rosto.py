@@ -46,7 +46,18 @@ def test_ler_rosto(tmp_path: Path) -> None:
     arq.write_text(json.dumps({"largura": 1920, "altura": 1080, "cortes": [2.0],
                                "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}), encoding="utf-8")
     assert ler_rosto(arq) == Rosto(1920, 1080, (Ponto(0.0, 960, 540, False),), (2.0,))
-    arq.write_text(json.dumps({"largura": 1920, "altura": 1080, "pontos": []}), encoding="utf-8")
+    arq.write_text(json.dumps({"largura": 1920, "altura": 1080, "cortes": [], "pontos": []}),
+                   encoding="utf-8")
+    with pytest.raises(ErroRender, match="rosto.json"):
+        ler_rosto(arq)
+
+
+def test_ler_rosto_exige_a_chave_cortes(tmp_path: Path) -> None:
+    """O script de visão sempre grava `cortes` (lista vazia quando não há troca de câmera);
+    se faltar, é arquivo gerado por script velho ou corrompido — não um default silencioso."""
+    arq = tmp_path / "rosto.json"
+    arq.write_text(json.dumps({"largura": 1920, "altura": 1080,
+                               "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}), encoding="utf-8")
     with pytest.raises(ErroRender, match="rosto.json"):
         ler_rosto(arq)
 
