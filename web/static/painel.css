@@ -232,6 +232,52 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
   border: 1px solid rgba(232,193,90,.35); color: var(--warn); font-size: 13px; line-height: 1.5; }
 .detalhe-erro h2 { font: 400 20px var(--serif); color: var(--text); margin-bottom: 6px; }
 
+/* Candidatos do episódio e painel do trecho (Produção, detalhe) */
+.detalhe > * { min-width: 0; }
+.detalhe { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; margin-top: 28px; align-items: start; }
+.secao { display: flex; justify-content: space-between; align-items: end; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
+.secao h2 { font: 400 26px/1 var(--serif); }
+.secao h2 em { color: var(--muted); }
+
+.candidatos { margin-top: 0; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
+/* colunas com minmax (não px fixo) pra não estourar entre 901–1180px, onde a coluna de
+   candidatos encolhe bastante ao lado do painel de 360px — ver nota da tela Shorts acima. */
+.cand { display: grid; grid-template-columns: minmax(40px,54px) minmax(54px,70px) minmax(44px,60px) 1fr minmax(0,auto);
+  gap: 14px; align-items: center; padding: 11px 16px; border-top: 1px solid var(--line-soft); cursor: pointer; min-width: 0; }
+.cand:first-child { border-top: 0; }
+.cand.cab { cursor: default; font: 500 10.5px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+.cand.sel { background: var(--raised); box-shadow: inset 2px 0 0 var(--up); }
+.cand:not(.cab):hover { background: var(--raised); }
+.cand:focus-visible { outline: 1px solid var(--up); outline-offset: -2px; }
+.cand .n { font: 400 22px var(--serif); }
+.cand .t { font-weight: 600; font-size: 13px; }
+.cand .j { color: var(--faint); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cand > div { min-width: 0; }
+.cand .decisao { font: 500 11px var(--mono); }
+.cand .decisao.aprovado { color: var(--ok); }
+.cand .decisao.rejeitado { color: var(--warn); }
+
+.painel { position: sticky; top: 20px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; }
+video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background: #000; display: block; }
+.painel h3 { font: 400 22px/1.15 var(--serif); margin-top: 14px; }
+.painel .meta { font: 11px var(--mono); color: var(--faint); margin-top: 6px; }
+.rubrica { display: grid; gap: 7px; margin: 16px 0; }
+.rub { display: grid; grid-template-columns: 112px 1fr 22px; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); }
+.rub .b { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.rub .b i { display: block; height: 100%; background: var(--up); }
+.rub span:last-child { font: 12px var(--mono); color: var(--text); text-align: right; }
+.porque { font-size: 12.5px; color: #cfc8bd; border-left: 2px solid var(--up); padding: 4px 0 4px 10px; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+.chip.no { color: var(--warn); }
+.decide { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.decide .ok { border-color: rgba(95,191,138,.5); color: var(--ok); }
+.decide .no { border-color: rgba(232,193,90,.4); color: var(--warn); }
+.motivo { margin-top: 10px; display: flex; gap: 6px; align-items: center; }
+.motivo select, .motivo input { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; min-width: 0; }
+.motivo input { flex: 1; min-width: 0; }
+.painel .sub { margin-top: 14px; color: var(--muted); font-size: 12.5px; }
+.painel .sub b { color: var(--text); }
+
 /* Shorts entre 901px e 1180px: conta/idade/assist. saem para a etiqueta (e o botão Ligar que
    mora nela) nunca ficar espremida contra a borda da tabela. */
 @media (max-width: 1180px) {
@@ -241,6 +287,9 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
      encolhe as duas pra caber sem rolagem horizontal. */
   .ep { grid-template-columns: minmax(0,1fr) minmax(170px,220px) 150px; gap: 12px; }
   .ep-abrir { grid-template-columns: 96px minmax(0,1fr); gap: 12px; }
+  /* o painel de 360px fixo ao lado da coluna de candidatos aperta demais nessa faixa —
+     encolhe pra 300px (ainda com minmax, não fixo: ver .detalhe abaixo em 900px). */
+  .detalhe { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); }
 }
 
 @media (max-width: 900px) {
@@ -279,4 +328,14 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
   .ep-abrir { grid-area: abrir; grid-template-columns: 72px minmax(0,1fr); }
   .ep .etapas { grid-area: etapas; }
   .ep .resumo { grid-area: resumo; align-items: flex-start; }
+
+  /* Detalhe do episódio: painel do trecho empilha ACIMA da lista de candidatos (o vídeo é o
+     que Davi quer ver primeiro no celular) — a ordem no HTML é lista depois painel, então
+     o empilhamento usa `order` em vez de reordenar o DOM. A justificativa (.cand .j) some:
+     numa coluna só, "nota · início · dur · título" já enche a linha em 375px. */
+  .detalhe { grid-template-columns: 1fr; }
+  .detalhe > div:first-child { order: 2; }
+  .painel { order: 1; position: static; }
+  .cand { grid-template-columns: 44px 56px 46px 1fr; }
+  .cand .j, .cand .decisao { display: none; }
 }
