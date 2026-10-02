@@ -461,3 +461,20 @@ hyperframes-player.previa, .previa.vazia { display: block; width: 100%; max-widt
 .versoes { list-style: none; padding: 0; display: grid; gap: 6px; }
 .versoes li { display: flex; gap: 10px; align-items: center; }
 .versoes li > a:first-child { font: 13px var(--mono); color: var(--text); }
+
+/* Editor: transcrição palavra a palavra (fora do corte apagada; início/fim marcados na borda). */
+.palavras { position: relative; max-height: 62vh; overflow: auto; line-height: 2; font-size: 14px; margin-top: 10px;
+  overflow-wrap: anywhere; }
+.pal { padding: 1px 3px; border-radius: 4px; cursor: pointer; }
+.pal.fora { color: var(--faint); }
+.pal.sel { background: var(--raised); outline: 1px solid var(--up); }
+.pal.ini { box-shadow: inset 2px 0 0 var(--up); }
+.pal.fim { box-shadow: inset -2px 0 0 var(--up); }
+.pal.ini.fim { box-shadow: inset 2px 0 0 var(--up), inset -2px 0 0 var(--up); }
+.pal.edit { color: var(--up); }
+.pal.masc { font-style: italic; }
+.pal:focus-visible { outline: 1px solid var(--up); }
+.acoes-pal { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.acoes-pal input { flex: 1 1 120px; }
+.aviso-inicio { font-size: 12.5px; color: var(--warn); border-left: 2px solid var(--warn); padding: 4px 0 4px 10px; margin-top: 10px; }
+.col-transcricao .sub { margin-top: 10px; }
