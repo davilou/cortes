@@ -36,13 +36,27 @@ def detectar(frame: np.ndarray, sessao: ort.InferenceSession) -> tuple[float, fl
     return x * 4 * frame.shape[1] / 224, y * 4 * frame.shape[0] / 224
 
 
+def _cortes_validos(brutos: list[float]) -> list[float]:
+    """Arredonda, descarta trocas em t<=0 (ruído do primeiro quadro, não é corte real) e
+    deduplica preservando a ordem (o detector de cena do ffmpeg pode marcar o mesmo instante
+    mais de uma vez; duplicado vira intervalo de duração zero em `_pontos_por_intervalo`)."""
+    vistos: set[float] = set()
+    res: list[float] = []
+    for t in (round(c, 2) for c in brutos):
+        if t > 0 and t not in vistos:
+            vistos.add(t)
+            res.append(t)
+    return res
+
+
 def cortes_de_camera(video: Path) -> list[float]:
     r = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(video), "-vf",
                         f"scale=320:-1,select='gt(scene,{CENA})',showinfo", "-an", "-f", "null", "-"],
                        capture_output=True, text=True, errors="replace")
     if r.returncode != 0:
         sys.exit(f"ffmpeg (trocas de câmera) falhou: {r.stderr[-1500:]}")
-    return [float(t) for t in re.findall(r"pts_time:([\d.]+)", r.stderr)]
+    brutos = [float(t) for t in re.findall(r"pts_time:([\d.]+)", r.stderr)]
+    return _cortes_validos(brutos)
 
 
 def amostrar(video: Path, sessao: ort.InferenceSession, cortes: list[float]) -> tuple[int, int, list[dict], int]:
@@ -72,7 +86,7 @@ def main() -> None:
     if len(pontos) < 0.5 * n:
         sys.exit(f"rosto em só {len(pontos)} de {n} amostras — trilha não confiável")
     saida.write_text(json.dumps({"largura": largura, "altura": altura, "pontos": pontos,
-                                 "cortes": [round(c, 2) for c in cortes]}), encoding="utf-8")
+                                 "cortes": cortes}), encoding="utf-8")
     print(f"rosto em {len(pontos)}/{n} amostras; {sum(p['corte'] for p in pontos)} trocas de câmera")
 
 
