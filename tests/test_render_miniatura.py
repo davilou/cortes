@@ -42,6 +42,45 @@ def test_gerar_pessoa_inexistente_e_erro(tmp_path: Path) -> None:
         gerar_miniatura(Path("t.mp4"), tmp_path / "m.jpg", plano, 1, 1920, 1080, rodar)
 
 
+def test_gerar_grava_num_parcial_e_renomeia_no_fim(tmp_path: Path) -> None:
+    vistos: list[str] = []
+
+    def rodar(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        vistos.append(args[-1])
+        Path(args[-1]).write_bytes(b"jpg")
+        return 0, ""
+
+    destino = tmp_path / "m.jpg"
+    plano = Plano(0, 1.0, 3.0, (Pessoa(960, 540, 80, 3, 0.9),), 0)
+    gerar_miniatura(Path("t.mp4"), destino, plano, 0, 1920, 1080, rodar)
+    assert destino.read_bytes() == b"jpg"
+    assert vistos == [str(tmp_path / "m.parcial.jpg")]
+    assert not (tmp_path / "m.parcial.jpg").exists()
+
+
+def test_gerar_apaga_o_parcial_quando_ffmpeg_sai_0_sem_gerar_arquivo(tmp_path: Path) -> None:
+    def rodar(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        return 0, ""   # ffmpeg "deu certo" mas não escreveu nada no destino
+
+    destino = tmp_path / "m.jpg"
+    plano = Plano(0, 1.0, 3.0, (Pessoa(960, 540, 80, 3, 0.9),), 0)
+    with pytest.raises(ErroRender, match="não gerou o arquivo"):
+        gerar_miniatura(Path("t.mp4"), destino, plano, 0, 1920, 1080, rodar)
+    assert not destino.exists() and not (tmp_path / "m.parcial.jpg").exists()
+
+
+def test_gerar_apaga_o_parcial_quando_ffmpeg_gera_arquivo_vazio(tmp_path: Path) -> None:
+    def rodar(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        Path(args[-1]).write_bytes(b"")
+        return 0, ""
+
+    destino = tmp_path / "m.jpg"
+    plano = Plano(0, 1.0, 3.0, (Pessoa(960, 540, 80, 3, 0.9),), 0)
+    with pytest.raises(ErroRender, match="não gerou o arquivo"):
+        gerar_miniatura(Path("t.mp4"), destino, plano, 0, 1920, 1080, rodar)
+    assert not destino.exists() and not (tmp_path / "m.parcial.jpg").exists()
+
+
 def test_runtime_entra_logo_depois_do_head() -> None:
     esperado = f'<html>\n  <head>\n<script src="{RUNTIME}"></script>\n<meta>'
     assert com_runtime("<html>\n  <head>\n<meta>") == esperado

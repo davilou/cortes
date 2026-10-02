@@ -19,8 +19,20 @@ def args_miniatura(trecho: Path, destino: Path, t: float, p: Pessoa, largura: in
 
 def gerar_miniatura(trecho: Path, destino: Path, plano: Plano, j: int, largura: int, altura: int,
                     rodar: Rodar) -> None:
+    """Grava em `<nome>.parcial.jpg` e só renomeia para o destino no fim: uma falha no meio (ou um
+    pedido concorrente pela mesma miniatura) nunca deixa um arquivo pela metade no lugar final.
+    ffmpeg que sai 0 sem gerar o arquivo (ou gera vazio) é tão erro quanto saída != 0 (item 2)."""
     if not 0 <= j < len(plano.pessoas):
         raise ErroRender(f"plano {plano.k}: pessoa {j} não existe (há {len(plano.pessoas)})")
     destino.parent.mkdir(parents=True, exist_ok=True)
+    parcial = destino.with_suffix(".parcial.jpg")
     t = (plano.ini + plano.fim) / 2
-    exigir(rodar, args_miniatura(trecho, destino, t, plano.pessoas[j], largura, altura), None, "miniatura")
+    try:
+        args = args_miniatura(trecho, parcial, t, plano.pessoas[j], largura, altura)
+        exigir(rodar, args, None, "miniatura")
+        if not parcial.exists() or parcial.stat().st_size == 0:
+            raise ErroRender(f"miniatura do plano {plano.k} pessoa {j}: ffmpeg não gerou o arquivo")
+        parcial.replace(destino)
+    except ErroRender:
+        parcial.unlink(missing_ok=True)
+        raise
