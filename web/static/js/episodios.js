@@ -192,6 +192,7 @@ function formColar(ep) {
     <label>Transcrição do YouTube com os tempos<textarea name="transcricao" rows="14" required spellcheck="false"
       placeholder="${esc(EXEMPLO_TRANSCRICAO)}"></textarea></label>
     <p class="dica">${esc(DICA_TRANSCRICAO)}</p>
+    <p class="dica" id="colar-aviso" role="status" hidden>Há texto colado: use Cancelar para descartar ou Enviar.</p>
     <div class="acoes"><button type="button" class="botao" id="cancelar">Cancelar</button><button type="submit" class="botao primario" id="gaveta-enviar">Enviar</button></div></form>`;
 }
 
@@ -204,16 +205,24 @@ function abrirColar(id, gatilho) {
   const camada = $("#camada");
   camada.innerHTML = formColar(ep);
   const form = $("form", camada), enviar = $("#gaveta-enviar", camada);
-  aoTeclarGaveta = ev => { if (ev.key === "Escape") fechar(); };
+  // Escape e clique no fundo são fáceis de acertar sem querer: com texto colado (2 h de
+  // transcrição) eles não fecham — só Cancelar ou Enviar. O aviso diz isso.
+  const fecharSeVazio = () => {
+    if (!form.transcricao.value.trim()) { fechar(); return; }
+    $("#colar-aviso", camada).hidden = false;
+    form.transcricao.focus();
+  };
+  aoTeclarGaveta = ev => { if (ev.key === "Escape") fecharSeVazio(); };
   document.addEventListener("keydown", aoTeclarGaveta);
-  $(".fundo", camada).onclick = () => fechar();
+  $(".fundo", camada).onclick = fecharSeVazio;
   $("#cancelar", camada).onclick = () => fechar();
   form.transcricao.focus();
   form.onsubmit = async ev => {
     ev.preventDefault();
     enviar.disabled = true;
     try {
-      await post(`/api/episodios/${encodeURIComponent(id)}/transcricao`, { transcricao: form.transcricao.value });
+      const r = await post(`/api/episodios/${encodeURIComponent(id)}/transcricao`, { transcricao: form.transcricao.value });
+      if (!r.enfileirado) avisar("transcrição salva; o episódio não estava em erro, nada foi reenfileirado");
       gatilhoGaveta = null;   // o botão some na lista nova: o foco vai pra linha do episódio
       fechar(`[data-ep="${CSS.escape(id)}"]`);
       await atualizarProducao();
@@ -278,7 +287,7 @@ async function telaEpisodios(meu) {
     const b = ev.submitter; b.disabled = true;
     try {
       const r = await post("/api/episodios", pedidoNovoEpisodio(ev.target));
-      epSel = r.id; ev.target.reset(); await desenhar();
+      epSel = r.id; ev.target.reset(); $(".colar-transcricao", ev.target).open = false; await desenhar();
     } catch (e) { avisar(e.message); } finally { b.disabled = false; }
   };
   if (epSel) await mostrarDetalhe(epSel, meu);

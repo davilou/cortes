@@ -16,7 +16,8 @@ from cortes.episodio import id_do_video, salvar_texto
 from cortes.painel.dados import VIDEO_ID
 from cortes.perfil import CRITERIOS
 from cortes.producao import curadoria, legenda_yt, transcricao_colada
-from cortes.producao.estado import ErroProducao, etapa_com_erro, gravar, ler, novo, reabrir
+from cortes.producao.estado import ErroProducao, EstadoEpisodio, etapa_com_erro, gravar, ler, novo, reabrir
+from cortes.producao.etapas import ARQUIVO_FONTE
 from cortes.producao.fila import Fila
 
 FORMATOS_RENDER = ("f7", "f1")   # planos D e E acrescentam f4 e f3
@@ -74,6 +75,15 @@ def _resumo(pasta: Path) -> dict[str, Any]:
 
 
 def _fonte_legenda(pasta: Path) -> Literal["colada", "youtube"] | None:
+    """Com `palavras.json`, vale o marcador de quem o gerou (etapas.ARQUIVO_FONTE): um
+    `legenda.pt.json3` pode sobrar de um parse que falhou antes da transcrição colada.
+    Sem marcador (episódio de antes dele), a transcrição colada, se existir, foi a fonte."""
+    marcador = pasta / ARQUIVO_FONTE
+    if (pasta / "palavras.json").exists() and marcador.exists():
+        fonte = marcador.read_text(encoding="utf-8").strip()
+        if fonte not in ("colada", "youtube"):
+            raise ErroProducao(f"{marcador}: fonte de legenda desconhecida {fonte!r}")
+        return "colada" if fonte == "colada" else "youtube"
     if (pasta / transcricao_colada.ARQUIVO).exists():
         return "colada"
     if (pasta / legenda_yt.ARQUIVO).exists() or (pasta / "palavras.json").exists():
@@ -206,13 +216,25 @@ def _rota_transcricao(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.L
         colada e, se há etapa em erro, reabre e enfileira como o 'tentar de novo'."""
         pasta = _pasta(raiz, id)
         with escrita:
-            if (pasta / "palavras.json").exists():
-                raise ErroProducao("a legenda deste episódio já está pronta")
+            e = ler(pasta)
+            _conferir_pode_colar(pasta, e, fila)
             _validar_transcricao(pedido.transcricao)
             salvar_texto(pasta / transcricao_colada.ARQUIVO, pedido.transcricao)
-            e = ler(pasta)
             reabrir_agora = etapa_com_erro(e) is not None
             if reabrir_agora:
                 gravar(pasta, reabrir(e))
                 fila.enfileirar(id)
         return {"enfileirado": reabrir_agora}
+
+
+def _conferir_pode_colar(pasta: Path, e: EstadoEpisodio, fila: Fila) -> None:
+    """Tudo antes de gravar: um pedido recusado não deixa transcricao.txt para trás. A fila
+    rodando o episódio poderia estar no meio da etapa legenda (download em curso)."""
+    if (pasta / "palavras.json").exists():
+        raise ErroProducao("a legenda deste episódio já está pronta")
+    atual = fila.situacao()["atual"]
+    if atual is not None and atual.get("episodio") == e.id:
+        raise ErroProducao(f"episódio {e.id} está sendo processado agora; espere a etapa terminar")
+    situacao = e.etapas["legenda"].situacao
+    if situacao not in ("erro", "pendente"):
+        raise ErroProducao(f"a etapa legenda está '{situacao}'; só dá para colar com ela em erro ou pendente")

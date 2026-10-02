@@ -6,9 +6,10 @@ import pytest
 
 from cortes.painel.servidor import Config
 from cortes.producao.estado import gravar, ler, marcar, novo
+from cortes.producao.etapas import ARQUIVO_FONTE
 from cortes.producao.rotas import TRANSCRICAO_MAX_BYTES
+from tests.amostras import AMOSTRA
 from tests.test_producao_rotas import AGORA, NOVO, montar, preparar_concluido
-from tests.test_producao_transcricao_colada import AMOSTRA
 
 
 def test_transcricao_colada_e_gravada_com_o_episodio(cfg: Config) -> None:
@@ -30,11 +31,11 @@ def test_sem_transcricao_nao_grava_arquivo(cfg: Config) -> None:
 
 
 @pytest.mark.parametrize("texto, erro", [
-    ("Transcrição\n" + AMOSTRA, "linha 1: texto antes do primeiro tempo"),
+    (AMOSTRA.replace("0:18", "0:05", 1), "linha 3: tempo 0:05 não é maior que o anterior"),
     (AMOSTRA.replace("0:18", "0:75", 1), "linha 3: tempo inválido '0:75'"),
     ("0:01\nsó isso\n", "transcrição curta demais: 2 palavras"),
     ("   ", "sem palavras"),
-], ids=["antes-do-tempo", "tempo-invalido", "curta", "vazia"])
+], ids=["tempo-nao-cresce", "tempo-invalido", "curta", "vazia"])
 def test_transcricao_ruim_e_422_e_nada_e_criado(cfg: Config, texto: str, erro: str) -> None:
     c, fila = montar(cfg)
     r = c.post("/api/episodios", json={**NOVO, "transcricao": texto})
@@ -100,10 +101,10 @@ def test_colar_com_legenda_pronta_e_422(cfg: Config) -> None:
 
 
 @pytest.mark.parametrize("texto, erro", [
-    ("Transcrição\n" + AMOSTRA, "transcrição colada: linha 1: texto antes do primeiro tempo"),
+    (AMOSTRA.replace("0:18", "0:75", 1), "transcrição colada: linha 3: tempo inválido"),
     ("0:01\nsó isso\n", "transcrição colada: transcrição curta demais"),
     (AMOSTRA + "x" * TRANSCRICAO_MAX_BYTES, "transcrição colada grande demais"),
-], ids=["antes-do-tempo", "curta", "grande"])
+], ids=["tempo-invalido", "curta", "grande"])
 def test_colar_texto_ruim_e_422_e_nada_e_gravado(cfg: Config, texto: str, erro: str) -> None:
     pasta = episodio_com_legenda_em_erro(cfg)
     c, fila = montar(cfg)
@@ -120,3 +121,37 @@ def test_colar_em_id_desconhecido_e_422(cfg: Config, id: str, erro: str) -> None
     r = c.post(f"/api/episodios/{id}/transcricao", json={"transcricao": AMOSTRA})
     assert r.status_code == 422 and erro in r.json()["detail"]
     assert not (cfg.raiz / "episodios").exists()
+
+
+def test_colar_com_a_fila_processando_o_episodio_e_422(cfg: Config, monkeypatch: pytest.MonkeyPatch) -> None:
+    pasta = episodio_com_legenda_em_erro(cfg)
+    c, fila = montar(cfg)
+    situacao = fila.situacao()
+    monkeypatch.setattr(fila, "situacao", lambda: {**situacao, "atual": {"episodio": "abcdefghijk",
+                                                                          "etapa": "legenda"}})
+    r = c.post("/api/episodios/abcdefghijk/transcricao", json={"transcricao": AMOSTRA})
+    assert r.status_code == 422 and "sendo processado agora" in r.json()["detail"]
+    assert not (pasta / "transcricao.txt").exists()
+
+
+def test_colar_com_legenda_ok_ou_rodando_e_422(cfg: Config) -> None:
+    pasta = episodio_com_legenda_em_erro(cfg)
+    c, _ = montar(cfg)
+    for situacao in ("ok", "rodando"):
+        gravar(pasta, marcar(ler(pasta), "legenda", situacao, AGORA))
+        r = c.post("/api/episodios/abcdefghijk/transcricao", json={"transcricao": AMOSTRA})
+        assert r.status_code == 422 and f"está '{situacao}'" in r.json()["detail"]
+        assert not (pasta / "transcricao.txt").exists()
+
+
+@pytest.mark.parametrize("marcador, esperado",
+                         [("youtube", "youtube"), ("colada", "colada"), (None, "colada")])
+def test_fonte_legenda_segue_o_marcador_de_quem_gerou_palavras(cfg: Config, marcador: str | None,
+                                                               esperado: str) -> None:
+    pasta = episodio_com_legenda_em_erro(cfg)
+    for nome in ("legenda.pt.json3", "transcricao.txt", "palavras.json"):
+        (pasta / nome).write_text("[]", encoding="utf-8")
+    if marcador is not None:
+        (pasta / ARQUIVO_FONTE).write_text(marcador, encoding="utf-8")
+    c, _ = montar(cfg)
+    assert c.get("/api/producao").json()["episodios"][0]["fonte_legenda"] == esperado

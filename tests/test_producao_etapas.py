@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from cortes.producao.estado import ErroProducao, novo
-from cortes.producao.etapas import Dependencias, rodar_etapa
+from cortes.producao.etapas import ARQUIVO_FONTE, Dependencias, rodar_etapa
 from cortes.producao.legenda_yt import ARQUIVO
 
 AGORA = datetime(2026, 10, 2, 9)
@@ -161,7 +161,7 @@ def test_etapas_do_estado_e_do_modulo_nao_divergem() -> None:
 
 
 def test_legenda_usa_transcricao_colada_sem_baixar(tmp_path: Path) -> None:
-    from tests.test_producao_transcricao_colada import AMOSTRA
+    from tests.amostras import AMOSTRA
 
     pasta = tmp_path / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
@@ -173,6 +173,15 @@ def test_legenda_usa_transcricao_colada_sem_baixar(tmp_path: Path) -> None:
     palavras = json.loads((pasta / "palavras.json").read_text(encoding="utf-8"))
     assert palavras[0] == {"texto": "Fala", "inicio": 10.0, "fim": palavras[1]["inicio"]}
     assert not (pasta / ARQUIVO).exists()
+    assert (pasta / ARQUIVO_FONTE).read_text(encoding="utf-8") == "colada"
+
+
+def test_legenda_baixada_marca_a_fonte_youtube(tmp_path: Path) -> None:
+    pasta = tmp_path / "episodios" / "abcdefghijk"
+    pasta.mkdir(parents=True)
+    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    rodar_etapa("legenda", pasta, e, tmp_path, Falsas().dep())
+    assert (pasta / ARQUIVO_FONTE).read_text(encoding="utf-8") == "youtube"
 
 
 def test_legenda_com_transcricao_ruim_para_com_a_linha(tmp_path: Path) -> None:
@@ -180,9 +189,9 @@ def test_legenda_com_transcricao_ruim_para_com_a_linha(tmp_path: Path) -> None:
 
     pasta = tmp_path / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
-    (pasta / "transcricao.txt").write_text("oi\n0:10\nfala\n", encoding="utf-8")
+    (pasta / "transcricao.txt").write_text("0:10\nfala\n0:05\noi\n", encoding="utf-8")
     e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
     f = Falsas()
-    with pytest.raises(ErroTranscricao, match="linha 1"):
+    with pytest.raises(ErroTranscricao, match="linha 3"):
         rodar_etapa("legenda", pasta, e, tmp_path, f.dep())
     assert f.chamadas == [] and not (pasta / "palavras.json").exists()

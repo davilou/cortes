@@ -9,12 +9,14 @@ from pathlib import Path
 
 from cortes import ingestao, sinais
 from cortes.detector import ChamarLLM, chamar_llm_real, detectar
-from cortes.episodio import ler_json, salvar_json
+from cortes.episodio import ler_json, salvar_json, salvar_texto
 from cortes.perfil import carregar_perfil
 from cortes.producao import legenda_yt, transcricao_colada
 from cortes.producao.estado import ETAPAS, ErroProducao, EstadoEpisodio
 from cortes.segmentacao import frases
 from cortes.tipos import Palavra
+
+ARQUIVO_FONTE = "fonte_legenda.txt"   # "colada" | "youtube": quem gerou palavras.json
 
 
 @dataclass(frozen=True)
@@ -36,14 +38,19 @@ def _video(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> Non
 
 
 def _legenda(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> None:
-    """Transcrição colada na entrada (`transcricao.txt`) tem preferência: não baixa nada."""
+    """Transcrição colada (`transcricao.txt`) tem preferência: não baixa nada. A fonte que de
+    fato gerou `palavras.json` fica em ARQUIVO_FONTE, gravado antes dele — `legenda.pt.json3`
+    pode sobrar de um download cujo parse falhou antes de Davi colar a transcrição."""
     if (pasta / "palavras.json").exists():
         return
     colada = pasta / transcricao_colada.ARQUIVO
     if colada.exists():
+        fonte = "colada"
         palavras = transcricao_colada.palavras_da_transcricao(colada.read_text(encoding="utf-8"))
     else:
+        fonte = "youtube"
         palavras = legenda_yt.palavras_do_json3(ler_json(dep.baixar_legenda(e.url, pasta)))
+    salvar_texto(pasta / ARQUIVO_FONTE, fonte)
     salvar_json(pasta / "palavras.json", [asdict(p) for p in palavras])
 
 

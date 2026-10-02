@@ -87,9 +87,16 @@ palavra (`tStartMs` do evento + `tOffsetMs` do segmento). Regras:
   Davi pode colar o texto de "Mostrar transcrição" — linha de tempo (`0:10`, `1:00:03`) seguida
   do texto do bloco, em uma ou mais linhas. A API valida (parse completo, até 5 MB, mínimo 50
   palavras; erro diz a linha) antes de criar o episódio e grava `transcricao.txt`; a etapa
-  legenda usa esse arquivo em vez de baixar (`producao/transcricao_colada.py`). Só o início do
-  bloco (~5–7 s) tem tempo: as palavras são distribuídas no bloco pelo tamanho (mesma regra da
-  legenda manual), o último bloco dura nº de palavras × 0,35 s (~2,8 palavras/s). Precisão por
+  legenda usa esse arquivo em vez de baixar (`producao/transcricao_colada.py`). Episódio já na
+  produção com a legenda em erro recebe a transcrição por `POST /api/episodios/{id}/transcricao`
+  (recusado se a legenda já está pronta, rodando ou ok). Só o início do bloco (~5–7 s) tem
+  tempo: as palavras são distribuídas pelo tamanho (mesma regra da legenda manual) até o início
+  do bloco seguinte, mas no máximo nº de palavras × 0,35 s × 1,8 — sem esse teto, um bloco
+  seguido de silêncio ou música espalharia as palavras por minutos; o último bloco dura nº de
+  palavras × 0,35 s (~2,8 palavras/s). Linhas antes do primeiro tempo (título do vídeo ou de
+  capítulo) são ignoradas; um título de capítulo entre blocos entra no texto do bloco anterior
+  (indistinguível de fala); uma fala que seja exatamente um tempo ("2:30") é lida como tempo.
+  `fonte_legenda.txt` registra quem gerou `palavras.json` ("colada" | "youtube"). Precisão por
   palavra estimada em ~±0,3 s — basta para achar momentos; para a legenda queimada do plano B,
   considerar refinar (alinhamento forçado com o áudio ou Whisper só no trecho do corte).
 
