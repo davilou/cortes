@@ -82,11 +82,16 @@ def test_etapas_em_ordem_gravam_seus_arquivos(tmp_path: Path) -> None:
     assert (pasta / "frases.json").exists() and (pasta / "descartados.json").exists()
 
 
+def asdict_palavra(t: str, i: float, f: float) -> dict[str, Any]:
+    return {"texto": t, "inicio": i, "fim": f}
+
+
 def test_etapa_pula_o_que_ja_existe(tmp_path: Path) -> None:
     raiz = raiz_com_nicho(tmp_path)
     pasta = raiz / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
     (pasta / "video.mp4").write_bytes(b"x")
+    (pasta / "meta.json").write_text('{"titulo": "T"}', encoding="utf-8")
     wav_silencio(pasta / "audio.wav")
     (pasta / "palavras.json").write_text(json.dumps([asdict_palavra("oi", 0, 1)]), encoding="utf-8")
     e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
@@ -96,8 +101,39 @@ def test_etapa_pula_o_que_ja_existe(tmp_path: Path) -> None:
     assert f.chamadas == []
 
 
-def asdict_palavra(t: str, i: float, f: float) -> dict[str, Any]:
-    return {"texto": t, "inicio": i, "fim": f}
+def test_etapa_video_refaz_download_se_so_video_mp4_sobreviveu(tmp_path: Path) -> None:
+    """video.mp4 sem meta.json é download incompleto (queda, ou altura rejeitada em
+    ingestao.baixar): o marcador de "baixado" é meta.json, não video.mp4."""
+    raiz = raiz_com_nicho(tmp_path)
+    pasta = raiz / "episodios" / "abcdefghijk"
+    pasta.mkdir(parents=True)
+    (pasta / "video.mp4").write_bytes(b"lixo de uma queda anterior")
+    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    f = Falsas()
+    rodar_etapa("video", pasta, e, raiz, f.dep())
+    assert f.chamadas == ["video", "audio"]
+
+
+def test_etapa_sinais_pula_se_sinais_json_existe(tmp_path: Path) -> None:
+    raiz = raiz_com_nicho(tmp_path)
+    pasta = raiz / "episodios" / "abcdefghijk"
+    pasta.mkdir(parents=True)
+    (pasta / "sinais.json").write_text('{"janela_s": 0.5, "energia": [0.1]}', encoding="utf-8")
+    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    f = Falsas()
+    rodar_etapa("sinais", pasta, e, raiz, f.dep())
+    assert f.chamadas == []
+
+
+def test_etapa_momentos_pula_e_nao_chama_llm_se_candidatos_json_existe(tmp_path: Path) -> None:
+    raiz = raiz_com_nicho(tmp_path)
+    pasta = raiz / "episodios" / "abcdefghijk"
+    pasta.mkdir(parents=True)
+    (pasta / "candidatos.json").write_text("[]", encoding="utf-8")
+    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    f = Falsas()
+    rodar_etapa("momentos", pasta, e, raiz, f.dep())
+    assert f.chamadas == []
 
 
 def test_nicho_inexistente_falha_com_caminho(tmp_path: Path) -> None:

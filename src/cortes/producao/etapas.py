@@ -27,7 +27,9 @@ class Dependencias:
 
 
 def _video(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> None:
-    if not (pasta / "video.mp4").exists():
+    """`meta.json` é o marcador de download feito: `ingestao.baixar` só o grava depois de
+    validar a altura, então `video.mp4` sozinho (queda ou altura rejeitada) não basta."""
+    if not (pasta / "meta.json").exists():
         dep.baixar_video(e.url, pasta)
     if not (pasta / "audio.wav").exists():
         dep.extrair_audio(pasta)

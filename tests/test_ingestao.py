@@ -1,8 +1,10 @@
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from cortes import ingestao
 from cortes.ingestao import (
     ALTURA_MINIMA,
     ErroIngestao,
@@ -58,3 +60,44 @@ def test_extrair_meta() -> None:
             "id": "abc", "outros": "ignorado"}
     assert extrair_meta(info) == {"titulo": "Ep 1", "canal": "Podcast", "duracao_s": 3600,
                                   "data": "20260901", "id": "abc"}
+
+
+def test_extrair_audio_grava_atomico_so_audio_wav_fica(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_sucesso(args: list[str]) -> subprocess.CompletedProcess[str]:
+        Path(args[-1]).write_bytes(b"audio")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(ingestao, "_rodar", fake_sucesso)
+    ingestao.extrair_audio(tmp_path)
+    assert (tmp_path / "audio.wav").exists()
+    assert not (tmp_path / "audio.tmp.wav").exists()
+
+
+def test_extrair_audio_falha_nao_deixa_audio_wav(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_falha(args: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 1, "", "ffmpeg explodiu")
+
+    monkeypatch.setattr(ingestao, "_rodar", fake_falha)
+    with pytest.raises(ErroIngestao, match="ffmpeg"):
+        ingestao.extrair_audio(tmp_path)
+    assert not (tmp_path / "audio.wav").exists()
+
+
+def test_baixar_altura_rejeitada_remove_video_e_info_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[0] == "ffprobe":
+            return subprocess.CompletedProcess(args, 0, "360\n", "")
+        (tmp_path / "video.mp4").write_bytes(b"x")
+        (tmp_path / "video.info.json").write_text("{}", encoding="utf-8")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(ingestao, "_rodar", fake)
+    with pytest.raises(ErroIngestao, match="360"):
+        ingestao.baixar("u", tmp_path)
+    assert not (tmp_path / "video.mp4").exists()
+    assert not (tmp_path / "video.info.json").exists()
+    assert not (tmp_path / "meta.json").exists()

@@ -66,6 +66,13 @@ def _altura(video: Path) -> int:
     return altura_de_saida(r.stdout, video)
 
 
+def _descartar_video(destino: Path) -> None:
+    """Remove o vídeo e seu info.json: nem `video.mp4` nem `meta.json` ficam de pé
+    quando a altura é rejeitada, para `video.mp4` não servir de marcador de "baixado"."""
+    (destino / "video.mp4").unlink(missing_ok=True)
+    (destino / "video.info.json").unlink(missing_ok=True)
+
+
 def baixar(url: str, destino: Path) -> None:
     r = _rodar(comando_download(url, destino, cliente=None))
     if r.returncode != 0 and precisa_cliente_alternativo(r.stderr):
@@ -73,13 +80,21 @@ def baixar(url: str, destino: Path) -> None:
     if r.returncode != 0:
         raise ErroIngestao(f"yt-dlp falhou: {r.stderr[-500:]}")
     video = destino / "video.mp4"
-    validar_altura(_altura(video))
+    try:
+        validar_altura(_altura(video))
+    except ErroIngestao:
+        _descartar_video(destino)
+        raise
     info = json.loads((destino / "video.info.json").read_text(encoding="utf-8"))
     salvar_json(destino / "meta.json", extrair_meta(info))
 
 
 def extrair_audio(destino: Path) -> None:
+    """Grava em `audio.tmp.wav` e renomeia para `audio.wav` ao final: uma queda no meio
+    do ffmpeg não deixa um `audio.wav` truncado que a etapa de produção aceitaria como feito."""
+    tmp = destino / "audio.tmp.wav"
     r = _rodar(["ffmpeg", "-y", "-v", "error", "-i", str(destino / "video.mp4"),
-                "-ac", "1", "-ar", "16000", str(destino / "audio.wav")])
+                "-ac", "1", "-ar", "16000", str(tmp)])
     if r.returncode != 0:
         raise ErroIngestao(f"ffmpeg falhou ao extrair áudio: {r.stderr[-300:]}")
+    tmp.replace(destino / "audio.wav")
