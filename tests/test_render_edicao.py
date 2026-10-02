@@ -71,3 +71,8 @@ def test_legenda_mascarar_e_palavroes() -> None:
 def test_sem_mudanca_nao_marca_alterado() -> None:
     assert aplicar(C, Edicao(titulo="T"), TODAS, []).alterado is False
     assert aplicar(C, Edicao(rosto=(0, 1)), TODAS, [2]).edicoes.rostos == {0: 1}
+
+
+def test_mudar_trecho_e_escolher_rosto_junto_e_recusado() -> None:
+    with pytest.raises(ErroProducao, match="escolha o rosto depois de mudar"):
+        aplicar(C, Edicao(inicio_palavra=2, fim_palavra=6, rosto=(0, 1)), TODAS, [2])

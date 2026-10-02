@@ -134,5 +134,8 @@ def _titulo_formato(c: Corte, ed: Edicao) -> Corte:
 
 def aplicar(c: Corte, ed: Edicao, todas: list[Palavra], pessoas_por_plano: list[int]) -> Corte:
     """`pessoas_por_plano[k]` = quantas pessoas o plano k tem (do rosto.json atual)."""
+    if ed.rosto is not None and (ed.inicio_palavra is not None or ed.fim_palavra is not None):
+        raise ErroProducao(
+            "escolha o rosto depois de mudar início/fim: os planos de câmera mudam com o trecho")
     novo = _titulo_formato(_rosto(_textos(_janela(c, ed, todas), ed, todas), ed, pessoas_por_plano), ed)
     return novo if novo == c else replace(novo, alterado=True)
