@@ -3,6 +3,8 @@
 Automática: um segmento por palavra, com tOffsetMs. Manual: a linha inteira num segmento só —
 o tempo é distribuído pelas palavras na proporção do tamanho. O json3 não traz o fim de cada
 palavra: fim = início da seguinte, limitado a FIM_MAX_S (uma pausa longa não estica a palavra).
+Marcas entre colchetes (`[música]`, palavrão censurado `[ __ ]`) e marcas de troca de locutor
+(`>>`) são descartadas de propósito: a palavra por trás delas não dá para recuperar.
 """
 import re
 import subprocess
@@ -14,7 +16,7 @@ from typing import Any
 from cortes.tipos import Palavra
 
 FIM_MAX_S = 1.5
-_MARCA = re.compile(r"\[[^\]]*\]")
+_MARCA = re.compile(r"\[[^\]]*\]|>>")
 
 
 class ErroLegenda(RuntimeError):
@@ -41,15 +43,28 @@ def _rodar(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def baixar(url: str, destino: Path, executar: Executor = _rodar) -> Path:
+    arquivo = destino / ARQUIVO
+    arquivo.unlink(missing_ok=True)  # um arquivo antigo não pode passar por resultado novo
     r = executar(comando(url, destino))
     if "HTTP Error 429" in r.stderr:
         raise ErroLegenda("YouTube limitou as requisições; tente em alguns minutos")
     if r.returncode != 0:
         raise ErroLegenda(f"yt-dlp falhou ao baixar a legenda: {r.stderr.strip()[-400:]}")
-    arquivo = destino / ARQUIVO
     if not arquivo.exists():
         raise ErroLegenda("vídeo sem legenda em português no YouTube")
     return arquivo
+
+
+def _validar_evento(ev: dict[str, Any]) -> None:
+    if not isinstance(ev.get("tStartMs"), (int, float)):
+        raise ErroLegenda("legenda do YouTube fora do formato json3: evento sem 'tStartMs' numérico")
+    segs = ev.get("segs")
+    if not isinstance(segs, list):
+        raise ErroLegenda("legenda do YouTube fora do formato json3: 'segs' do evento não é lista")
+    for seg in segs:
+        utf8 = seg.get("utf8", "") if isinstance(seg, dict) else None
+        if not isinstance(utf8, str):
+            raise ErroLegenda("legenda do YouTube fora do formato json3: segmento com 'utf8' que não é texto")
 
 
 def _inicios_do_evento(ev: dict[str, Any]) -> list[tuple[str, float]]:
@@ -73,7 +88,12 @@ def palavras_do_json3(dados: dict[str, Any]) -> list[Palavra]:
     eventos = dados.get("events")
     if not isinstance(eventos, list):
         raise ErroLegenda("legenda do YouTube fora do formato json3 (sem 'events')")
-    inicios = [par for ev in eventos if "segs" in ev for par in _inicios_do_evento(ev)]
+    inicios: list[tuple[str, float]] = []
+    for ev in eventos:
+        if "segs" not in ev:
+            continue
+        _validar_evento(ev)
+        inicios.extend(_inicios_do_evento(ev))
     if not inicios:
         raise ErroLegenda("legenda do YouTube sem palavras")
     inicios.sort(key=lambda par: par[1])

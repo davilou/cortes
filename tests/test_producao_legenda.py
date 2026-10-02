@@ -59,6 +59,26 @@ def test_json_fora_do_formato_e_erro() -> None:
         palavras_do_json3({"eventos": []})
 
 
+def test_marca_de_troca_de_locutor_nao_rouba_tempo_da_palavra() -> None:
+    dados = {"events": [{"tStartMs": 0, "dDurationMs": 1000, "segs": [
+        {"utf8": "Sim."},
+        {"utf8": " >> já", "tOffsetMs": 500, "isSpeakerChange": 1},
+    ]}]}
+    ps = palavras_do_json3(dados)
+    assert [p.texto for p in ps] == ["Sim.", "já"]
+    assert ps[1].inicio == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize("evento", [
+    {"segs": [{"utf8": "a"}]},                       # sem tStartMs
+    {"tStartMs": 0, "segs": "não é lista"},           # segs não é lista
+    {"tStartMs": 0, "segs": [{"utf8": 123}]},         # utf8 não é texto
+])
+def test_evento_malformado_e_erro(evento: dict[str, object]) -> None:
+    with pytest.raises(ErroLegenda, match="formato"):
+        palavras_do_json3({"events": [evento]})
+
+
 def test_comando_pede_so_pt_em_json3(tmp_path: Path) -> None:
     cmd = comando("https://youtu.be/abcdefghijk", tmp_path)
     assert cmd[:3] == [sys.executable, "-m", "yt_dlp"]
@@ -95,3 +115,9 @@ def test_429_para_sem_repetir(tmp_path: Path) -> None:
 def test_outro_erro_do_ytdlp_mostra_o_fim_do_stderr(tmp_path: Path) -> None:
     with pytest.raises(ErroLegenda, match="Video unavailable"):
         baixar("https://youtu.be/abcdefghijk", tmp_path, executor(1, "ERROR: Video unavailable", False))
+
+
+def test_arquivo_antigo_nao_passa_por_resultado_novo(tmp_path: Path) -> None:
+    (tmp_path / ARQUIVO).write_text("lixo de uma rodada anterior", encoding="utf-8")
+    with pytest.raises(ErroLegenda, match="sem legenda em português"):
+        baixar("https://youtu.be/abcdefghijk", tmp_path, executor(0, criar=False))

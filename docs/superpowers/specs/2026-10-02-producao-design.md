@@ -77,8 +77,12 @@ palavra (`tStartMs` do evento + `tOffsetMs` do segmento). Regras:
 - pede **só** a faixa `pt` original (a tradução `pt-PT` levou HTTP 429);
 - legenda manual tem preferência sobre a automática quando existir;
 - descarta marcas entre colchetes (`[música]`, `[aplausos]`);
-- fim de cada palavra = início da seguinte (limitado a 1,5 s; última do evento usa o fim do evento);
-- sem faixa `pt` → o episódio para com "vídeo sem legenda em português no YouTube".
+- fim de cada palavra = início da seguinte (limitado a 1,5 s), em todo o episódio — não só
+  dentro do evento;
+- sem faixa `pt` → o episódio para com "vídeo sem legenda em português no YouTube";
+- marcas de troca de locutor (`>>`) e palavrões censurados (`[ __ ]`) são descartados; o
+  YouTube começa a palavra ~0,2–0,4 s depois do Whisper (dar folga na borda inicial do corte,
+  plano B).
 
 ### 4.3 Dados por episódio
 
