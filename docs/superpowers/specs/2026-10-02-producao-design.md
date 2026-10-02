@@ -124,10 +124,19 @@ episodios/<id>/
   cortes/
     planejado.json   # marcador: os N melhores já foram postos na fila (uma vez por episódio)
     <n>/
-      corte.json     # candidato de origem, início/fim, formato, título, edições de legenda,
-                     # escolhas de rosto/B-roll/cenas, status do render: na_fila |
-                     # renderizando | pronto | erro (+ causa), versão atual
+      corte.json     # candidato de origem, início/fim, formato, título, `edicoes` (editor,
+                     # plano C: legenda e mascaradas por índice global da palavra em
+                     # palavras.json, rostos por plano de câmera), `alterado` (há edição salva
+                     # ainda não renderizada; volta a false em `concluir`), status do render:
+                     # na_fila | renderizando | pronto | erro (+ causa), versão atual
       recorte.json   # início/fim/segmentos: marcador de trecho e rosto prontos (cache)
+      rosto.json     # formato 2 (plano C): até 3 rostos por amostra — {formato, largura,
+                     # altura, cortes (trocas reais de câmera), amostras: [{t, rostos: [{x, y,
+                     # r, conf}]}]}. Um `rosto.json` de formato velho (1, plano B) não serve de
+                     # cache: o editor precisa das pessoas por plano, que só existem no formato
+                     # atual, e a medição roda de novo.
+      miniaturas/    # p<plano>-<pessoa>.jpg: quadro do meio do plano, recortado em volta do
+                     # rosto (editor, "quem aparece"). Apaga quando início/fim muda (trecho novo).
       projeto/       # projeto HyperFrames
       short-v<k>.mp4 # versões; a anterior é mantida
 ```
@@ -173,16 +182,45 @@ rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 4. Painel do Short: player, as 5 notas da rubrica em barras, justificativa, tags de bônus,
    aprovar/rejeitar/editar, baixar MP4, copiar título.
 
-**Editor** (plano C), três colunas:
-- **Prévia 9:16** no próprio navegador (o formato é HTML do HyperFrames; o plano C confirma a
-  reprodução no navegador como primeira tarefa — se não der, prévia por render rascunho em
-  resolução/fps reduzidos). "Renderizar" gera o MP4 final.
+**Editor** (plano C, implementado), três colunas:
+- **Prévia 9:16** no próprio navegador: o `index.html` do projeto HyperFrames servido com o
+  runtime injetado logo depois de `<head>` (`render/previa.py` `com_runtime`), dentro de
+  `<hyperframes-player src="/composition/index.html" controls>` (confirmado por teste real,
+  §"Fatos verificados" do plano C). "Renderizar" gera o MP4 final.
+  - A montagem da prévia roda numa thread própria (`producao/previas.py`), fora da fila do
+    render — recortar o trecho e medir o rosto leva de 10 a 30 s quando início ou fim mudam, e
+    a prévia não deve esperar atrás de outro render.
+  - Situação da prévia (`situacao_previa`): com a memória da thread, vale ela; sem memória
+    (painel reiniciado), vale o disco — `projeto/index.html` mais novo que `corte.json` é
+    "pronta", mais velho é "desatualizada", sem o arquivo é "ausente". A tela pede a prévia
+    sozinha nos dois últimos casos. Sem edição pendente (`corte.alterado is False`) a prévia
+    está sempre "pronta": o render grava o `index.html` e só depois o `corte.json`
+    (`concluir`), então comparar os dois mtimes só faz sentido quando há edição pendente.
+  - Edição é recusada enquanto o corte está `na_fila`/`renderizando` ou com a prévia em
+    preparo, e "Renderizar" é recusado com a prévia em preparo — nunca dois escritores no
+    mesmo `projeto/` (`editavel`, `_exigir_editavel`). A miniatura de um rosto também é
+    recusada nesse estado, porque o rosto pode estar sendo medido de novo.
 - **Transcrição** em volta do corte, palavra a palavra: clicar move início/fim (sempre por
-  palavra); a regra de início do detector avisa quando o início depende de contexto. Grupos de
-  legenda editáveis; botão de mascarar palavrão (só na legenda).
+  palavra); a regra de início do detector avisa quando o início depende de contexto. Edição é
+  por palavra (corrigir nome/número, juntar palavras apagando uma com texto vazio, apagar); a
+  quebra manual de grupo fica fora, os grupos continuam saindo de `legenda.grupos`. Clicar numa
+  palavra alterna o mascaramento; "Mascarar palavrões" aplica a lista fixa de `edicao.PALAVROES`.
+  Mudar início ou fim zera as escolhas de rosto (os planos de câmera mudam com o trecho; a
+  escolha antiga apontaria para outro plano) e exige nova medição do rosto.
 - **Ajustes:** título; formato (gera versão nova); **quem aparece** — linha do tempo dos planos
-  de câmera com as miniaturas dos rostos de cada plano, clique escolhe quem fica na tela
-  (padrão: o rosto mais confiável); no f4, as opções de B-roll por deixa; no f3, as cenas.
+  de câmera (`render/rosto.py` `planos`) com as miniaturas dos rostos de cada plano
+  (`render/miniatura.py`, quadro do meio do plano recortado num quadrado em volta do rosto),
+  clique escolhe quem fica na tela (padrão: a pessoa mais confiável — mais detecções, depois
+  maior confiança). Agrupar os rostos de um plano em pessoas usa a posição x (câmera parada:
+  cada pessoa fica no seu lugar), medindo o vão contra o PRIMEIRO rosto de cada grupo, não o
+  último — single-linkage deixava uma cadeia de detecções intermediárias emendar duas pessoas
+  que nunca ficaram próximas entre si. Rosto ilegível (poucas detecções, trilha não confiável)
+  não bloqueia o editor: os planos saem vazios e a tela mostra um aviso (`rosto_erro`), em vez
+  de um 500 — a prévia refaz a medição e resolve. Escolha de rosto inválida (pessoa que não
+  existe mais no plano, por exemplo depois de remedir) volta ao padrão com aviso
+  (`escolha_invalida`), em vez de recusar a tela inteira. "Editar" só existe para candidato que
+  já tem corte (`corte.json`), ou seja, que foi renderizado ou pedido; no f4, as opções de
+  B-roll por deixa; no f3, as cenas.
 
 ## 6. B-roll (plano D)
 
