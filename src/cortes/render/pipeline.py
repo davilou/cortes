@@ -2,12 +2,16 @@
 
 Trecho e rosto são caros e só dependem de início/fim: ficam gravados com `recorte.json` como
 marcador, que é escrito por último. Se início/fim mudarem (editor, plano C), os dois são refeitos.
+`montar_projeto` (trecho + rosto + index.html com as edições) é o que a prévia do editor mostra;
+`renderizar_corte` chama `montar_projeto` e depois gera o MP4.
 """
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from cortes.episodio import ler_json, salvar_json
 from cortes.render.corte import Corte, pasta_corte
+from cortes.render.edicao import palavras_editadas
 from cortes.render.hyperframes import criar_projeto, renderizar
 from cortes.render.legenda import grupos, palavras_do_corte
 from cortes.render.montagem import caminho_template, montar_html, valores
@@ -73,6 +77,9 @@ def preparar_trecho(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> lis
     segs = segmentos_sem_pausa(dep.ler_audio(pasta_ep / "audio.wav", ini, fim - ini))
     trecho = d / "projeto" / "assets" / "trecho.mp4"
     trecho.parent.mkdir(parents=True, exist_ok=True)
+    mini = d / "miniaturas"   # quadros do trecho anterior: o trecho mudou, elas não valem mais
+    if mini.exists():
+        shutil.rmtree(mini)
     recortar(pasta_ep / "video.mp4", trecho, ini, segs, dep.rodar)
     medir_rosto(trecho, d / "rosto.json", raiz / SCRIPT_ROSTO, dep.py_visao, dep.modelo_rosto, dep.rodar)
     salvar_json(marca, {"inicio": ini, "fim": fim, "segmentos": segs})
@@ -81,17 +88,23 @@ def preparar_trecho(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> lis
 
 def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento]) -> str:
     ini, fim = janela(c)
-    todas = [Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")]
+    todas = palavras_editadas([Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")], c.edicoes)
     ws = palavras_sem_pausa(palavras_do_corte(todas, ini, fim), segs)
     dur = duracao(segs)
     rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json")
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
-    return montar_html(tpl, valores(dur, rosto, grupos(ws, dur), tempos_de_corte(segs), {}))
+    return montar_html(tpl, valores(dur, rosto, grupos(ws, dur), tempos_de_corte(segs), c.edicoes.rostos))
+
+
+def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
+    """Trecho + rosto (com cache) e o index.html com as edições — o que a prévia do editor mostra
+    e o render grava em MP4. Rápido quando início/fim não mudaram (só regera o HTML)."""
+    segs = preparar_trecho(pasta_ep, c, raiz, dep)
+    criar_projeto(pasta_corte(pasta_ep, c.indice) / "projeto", _html(pasta_ep, c, raiz, segs))
 
 
 def renderizar_corte(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
     """Gera cortes/<indice>/short-v<versao+1>.mp4. Falha alto (ErroRender) em qualquer passo."""
-    segs = preparar_trecho(pasta_ep, c, raiz, dep)
-    proj = pasta_corte(pasta_ep, c.indice) / "projeto"
-    criar_projeto(proj, _html(pasta_ep, c, raiz, segs))
-    renderizar(proj, pasta_corte(pasta_ep, c.indice) / f"short-v{c.versao + 1}.mp4", dep.npx, dep.rodar)
+    montar_projeto(pasta_ep, c, raiz, dep)
+    d = pasta_corte(pasta_ep, c.indice)
+    renderizar(d / "projeto", d / f"short-v{c.versao + 1}.mp4", dep.npx, dep.rodar)

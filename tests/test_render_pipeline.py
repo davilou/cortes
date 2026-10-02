@@ -5,8 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
-from cortes.render.corte import concluir, novo_corte
-from cortes.render.pipeline import DepRender, janela, renderizar_corte
+from cortes.render.corte import Edicoes, concluir, novo_corte
+from cortes.render.pipeline import DepRender, janela, montar_projeto, renderizar_corte
 
 REPO = Path(__file__).resolve().parents[1]
 ROSTO = {"formato": 2, "largura": 1920, "altura": 1080, "cortes": [],
@@ -95,3 +95,21 @@ def test_rosto_json_formato_velho_refaz_trecho_mesmo_com_marcador(tmp_path: Path
                     "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}), encoding="utf-8")
     renderizar_corte(pasta, concluir(C), tmp_path, f.dep())
     assert f.chamadas == ["ffmpeg", "py-visao", "npx", "ffmpeg", "py-visao", "npx"]
+
+
+def test_projeto_aplica_legenda_e_mascara(tmp_path: Path) -> None:
+    pasta, f = episodio(tmp_path), Falso()
+    c = replace(C, edicoes=Edicoes({0: "Eu,"}, (1,), {}))
+    montar_projeto(pasta, c, tmp_path, f.dep())
+    html = (pasta / "cortes" / "0" / "projeto" / "index.html").read_text(encoding="utf-8")
+    assert "<span>Eu, g*nhei.</span>" in html and f.chamadas == ["ffmpeg", "py-visao"]
+
+
+def test_novo_trecho_apaga_miniaturas_velhas(tmp_path: Path) -> None:
+    pasta, f = episodio(tmp_path), Falso()
+    montar_projeto(pasta, C, tmp_path, f.dep())
+    mini = pasta / "cortes" / "0" / "miniaturas"
+    mini.mkdir()
+    (mini / "p0-0.jpg").write_bytes(b"x")
+    montar_projeto(pasta, replace(C, inicio=11.0), tmp_path, f.dep())
+    assert not mini.exists()
