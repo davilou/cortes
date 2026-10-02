@@ -12,15 +12,16 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from cortes.episodio import id_do_video
+from cortes.episodio import id_do_video, salvar_texto
 from cortes.painel.dados import VIDEO_ID
 from cortes.perfil import CRITERIOS
-from cortes.producao import curadoria
+from cortes.producao import curadoria, legenda_yt, transcricao_colada
 from cortes.producao.estado import ErroProducao, etapa_com_erro, gravar, ler, novo, reabrir
 from cortes.producao.fila import Fila
 
 FORMATOS_RENDER = ("f7", "f1")   # planos D e E acrescentam f4 e f3
 N_SHORTS_MAX = 10
+TRANSCRICAO_MAX_BYTES = 5 * 1024 * 1024
 
 
 class NovoEpisodio(BaseModel):
@@ -28,6 +29,7 @@ class NovoEpisodio(BaseModel):
     nicho: str
     n_shorts: int
     formato: str
+    transcricao: str | None = None   # colada de "Mostrar transcrição" do YouTube (spec §4.2)
 
 
 class PedidoDecisao(BaseModel):
@@ -63,7 +65,16 @@ def _candidatos(pasta: Path) -> list[dict[str, Any]]:
 def _resumo(pasta: Path) -> dict[str, Any]:
     meta = _meta(pasta)
     return {**asdict(ler(pasta)), "titulo": meta.get("titulo"), "canal": meta.get("canal"),
-            "duracao_s": meta.get("duracao_s"), "n_candidatos": len(_candidatos(pasta))}
+            "duracao_s": meta.get("duracao_s"), "n_candidatos": len(_candidatos(pasta)),
+            "fonte_legenda": _fonte_legenda(pasta)}
+
+
+def _fonte_legenda(pasta: Path) -> Literal["colada", "youtube"] | None:
+    if (pasta / transcricao_colada.ARQUIVO).exists():
+        return "colada"
+    if (pasta / legenda_yt.ARQUIVO).exists() or (pasta / "palavras.json").exists():
+        return "youtube"
+    return None
 
 
 def _episodios(raiz: Path) -> list[dict[str, Any]]:
@@ -96,7 +107,21 @@ def _validar(raiz: Path, pedido: NovoEpisodio) -> str:
         raise ErroProducao(f"n_shorts deve ficar entre 1 e {N_SHORTS_MAX}")
     if (raiz / "episodios" / id / "estado.json").exists():
         raise ErroProducao(f"episódio {id} já está na produção")
+    if pedido.transcricao is not None:
+        _validar_transcricao(pedido.transcricao)
     return id
+
+
+def _validar_transcricao(texto: str) -> None:
+    """Parse completo antes de criar o episódio: transcrição ruim não vira episódio quebrado."""
+    tamanho = len(texto.encode("utf-8"))
+    if tamanho > TRANSCRICAO_MAX_BYTES:
+        raise ErroProducao(f"transcrição colada grande demais: {tamanho / 1024 / 1024:.1f} MB "
+                           f"(máximo {TRANSCRICAO_MAX_BYTES // 1024 // 1024} MB)")
+    try:
+        transcricao_colada.palavras_da_transcricao(texto)
+    except transcricao_colada.ErroTranscricao as ex:
+        raise ErroProducao(f"transcrição colada: {ex}") from ex
 
 
 def montar(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock,
@@ -138,6 +163,8 @@ def _rotas_acao(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock,
             id = _validar(raiz, pedido)
             pasta = raiz / "episodios" / id
             pasta.mkdir(parents=True, exist_ok=True)
+            if pedido.transcricao is not None:   # antes do estado.json: a fila nunca vê o episódio sem ela
+                salvar_texto(pasta / transcricao_colada.ARQUIVO, pedido.transcricao)
             gravar(pasta, novo(id, f"https://www.youtube.com/watch?v={id}", pedido.nicho,
                                pedido.n_shorts, pedido.formato, agora()))
         fila.enfileirar(id)

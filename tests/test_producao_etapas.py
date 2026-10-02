@@ -158,3 +158,31 @@ def test_etapas_do_estado_e_do_modulo_nao_divergem() -> None:
     from cortes.producao.estado import ETAPAS
 
     assert tuple(etapas._ETAPAS) == ETAPAS
+
+
+def test_legenda_usa_transcricao_colada_sem_baixar(tmp_path: Path) -> None:
+    from tests.test_producao_transcricao_colada import AMOSTRA
+
+    pasta = tmp_path / "episodios" / "abcdefghijk"
+    pasta.mkdir(parents=True)
+    (pasta / "transcricao.txt").write_text(AMOSTRA, encoding="utf-8")
+    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    f = Falsas()
+    rodar_etapa("legenda", pasta, e, tmp_path, f.dep())
+    assert f.chamadas == []
+    palavras = json.loads((pasta / "palavras.json").read_text(encoding="utf-8"))
+    assert palavras[0] == {"texto": "Fala", "inicio": 10.0, "fim": palavras[1]["inicio"]}
+    assert not (pasta / ARQUIVO).exists()
+
+
+def test_legenda_com_transcricao_ruim_para_com_a_linha(tmp_path: Path) -> None:
+    from cortes.producao.transcricao_colada import ErroTranscricao
+
+    pasta = tmp_path / "episodios" / "abcdefghijk"
+    pasta.mkdir(parents=True)
+    (pasta / "transcricao.txt").write_text("oi\n0:10\nfala\n", encoding="utf-8")
+    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    f = Falsas()
+    with pytest.raises(ErroTranscricao, match="linha 1"):
+        rodar_etapa("legenda", pasta, e, tmp_path, f.dep())
+    assert f.chamadas == [] and not (pasta / "palavras.json").exists()

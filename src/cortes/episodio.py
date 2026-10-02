@@ -32,8 +32,13 @@ def salvar_json(caminho: Path, dados: Any) -> None:
     O nome do .tmp é único por processo+thread — duas gravações concorrentes (a fila da
     produção e, no futuro, outro escritor) nunca disputam o mesmo arquivo temporário.
     """
+    salvar_texto(caminho, json.dumps(dados, ensure_ascii=False, indent=1))
+
+
+def salvar_texto(caminho: Path, texto: str) -> None:
+    """Gravação atômica de texto UTF-8 (mesmo .tmp + rename de `salvar_json`)."""
     tmp = caminho.with_suffix(f"{caminho.suffix}.{os.getpid()}.{threading.get_ident()}.tmp")
-    tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.write_text(texto, encoding="utf-8")
     _substituir_com_retentativa(tmp, caminho)
 
 

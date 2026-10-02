@@ -1,4 +1,4 @@
-"""As 4 etapas do episódio no painel: vídeo, legenda do YouTube, sinais, momentos.
+"""As 4 etapas do episódio no painel: vídeo, legenda do YouTube (ou transcrição colada), sinais, momentos.
 
 Cada etapa grava seu arquivo e pula se ele já existe (mesmo padrão do `cortes detectar`).
 O `cortes detectar` do terminal segue com Whisper; aqui a transcrição é a legenda do YouTube.
@@ -11,7 +11,7 @@ from cortes import ingestao, sinais
 from cortes.detector import ChamarLLM, chamar_llm_real, detectar
 from cortes.episodio import ler_json, salvar_json
 from cortes.perfil import carregar_perfil
-from cortes.producao import legenda_yt
+from cortes.producao import legenda_yt, transcricao_colada
 from cortes.producao.estado import ETAPAS, ErroProducao, EstadoEpisodio
 from cortes.segmentacao import frases
 from cortes.tipos import Palavra
@@ -36,10 +36,14 @@ def _video(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> Non
 
 
 def _legenda(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> None:
+    """Transcrição colada na entrada (`transcricao.txt`) tem preferência: não baixa nada."""
     if (pasta / "palavras.json").exists():
         return
-    arquivo = dep.baixar_legenda(e.url, pasta)
-    palavras = legenda_yt.palavras_do_json3(ler_json(arquivo))
+    colada = pasta / transcricao_colada.ARQUIVO
+    if colada.exists():
+        palavras = transcricao_colada.palavras_da_transcricao(colada.read_text(encoding="utf-8"))
+    else:
+        palavras = legenda_yt.palavras_do_json3(ler_json(dep.baixar_legenda(e.url, pasta)))
     salvar_json(pasta / "palavras.json", [asdict(p) for p in palavras])
 
 

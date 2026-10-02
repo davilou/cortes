@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from cortes.producao.legenda_yt import MARCA, ErroLegenda, com_fim, distribuir
 from cortes.tipos import Palavra
 
+ARQUIVO = "transcricao.txt"   # em episodios/<id>/, gravado pela API na entrada
 S_POR_PALAVRA = 0.35
 MINIMO_PALAVRAS = 50
 _TEMPO = re.compile(r"(\d{1,2}):(\d{2})(?::(\d{2}))?")
