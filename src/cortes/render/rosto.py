@@ -123,7 +123,9 @@ def pessoas(faces: list[Face], largura: int) -> tuple[Pessoa, ...]:
     fs = sorted(faces, key=lambda f: f.x)
     grupos: list[list[Face]] = [[fs[0]]]
     for f in fs[1:]:
-        if f.x - grupos[-1][-1].x > SEPARA * largura:
+        # Vão medido contra o PRIMEIRO rosto do grupo (não o último): single-linkage deixava uma
+        # cadeia de detecções intermediárias emendar duas pessoas que nunca ficaram próximas entre si.
+        if f.x - grupos[-1][0].x > SEPARA * largura:
             grupos.append([f])
         else:
             grupos[-1].append(f)
@@ -168,6 +170,9 @@ def trilha_fixa(r: Rosto, escolhas: dict[int, int]) -> list[list[float]]:
     ao ALVO sem mostrar borda. Plano sem rosto herda a posição do anterior (o primeiro, a do próximo
     com rosto); nenhum plano com rosto é erro. O 1 final pede corte seco ao template."""
     pls = planos(r)
+    invalidos = set(escolhas) - {p.k for p in pls if p.pessoas}
+    if invalidos:
+        raise ErroRender(f"plano {sorted(invalidos)[0]} não existe ou não tem pessoa para escolher")
     alvos = [_escolhida(p, escolhas) for p in pls]
     if all(a is None for a in alvos):
         raise ErroRender("nenhum plano de câmera tem rosto")

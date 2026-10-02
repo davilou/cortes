@@ -38,6 +38,18 @@ def test_pessoa_com_poucas_deteccoes_e_ruido() -> None:
     assert [p.x for p in ps] == [900.0]
 
 
+def test_pessoas_nao_encadeiam_por_deteccoes_intermediarias() -> None:
+    """Vão medido contra o PRIMEIRO rosto do grupo, não o último (single-linkage emendava duas
+    pessoas através de uma cadeia de detecções intermediárias). largura 1920, SEPARA 0.08 → 153,6px.
+    400→550: 150 ≤ 153,6 (mesmo grupo, ancorado em 400); 550→700: 300 > 153,6 (grupo novo, ancorado
+    em 700); 700→850: 150 ≤ 153,6 (mesmo grupo); 850→1000: 300 > 153,6 (grupo novo, ancorado em
+    1000). Os 3 grupos resultantes têm n=6 (mediana 400), n=2 (mediana 775) e n=5 (mediana 1000);
+    o do meio (n=2) não cai no filtro de ruído porque 2 ≥ 0,2×6=1,2 — as 3 pessoas sobrevivem."""
+    faces = [F(400, 500)] * 5 + [F(550, 500), F(700, 500), F(850, 500)] + [F(1000, 500)] * 5
+    ps = pessoas(faces, 1920)
+    assert [(p.x, p.n) for p in ps] == [(400.0, 6), (775.0, 2), (1000.0, 5)]
+
+
 def test_planos_e_padrao() -> None:
     pl = planos(R)
     assert [(p.k, p.ini, len(p.pessoas), p.padrao) for p in pl] == [(0, 0.0, 1, 0), (1, 1.9, 2, 1)]
@@ -53,6 +65,11 @@ def test_trilha_fixa_padrao_e_escolha() -> None:
 def test_escolha_inexistente_e_erro() -> None:
     with pytest.raises(ErroRender, match="pessoa 5"):
         trilha_fixa(R, {1: 5})
+
+
+def test_escolha_de_plano_sem_pessoa_e_erro() -> None:
+    with pytest.raises(ErroRender, match="plano 2"):
+        trilha_fixa(R, {2: 0})
 
 
 def test_plano_sem_rosto_herda_o_anterior() -> None:
