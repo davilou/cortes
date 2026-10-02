@@ -1,7 +1,8 @@
 """Servidor local do painel: rotas JSON finas sobre as funções puras + a página estática."""
 import threading
 import traceback
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,10 @@ from cortes.painel.ligacao import listar_cortes, sugerir
 from cortes.painel.metodo import Linha, bases, montar_linhas
 from cortes.painel.publicados import Etiquetas, Publicado, gravar_publicados, ler_publicados, ligar
 from cortes.painel.retratos import ler_retratos
+from cortes.producao import rotas as rotas_producao
+from cortes.producao.estado import ErroProducao
+from cortes.producao.etapas import Dependencias, rodar_etapa
+from cortes.producao.fila import Fila
 
 HOSTS_LOCAIS = ("127.0.0.1", "localhost")
 
@@ -78,24 +83,42 @@ class PedidoAtualizar(BaseModel):
 
 def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
               abrir: coleta.Abridor = coleta._abrir,
-              agora: Callable[[], datetime] = datetime.now) -> FastAPI:
+              agora: Callable[[], datetime] = datetime.now, fila: Fila | None = None) -> FastAPI:
     carregar_vocabulario(cfg.raiz)       # configuração inválida: não sobe
     coleta.verificar_skill(cfg.skill_dir)
-    app = FastAPI(title="Painel de contas")
+    fila = fila if fila is not None else _fila_real(cfg, agora)
+
+    @asynccontextmanager
+    async def ciclo(_: FastAPI) -> AsyncIterator[None]:
+        fila.iniciar()   # só sob uvicorn (ou `with TestClient`): retoma o que ficou rodando
+        yield
+
+    app = FastAPI(title="Painel de contas", lifespan=ciclo)
     # Só 127.0.0.1/localhost: uma página de fora não alcança a API por DNS rebinding.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(HOSTS_LOCAIS))
     estado = EstadoColeta()
     app.state.coleta = estado
-    escrita = threading.Lock()   # ler-validar-gravar de contas.yaml e publicados.jsonl
+    app.state.fila = fila
+    escrita = threading.Lock()   # ler-validar-gravar de contas.yaml, publicados.jsonl e curadoria
 
     @app.exception_handler(ErroPainel)
     async def _erro(_: Request, e: ErroPainel) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(e)})
 
+    @app.exception_handler(ErroProducao)
+    async def _erro_producao(_: Request, e: ErroProducao) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(e)})
+
     _rotas_leitura(app, cfg, estado)
     _rotas_acao(app, cfg, estado, escrita, executar, abrir, agora)
+    rotas_producao.montar(app, cfg.raiz, fila, escrita, agora)
     app.mount("/", StaticFiles(directory=cfg.estatico, html=True), name="web")
     return app
+
+
+def _fila_real(cfg: Config, agora: Callable[[], datetime]) -> Fila:
+    dep = Dependencias()
+    return Fila(cfg.raiz, lambda nome, pasta, e: rodar_etapa(nome, pasta, e, cfg.raiz, dep), agora)
 
 
 def _rotas_leitura(app: FastAPI, cfg: Config, estado: EstadoColeta) -> None:
