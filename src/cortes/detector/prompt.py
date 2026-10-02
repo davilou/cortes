@@ -31,8 +31,18 @@ def _tags(tags: dict[str, str]) -> str:
     return "\n".join(f"- {t}: {d}" for t, d in tags.items()) or "(nenhuma)"
 
 
+_CAMPOS_PROMPT = ("titulo", "texto", "motivo")
+
+
+def _projetar(exemplo: dict[str, Any]) -> dict[str, Any]:
+    """O arquivo guarda episodio/inicio/fim para a deduplicação da curadoria; o prompt só
+    recebe o que ajuda o LLM a reconhecer o padrão, sem timestamp de outro episódio pra
+    ancorar errado."""
+    return {k: exemplo[k] for k in _CAMPOS_PROMPT if k in exemplo}
+
+
 def _jsonl(exemplos: list[dict[str, Any]]) -> str:
-    return "\n".join(json.dumps(e, ensure_ascii=False) for e in exemplos[-MAX_EXEMPLOS:])
+    return "\n".join(json.dumps(_projetar(e), ensure_ascii=False) for e in exemplos[-MAX_EXEMPLOS:])
 
 
 def montar_prompt(frases: list[Frase], perfil: Perfil) -> str:

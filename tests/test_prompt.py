@@ -46,6 +46,15 @@ def test_espanto_nao_repete_numero_nem_virada() -> None:
     assert "número" not in linha and "virada" not in linha
 
 
+def test_exemplos_no_prompt_nao_trazem_episodio_nem_timestamp() -> None:
+    exemplo = {"episodio": "abcdefghijk", "inicio": 10.0, "fim": 12.0, "titulo": "T", "texto": "x",
+               "motivo": "y"}
+    p = Perfil("f", "t", dict.fromkeys(CRITERIOS, 0.2), {}, {}, 20, 90, [exemplo], [])
+    txt = montar_prompt(FRASES, p)
+    assert "abcdefghijk" not in txt and "10.0" not in txt
+    assert '"titulo": "T"' in txt and '"texto": "x"' in txt and '"motivo": "y"' in txt
+
+
 def test_usa_os_exemplos_mais_recentes() -> None:
     exemplos = [{"texto": f"ex{i:02d}"} for i in range(MAX_EXEMPLOS + 3)]
     p = Perfil("f", "t", dict.fromkeys(CRITERIOS, 0.2), {}, {}, 20, 90, exemplos, [])
