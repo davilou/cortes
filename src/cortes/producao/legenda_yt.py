@@ -5,6 +5,10 @@ o tempo é distribuído pelas palavras na proporção do tamanho. O json3 não t
 palavra: fim = início da seguinte, limitado a FIM_MAX_S (uma pausa longa não estica a palavra).
 """
 import re
+import subprocess
+import sys
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from cortes.tipos import Palavra
@@ -15,6 +19,37 @@ _MARCA = re.compile(r"\[[^\]]*\]")
 
 class ErroLegenda(RuntimeError):
     pass
+
+
+Executor = Callable[[list[str]], subprocess.CompletedProcess[str]]
+ARQUIVO = "legenda.pt.json3"
+
+
+def comando(url: str, destino: Path) -> list[str]:
+    """Só a faixa 'pt' original: pedir 'pt.*' traz a tradução 'pt-PT' e levou HTTP 429
+    (conferido em 2026-10-02). Com --write-subs e --write-auto-subs, a manual tem preferência.
+
+    Nome do arquivo conferido em 2026-10-02: o yt-dlp põe o idioma antes da extensão
+    (<id>.pt.json3)."""
+    return [sys.executable, "-m", "yt_dlp", "--skip-download", "--write-subs", "--write-auto-subs",
+            "--sub-langs", "pt", "--sub-format", "json3", "--no-progress",
+            "-o", str(destino / "legenda.%(ext)s"), url]
+
+
+def _rodar(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace")
+
+
+def baixar(url: str, destino: Path, executar: Executor = _rodar) -> Path:
+    r = executar(comando(url, destino))
+    if "HTTP Error 429" in r.stderr:
+        raise ErroLegenda("YouTube limitou as requisições; tente em alguns minutos")
+    if r.returncode != 0:
+        raise ErroLegenda(f"yt-dlp falhou ao baixar a legenda: {r.stderr.strip()[-400:]}")
+    arquivo = destino / ARQUIVO
+    if not arquivo.exists():
+        raise ErroLegenda("vídeo sem legenda em português no YouTube")
+    return arquivo
 
 
 def _inicios_do_evento(ev: dict[str, Any]) -> list[tuple[str, float]]:

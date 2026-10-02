@@ -1,6 +1,10 @@
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
-from cortes.producao.legenda_yt import FIM_MAX_S, ErroLegenda, palavras_do_json3
+from cortes.producao.legenda_yt import ARQUIVO, FIM_MAX_S, ErroLegenda, baixar, comando, palavras_do_json3
 from cortes.tipos import Palavra
 
 AUTO = {"events": [
@@ -53,3 +57,41 @@ def test_sem_palavras_e_erro() -> None:
 def test_json_fora_do_formato_e_erro() -> None:
     with pytest.raises(ErroLegenda, match="formato"):
         palavras_do_json3({"eventos": []})
+
+
+def test_comando_pede_so_pt_em_json3(tmp_path: Path) -> None:
+    cmd = comando("https://youtu.be/abcdefghijk", tmp_path)
+    assert cmd[:3] == [sys.executable, "-m", "yt_dlp"]
+    assert "--skip-download" in cmd and "--write-subs" in cmd and "--write-auto-subs" in cmd
+    assert cmd[cmd.index("--sub-langs") + 1] == "pt"
+    assert cmd[cmd.index("--sub-format") + 1] == "json3"
+
+
+def executor(retorno: int, stderr: str = "", criar: bool = True):  # type: ignore[no-untyped-def]
+    def rodar(args: list[str]) -> subprocess.CompletedProcess[str]:
+        destino = Path(args[args.index("-o") + 1]).parent
+        if criar:
+            (destino / ARQUIVO).write_text('{"events": []}', encoding="utf-8")
+        return subprocess.CompletedProcess(args, retorno, "", stderr)
+    return rodar
+
+
+def test_baixar_devolve_o_arquivo(tmp_path: Path) -> None:
+    assert baixar("https://youtu.be/abcdefghijk", tmp_path, executor(0)) == tmp_path / ARQUIVO
+
+
+def test_sem_legenda_pt_para_com_mensagem(tmp_path: Path) -> None:
+    with pytest.raises(ErroLegenda, match="sem legenda em português"):
+        baixar("https://youtu.be/abcdefghijk", tmp_path, executor(0, criar=False))
+
+
+def test_429_para_sem_repetir(tmp_path: Path) -> None:
+    with pytest.raises(ErroLegenda, match="limitou as requisições"):
+        erro = ("ERROR: Unable to download video subtitles for 'pt': "
+                "HTTP Error 429: Too Many Requests")
+        baixar("https://youtu.be/abcdefghijk", tmp_path, executor(1, erro, False))
+
+
+def test_outro_erro_do_ytdlp_mostra_o_fim_do_stderr(tmp_path: Path) -> None:
+    with pytest.raises(ErroLegenda, match="Video unavailable"):
+        baixar("https://youtu.be/abcdefghijk", tmp_path, executor(1, "ERROR: Video unavailable", False))
