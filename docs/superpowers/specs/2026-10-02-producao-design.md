@@ -36,7 +36,7 @@ automática; nicho humor. O `cortes detectar` do terminal segue com o openai-whi
 | Plano | Entrega | Risco |
 |---|---|---|
 | **A. Produção** | Link → vídeo + transcrição local → detector, com progresso por etapa; candidatos com nota, rubrica, justificativa e player do trecho | baixo |
-| **B. Render f1 + f7** | N melhores renderizados sozinhos; grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4 | baixo — o código existe nos protótipos |
+| **B. Render f1 + f7** | N melhores renderizados sozinhos; grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4; pausas cortadas sempre; sem trilha (Davi, 2026-10-02) | baixo — o código existe nos protótipos |
 | **C. Editor** | Início/fim por palavra, texto da legenda, título, troca de formato, quem aparece por plano, versões | médio (multirrosto) |
 | **D. f4 B-roll** | Deixas pelo Claude → busca no YouTube → conferência visual → 3 opções por deixa no editor | médio |
 | **E. f3 Motion** | Biblioteca de componentes + cenas em JSON pelo Claude; teste cego contra o f3 manual | alto |
@@ -53,20 +53,32 @@ src/cortes/producao/
   rotas.py         # API da Produção (montada no servidor do painel)
 src/cortes/render/
   recorte.py       # trecho.mp4 (ffmpeg), cortes de pausa
-  rosto.py         # rostos por quadro (até 3) + trocas de câmera
+  rosto.py         # enquadramento fixo por plano (puro) + chamada ao detector
   legenda.py       # grupos de legenda (puro), aplicação das edições
   montagem.py      # plano de corte → index.html a partir do template (puro)
   hyperframes.py   # projeto, render, log (executor injetável)
+  corte.py         # corte.json: modelo, transições, planejar, próximo
+  pipeline.py      # um corte: trecho → rosto → html → mp4
+  processo.py      # executor injetável, ErroRender, exigir()
   broll.py         # plano D
   cenas.py         # plano E
 render/formatos/   # falante.tpl, conversa.tpl, broll.tpl, motion.tpl (no git)
 render/componentes/# plano E: componentes parametrizados
+render/visao/rosto.py  # detector (Python do ComfyUI, fora do mypy)
 ```
 
 O que os protótipos em `testes/comum/` fazem (`corte.py`, `rosto.py`, `rodada.py`,
 `buscar_broll.py`, `formatos/*.tpl`) é portado com o episódio como parâmetro. `testes/` fica
 como histórico da rodada de formatos. O caminho do Python com onnxruntime (hoje o venv do
 ComfyUI) vira configuração com verificação na subida, como a skill no painel de contas.
+
+As pausas são achadas pelo áudio, não pelo vão entre palavras (a legenda do YouTube não tem
+vão entre palavras; com a transcrição local, §4.2, o vão existe, mas o critério por áudio
+segue valendo — é o que o render usa hoje). Com a transcrição local, `FOLGA_INICIO` (0,3 s)
+deixou de compensar o atraso da legenda do YouTube e virou só respiro antes da primeira
+palavra; o silêncio que ele adiciona é aparado pela regra de bordas de
+`segmentos_sem_pausa`. O enquadramento troca no instante real da troca de câmera (ponto
+`corte: true` do detector), não num horário fixo por plano.
 
 ### 4.2 Transcrição local
 
@@ -109,13 +121,20 @@ dela levou HTTP 429), e com ela a transcrição colada (§2). Regras:
 episodios/<id>/
   video.mp4  audio.wav  meta.json  palavras.json  sinais.json  candidatos.json   (já existem)
   estado.json        # etapas: pendente | rodando (progresso) | ok | erro (causa, arquivo)
-  cortes/<n>/
-    corte.json       # candidato de origem, início/fim, formato, título, edições de legenda,
-                     # escolhas de rosto/B-roll/cenas, status: na_fila | renderizando |
-                     # pronto | aprovado | rejeitado (+ motivo), versão atual
-    projeto/         # projeto HyperFrames
-    short-v<k>.mp4   # versões; a anterior é mantida
+  cortes/
+    planejado.json   # marcador: os N melhores já foram postos na fila (uma vez por episódio)
+    <n>/
+      corte.json     # candidato de origem, início/fim, formato, título, edições de legenda,
+                     # escolhas de rosto/B-roll/cenas, status do render: na_fila |
+                     # renderizando | pronto | erro (+ causa), versão atual
+      recorte.json   # início/fim/segmentos: marcador de trecho e rosto prontos (cache)
+      projeto/       # projeto HyperFrames
+      short-v<k>.mp4 # versões; a anterior é mantida
 ```
+
+Aprovado/rejeitado ficam em `curadoria.json`, não em `corte.json` (o índice do candidato é o
+índice do corte, então a curadoria do plano A já vale para o Short; repetir a decisão criaria
+duas cópias, e uma delas envelheceria).
 
 O `corte.json` guarda o título: a sugestão de corte do painel de contas (aba Shorts) passa a
 casar cortes de episódio pelo título, e não só as pastas de `testes/` (`ligacao.py` lê o
@@ -127,6 +146,10 @@ casar cortes de episódio pelo título, e não só as pastas de `testes/` (`liga
 - Cada etapa grava seu arquivo e é pulada se ele existe (padrão do `cortes detectar`).
 - Ao subir, o servidor relê os `estado.json` e recoloca na fila o que estava `rodando`.
 - O detector termina enfileirando o render dos N melhores no formato escolhido na entrada.
+- O render é a 5ª etapa do episódio (vídeo, transcrição, sinais, momentos, render); planeja os
+  N melhores uma vez (`cortes/planejado.json`) e depois renderiza, um por vez, os cortes com
+  `status: na_fila`. "Renderizar" manual grava um corte `na_fila` e reenfileira o episódio; um
+  gancho `antes` da fila reabre a etapa `render` se ela já tinha fechado.
 - Cota do Claude atingida → a fila **pausa** e a tela avisa; não descarta trabalhos.
 
 ### 4.5 Curadoria e retorno ao detector
@@ -193,6 +216,10 @@ Nada de fallback silencioso:
 - Modelo `large-v3-turbo` fora do cache → para com o comando que o baixa uma vez com internet.
 - Transcrição sem nenhuma palavra → para (não grava `palavras.json` vazio).
 - Render que falha mantém a versão anterior e mostra o fim do log.
+- Processo do render (ffmpeg, detector de rosto, HyperFrames) tem timeout de 20 min; ao vencer,
+  mata a árvore de processos (não só o processo-pai) e falha a etapa com a causa.
+- "Renderizar" manual é recusado quando a etapa `render` do episódio já está em erro — reenfileirar
+  por cima de uma etapa quebrada escondia a causa; é preciso corrigir e tentar de novo primeiro.
 - Cota do Claude → fila pausada com aviso.
 - Configuração ausente (Python do rosto, HyperFrames, ffmpeg) → o servidor não sobe e diz o que falta.
 
