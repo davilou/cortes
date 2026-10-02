@@ -53,15 +53,20 @@ function faixaDe(D, c) {
 }
 
 // Player + o que acompanha o Short: baixar, copiar título, versão/formato, e a causa do erro
-// com "tentar de novo" (um corte em erro pode ainda ter o MP4 da versão anterior).
+// com "tentar de novo" (um corte em erro pode ainda ter o MP4 da versão anterior). "Editar" só
+// para quem já tem corte fora do render (plano C, decisão 4) — junto do Short, ou do erro se
+// ainda não há Short.
 function htmlMidia(D, c) {
   const k = corteDe(D, c.indice);
+  const linkEditar = k && !["na_fila", "renderizando"].includes(k.status)
+    ? `<a class="botao mini" href="#editor/${encodeURIComponent(D.id)}/${c.indice}">Editar</a>` : "";
   const erro = k?.status === "erro"
     ? `<p class="erro-txt corte-erro" title="${esc(k.erro)}">${esc(k.erro)}</p>
-       <button class="botao mini" type="button" data-renderizar="${c.indice}">tentar de novo</button>` : "";
+       <div class="short-acoes"><button class="botao mini" type="button" data-renderizar="${c.indice}">tentar de novo</button>
+       ${k.video ? "" : linkEditar}</div>` : "";
   const acoes = k?.video
     ? `<div class="short-acoes"><a class="botao mini" href="${esc(k.video)}?baixar=true" download>Baixar MP4</a>
-        <button class="botao mini" type="button" data-copiar>Copiar título</button>
+        <button class="botao mini" type="button" data-copiar>Copiar título</button>${linkEditar}
         <span class="num">v${k.versao} · ${esc(k.formato)}</span></div>` : "";
   return `${htmlPlayer(faixaDe(D, c))}${acoes}${erro}`;
 }

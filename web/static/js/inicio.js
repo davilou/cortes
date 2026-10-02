@@ -1,15 +1,19 @@
 "use strict";
 // Roteador por hash e acompanhamento da coleta. Carregado por último.
+// Telas podem receber parâmetros por #tela/a/b (ex. #editor/<episódio>/<corte>): cada parte
+// depois do nome chega decodificada como argumento da função da tela, depois de `meu`.
 // desenhar.n é o contador de renderização: cada chamada pega o número seguinte e as telas
 // (ex. telaComparar) recebem esse número para conferir, depois do await, se ainda são a
 // renderização mais recente — uma resposta antiga que chega depois de uma mais nova não
 // deve pintar a tela com o dado velho.
 async function desenhar() {
   const meu = ++desenhar.n;
-  const nome = TELAS[location.hash.slice(1)] ? location.hash.slice(1) : "episodios";
-  $$("[data-tela]").forEach(a => a.classList.toggle("ativo", a.dataset.tela === nome));
+  const [pedido, ...args] = location.hash.slice(1).split("/");
+  const nome = TELAS[pedido] ? pedido : "episodios";
+  const noTrilho = nome === "editor" ? "episodios" : nome;   // o editor mora dentro de Episódios
+  $$("[data-tela]").forEach(a => a.classList.toggle("ativo", a.dataset.tela === noTrilho));
   try {
-    await TELAS[nome](meu);
+    await TELAS[nome](meu, ...args.map(decodeURIComponent));
   } catch (e) {
     if (meu === desenhar.n) avisar(e.message);
   }
