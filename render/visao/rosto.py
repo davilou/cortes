@@ -40,6 +40,8 @@ def cortes_de_camera(video: Path) -> list[float]:
     r = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(video), "-vf",
                         f"scale=320:-1,select='gt(scene,{CENA})',showinfo", "-an", "-f", "null", "-"],
                        capture_output=True, text=True, errors="replace")
+    if r.returncode != 0:
+        sys.exit(f"ffmpeg (trocas de câmera) falhou: {r.stderr[-1500:]}")
     return [float(t) for t in re.findall(r"pts_time:([\d.]+)", r.stderr)]
 
 
@@ -65,10 +67,12 @@ def amostrar(video: Path, sessao: ort.InferenceSession, cortes: list[float]) -> 
 def main() -> None:
     trecho, modelo, saida = (Path(a) for a in sys.argv[1:4])
     sessao = ort.InferenceSession(str(modelo), providers=["CPUExecutionProvider"])
-    largura, altura, pontos, n = amostrar(trecho, sessao, cortes_de_camera(trecho))
+    cortes = cortes_de_camera(trecho)
+    largura, altura, pontos, n = amostrar(trecho, sessao, cortes)
     if len(pontos) < 0.5 * n:
         sys.exit(f"rosto em só {len(pontos)} de {n} amostras — trilha não confiável")
-    saida.write_text(json.dumps({"largura": largura, "altura": altura, "pontos": pontos}), encoding="utf-8")
+    saida.write_text(json.dumps({"largura": largura, "altura": altura, "pontos": pontos,
+                                 "cortes": [round(c, 2) for c in cortes]}), encoding="utf-8")
     print(f"rosto em {len(pontos)}/{n} amostras; {sum(p['corte'] for p in pontos)} trocas de câmera")
 
 
