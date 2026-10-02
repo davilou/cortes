@@ -10,6 +10,10 @@ dependencies = [
   "yt-dlp",           # download do episódio
   "fastapi",          # servidor local do painel (spec painel §7; mesmo servidor da curadoria)
   "uvicorn",          # roda o FastAPI
+  "faster-whisper",   # transcrição local da Produção: turbo ~35 s por hora de áudio na 3090 (spec produção §2)
+  "nvidia-cublas-cu12",          # CTranslate2 (faster-whisper) precisa do cuBLAS do CUDA 12; o torch é cu130
+  "nvidia-cudnn-cu12>=9,<10",    # CTranslate2 precisa do cuDNN 9
+  "curl_cffi",        # yt-dlp: personificação de navegador no download do vídeo
 ]
 
 [project.optional-dependencies]
@@ -36,8 +40,10 @@ strict = true
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["whisper"]
+module = ["whisper", "faster_whisper"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not lento'"
+markers = ["lento: precisa da GPU ou de minutos (fora do check padrão; rode com -m lento)"]

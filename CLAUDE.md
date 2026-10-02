@@ -8,6 +8,11 @@ App local que transforma episódios de podcast em Shorts. Spec em
     .venv/Scripts/python -m ruff check src tests
     .venv/Scripts/python -m mypy src
     .venv/Scripts/python -m pytest -q
+    node --check web/static/js/<arquivo mexido>.js
+
+O `pytest -q` pula os testes `lento` (GPU ou minutos; `addopts` no `pyproject.toml`). Para
+rodá-los: `.venv/Scripts/python -m pytest -q -m lento` (a transcrição de verdade pede
+`CORTES_TRECHO_WAV` com um .wav de fala).
 
 ## Regras do projeto
 
