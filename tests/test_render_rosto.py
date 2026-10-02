@@ -4,73 +4,87 @@ from pathlib import Path
 import pytest
 
 from cortes.render.processo import ErroRender
-from cortes.render.rosto import Ponto, Rosto, largura_quadro, ler_rosto, medir_rosto, trilha_fixa
+from cortes.render.rosto import (
+    Amostra,
+    Face,
+    Rosto,
+    largura_quadro,
+    ler_rosto,
+    medir_rosto,
+    pessoas,
+    planos,
+    trilha_fixa,
+)
 
-R = Rosto(1920, 1080, (Ponto(0.0, 960, 540, False), Ponto(0.25, 980, 540, False),
-                       Ponto(2.0, 1800, 500, True), Ponto(2.25, 1800, 520, False)), (2.0,))
+
+def F(x: float, y: float) -> Face:
+    return Face(x, y, 80.0, 0.9)
 
 
-def test_trilha_fixa_um_plano_por_intervalo_entre_trocas_reais() -> None:
-    assert trilha_fixa(R) == [[0.0, -1184.4, 0.0, 1], [2.0, -2333.3, 0.0, 1]]
+R = Rosto(1920, 1080, (
+    Amostra(0.0, (F(960, 540),)), Amostra(0.25, (F(980, 540),)), Amostra(1.9, ()),
+    Amostra(2.0, (F(1800, 500), F(400, 520))), Amostra(2.25, (F(1800, 520), F(420, 500))),
+    Amostra(2.5, (F(1790, 510),)),
+), (1.9,))
+
+
+def test_pessoas_separam_pela_posicao_x() -> None:
+    ps = pessoas([F(1800, 500), F(400, 520), F(1800, 520), F(420, 500), F(1790, 510)], 1920)
+    assert [(p.x, p.n) for p in ps] == [(410.0, 2), (1800.0, 3)]
+
+
+def test_pessoa_com_poucas_deteccoes_e_ruido() -> None:
+    ps = pessoas([F(900, 500)] * 10 + [F(100, 500)], 1920)
+    assert [p.x for p in ps] == [900.0]
+
+
+def test_planos_e_padrao() -> None:
+    pl = planos(R)
+    assert [(p.k, p.ini, len(p.pessoas), p.padrao) for p in pl] == [(0, 0.0, 1, 0), (1, 1.9, 2, 1)]
+    assert pl[1].fim == 2.75
+
+
+def test_trilha_fixa_padrao_e_escolha() -> None:
+    assert trilha_fixa(R, {}) == [[0.0, -1184.4, 0.0, 1], [1.9, -2333.3, 0.0, 1]]
+    assert trilha_fixa(R, {1: 0}) == [[0.0, -1184.4, 0.0, 1], [1.9, -188.9, 0.0, 1]]
     assert largura_quadro(R) == 3413
 
 
-def test_trilha_fixa_usa_o_instante_real_do_corte_mesmo_sem_ponto_exato() -> None:
-    # troca real em t=1.9, mas o primeiro ponto do plano novo só chega em t=2.0
-    r = Rosto(1920, 1080, (Ponto(0.0, 960, 540, False), Ponto(2.0, 1800, 500, True)), (1.9,))
-    assert [p[0] for p in trilha_fixa(r)] == [0.0, 1.9]
+def test_escolha_inexistente_e_erro() -> None:
+    with pytest.raises(ErroRender, match="pessoa 5"):
+        trilha_fixa(R, {1: 5})
 
 
-def test_plano_sem_ponto_herda_do_anterior() -> None:
-    # corte em 1.0 e 2.0; só o primeiro plano tem ponto (em t=0.0)
-    r = Rosto(1920, 1080, (Ponto(0.0, 960, 540, False),), (1.0, 2.0))
-    planos = trilha_fixa(r)
-    assert len(planos) == 3 and planos[0][1:3] == planos[1][1:3] == planos[2][1:3]
+def test_plano_sem_rosto_herda_o_anterior() -> None:
+    r = Rosto(1920, 1080, (Amostra(0.0, (F(960, 540),)), Amostra(1.5, ()), Amostra(2.2, (F(1800, 500),))),
+              (1.0, 2.0))
+    assert [t[1] for t in trilha_fixa(r, {})] == [-1166.7, -1166.7, -2333.3]
 
 
-def test_primeiro_plano_sem_ponto_herda_do_proximo_que_tiver() -> None:
-    # corte em 1.0; só o segundo plano (a partir de t=1.0) tem ponto
-    r = Rosto(1920, 1080, (Ponto(1.5, 1800, 500, True),), (1.0,))
-    planos = trilha_fixa(r)
-    assert len(planos) == 2 and planos[0][1:3] == planos[1][1:3]
-
-
-def test_nenhum_plano_com_ponto_e_erro() -> None:
-    r = Rosto(1920, 1080, (), ())
-    with pytest.raises(ErroRender, match="nenhum plano"):
-        trilha_fixa(r)
-
-
-def test_ler_rosto(tmp_path: Path) -> None:
+def test_ler_rosto_formato_2(tmp_path: Path) -> None:
     arq = tmp_path / "rosto.json"
-    arq.write_text(json.dumps({"largura": 1920, "altura": 1080, "cortes": [2.0],
-                               "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}), encoding="utf-8")
-    assert ler_rosto(arq) == Rosto(1920, 1080, (Ponto(0.0, 960, 540, False),), (2.0,))
-    arq.write_text(json.dumps({"largura": 1920, "altura": 1080, "cortes": [], "pontos": []}),
-                   encoding="utf-8")
-    with pytest.raises(ErroRender, match="rosto.json"):
+    dados = {"formato": 2, "largura": 1920, "altura": 1080, "cortes": [1.9],
+             "amostras": [{"t": 0.0, "rostos": [{"x": 960, "y": 540, "r": 80, "conf": 0.9}]},
+                          {"t": 2.0, "rostos": []}]}
+    arq.write_text(json.dumps(dados), encoding="utf-8")
+    esperado = Rosto(1920, 1080, (Amostra(0.0, (Face(960, 540, 80, 0.9),)), Amostra(2.0, ())), (1.9,))
+    assert ler_rosto(arq) == esperado
+
+
+@pytest.mark.parametrize("dados, erro", [
+    ({"largura": 1920, "altura": 1080, "pontos": [], "cortes": []}, "formato"),
+    ({"formato": 2, "largura": 1920, "altura": 1080, "cortes": [], "amostras": [{"t": 0.0, "rostos": []}]},
+     "nenhuma amostra"),
+    ({"formato": 2, "largura": 1920, "altura": 1080, "cortes": [2.0, 1.0], "amostras": []}, "cortes"),
+])
+def test_ler_rosto_invalido(tmp_path: Path, dados: dict[str, object], erro: str) -> None:
+    arq = tmp_path / "rosto.json"
+    arq.write_text(json.dumps(dados), encoding="utf-8")
+    with pytest.raises(ErroRender, match=erro):
         ler_rosto(arq)
 
 
-def test_ler_rosto_exige_a_chave_cortes(tmp_path: Path) -> None:
-    """O script de visão sempre grava `cortes` (lista vazia quando não há troca de câmera);
-    se faltar, é arquivo gerado por script velho ou corrompido — não um default silencioso."""
-    arq = tmp_path / "rosto.json"
-    arq.write_text(json.dumps({"largura": 1920, "altura": 1080,
-                               "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}), encoding="utf-8")
-    with pytest.raises(ErroRender, match="rosto.json"):
-        ler_rosto(arq)
-
-
-def test_ler_rosto_recusa_cortes_nao_crescente(tmp_path: Path) -> None:
-    arq = tmp_path / "rosto.json"
-    arq.write_text(json.dumps({"largura": 1920, "altura": 1080, "cortes": [2.0, 1.0],
-                               "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}), encoding="utf-8")
-    with pytest.raises(ErroRender, match="rosto.json"):
-        ler_rosto(arq)
-
-
-def test_medir_rosto_chama_o_python_da_visao(tmp_path: Path) -> None:
+def test_medir_rosto_chama_o_python_da_visao() -> None:
     vistos: list[list[str]] = []
 
     def rodar(args: list[str], cwd: Path | None) -> tuple[int, str]:

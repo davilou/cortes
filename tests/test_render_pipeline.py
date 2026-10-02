@@ -9,8 +9,8 @@ from cortes.render.corte import concluir, novo_corte
 from cortes.render.pipeline import DepRender, janela, renderizar_corte
 
 REPO = Path(__file__).resolve().parents[1]
-ROSTO = {"largura": 1920, "altura": 1080, "cortes": [],
-        "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}
+ROSTO = {"formato": 2, "largura": 1920, "altura": 1080, "cortes": [],
+        "amostras": [{"t": 0.0, "rostos": [{"x": 960, "y": 540, "r": 80, "conf": 0.9}]}]}
 
 
 class Falso:
@@ -81,5 +81,17 @@ def test_rosto_json_apagado_refaz_trecho_mesmo_com_marcador(tmp_path: Path) -> N
     pasta, f = episodio(tmp_path), Falso()
     renderizar_corte(pasta, C, tmp_path, f.dep())
     (pasta / "cortes" / "0" / "rosto.json").unlink()
+    renderizar_corte(pasta, concluir(C), tmp_path, f.dep())
+    assert f.chamadas == ["ffmpeg", "py-visao", "npx", "ffmpeg", "py-visao", "npx"]
+
+
+def test_rosto_json_formato_velho_refaz_trecho_mesmo_com_marcador(tmp_path: Path) -> None:
+    """Um `rosto.json` do plano B (formato 1) não serve mais: o editor (plano C) precisa das
+    pessoas por plano, que só existem no formato atual — por isso o cache é invalidado."""
+    pasta, f = episodio(tmp_path), Falso()
+    renderizar_corte(pasta, C, tmp_path, f.dep())
+    (pasta / "cortes" / "0" / "rosto.json").write_text(
+        json.dumps({"largura": 1920, "altura": 1080, "cortes": [],
+                    "pontos": [{"t": 0.0, "x": 960, "y": 540, "corte": False}]}), encoding="utf-8")
     renderizar_corte(pasta, concluir(C), tmp_path, f.dep())
     assert f.chamadas == ["ffmpeg", "py-visao", "npx", "ffmpeg", "py-visao", "npx"]

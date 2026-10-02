@@ -11,7 +11,7 @@ from cortes.render.corte import Corte, pasta_corte
 from cortes.render.hyperframes import criar_projeto, renderizar
 from cortes.render.legenda import grupos, palavras_do_corte
 from cortes.render.montagem import caminho_template, montar_html, valores
-from cortes.render.processo import Rodar, rodar_processo
+from cortes.render.processo import ErroRender, Rodar, rodar_processo
 from cortes.render.recorte import (
     LerAudio,
     Segmento,
@@ -47,10 +47,16 @@ def janela(c: Corte) -> tuple[float, float]:
 def _cache_valido(d: Path, marca: Path, ini: float, fim: float) -> list[Segmento] | None:
     """`recorte.json` só vale como cache se o que ele promete gravar ainda existir: sem
     `trecho.mp4` ou `rosto.json`, um render anterior falhou ou os apagaram, e reaproveitar
-    o marcador deixaria o render seguinte sem rosto para ler."""
+    o marcador deixaria o render seguinte sem rosto para ler. Um `rosto.json` de formato velho
+    (formato 1, do plano B) também obriga a medir de novo — o editor (plano C) precisa das
+    pessoas por plano, que só existem no formato atual."""
     if not marca.exists():
         return None
     if not (d / "projeto" / "assets" / "trecho.mp4").exists() or not (d / "rosto.json").exists():
+        return None
+    try:
+        ler_rosto(d / "rosto.json")
+    except ErroRender:
         return None
     r = ler_json(marca)
     if r["inicio"] != ini or r["fim"] != fim:
@@ -80,7 +86,7 @@ def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento]) -> str:
     dur = duracao(segs)
     rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json")
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
-    return montar_html(tpl, valores(dur, rosto, grupos(ws, dur), tempos_de_corte(segs)))
+    return montar_html(tpl, valores(dur, rosto, grupos(ws, dur), tempos_de_corte(segs), {}))
 
 
 def renderizar_corte(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
