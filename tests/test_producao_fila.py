@@ -86,6 +86,38 @@ def test_retomar_reabre_e_reprocessa_so_a_etapa_que_falhou(tmp_path: Path) -> No
     assert chamadas == []  # "momentos" rodou de novo; video/legenda/sinais não rodam (já "ok")
 
 
+def test_retomar_restaura_a_pausa_se_nao_conseguir_reabrir(tmp_path: Path) -> None:
+    """Se o estado.json do episódio pausado não puder ser reaberto, `retomar` não pode
+    simplesmente deixar a fila seguir sem ele: restaura a pausa e sobe o erro.
+    """
+    pasta = episodio(tmp_path)
+    f, _ = fila(tmp_path, {"momentos": ErroLLM("CLI reportou erro: limite de uso atingido")})
+    f.processar("abcdefghijk")
+    assert f.situacao()["pausada"] is not None
+
+    (pasta / "estado.json").write_text("{isso nao e json", encoding="utf-8")
+
+    with pytest.raises(Exception):  # noqa: B017, PT011 — a causa real é ErroProducao, não importa qual
+        f.retomar()
+
+    situacao = f.situacao()
+    assert situacao["pausada"] is not None
+    assert "limite de uso" in (situacao["pausada"] or "")
+
+
+def test_enfileirar_limpa_falha_registrada(tmp_path: Path) -> None:
+    pasta_corrompida = episodio(tmp_path, "corrompid1a")
+    (pasta_corrompida / "estado.json").write_text("{isso nao e json", encoding="utf-8")
+    f, _ = fila(tmp_path)
+    f.enfileirar("corrompid1a")
+    f._rodar_um(f._proximo())  # noqa: SLF001
+    assert "corrompid1a" in f.situacao()["falhas"]
+
+    f.enfileirar("corrompid1a")
+
+    assert "corrompid1a" not in f.situacao()["falhas"]
+
+
 def test_recupera_o_que_estava_rodando(tmp_path: Path) -> None:
     pasta = episodio(tmp_path)
     gravar(pasta, marcar(ler(pasta), "video", "rodando", AGORA))

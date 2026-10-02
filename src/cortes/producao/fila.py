@@ -51,28 +51,48 @@ class Fila:
         portanto não está mais em `_ids` — `_proximo` o retirou) pode ser enfileirado de
         novo sem perda: o "tentar de novo" clicado durante a execução não desaparece,
         só faz outra passada por `processar` depois (idempotente: pula o que já é "ok").
+        Reenfileirar limpa uma falha antiga registrada em `situacao()["falhas"]` — é
+        exatamente isso que "tentar de novo" quer dizer.
         """
         with self._tem_trabalho:
             if id not in self._ids:
                 self._ids.append(id)
+            self._falhas.pop(id, None)
             self._tem_trabalho.notify()
 
     def retomar(self) -> None:
         """Davi manda a fila seguir. Se a pausa foi por `ErroLLM`, o episódio parado não é
-        esquecido: a etapa volta a pendente e ele entra na frente da fila, não no fim.
+        esquecido: a etapa volta a pendente e ele entra na frente da fila, não no fim — e
+        a leitura/gravação do estado roda FORA da trava (I/O não pode bloquear quem só
+        quer `situacao()`). Se o episódio não puder ser reaberto, a pausa é restaurada e o
+        erro sobe: melhor continuar pausado e visível do que a fila seguir sem ele.
         """
         with self._tem_trabalho:
-            id, self._pausado_id, self._pausada = self._pausado_id, None, None
-            if id is not None:
-                self._reabrir_e_priorizar(id)
+            id, pausada_anterior = self._pausado_id, self._pausada
+            self._pausado_id = None
+            self._pausada = None
+            if id is None:
+                self._tem_trabalho.notify()
+                return
+
+        try:
+            self._reabrir_e_priorizar(id)
+        except Exception:
+            with self._tem_trabalho:
+                self._pausado_id = id
+                self._pausada = pausada_anterior
+            raise
+
+        with self._tem_trabalho:
             self._tem_trabalho.notify()
 
     def _reabrir_e_priorizar(self, id: str) -> None:
         pasta = self._pasta(id)
-        gravar(pasta, reabrir(ler(pasta)))
-        if id in self._ids:
-            self._ids.remove(id)
-        self._ids.insert(0, id)
+        gravar(pasta, reabrir(ler(pasta)))   # I/O fora da trava
+        with self._trava:
+            if id in self._ids:
+                self._ids.remove(id)
+            self._ids.insert(0, id)
 
     def situacao(self) -> dict[str, Any]:
         """Cópia do estado interno — nada aqui pode ser mutado pelo chamador."""
@@ -119,10 +139,12 @@ class Fila:
         try:
             self._rodar(etapa, pasta, e)
         except ErroLLM as ex:
-            with self._trava:   # a fila precisa aparecer pausada antes de qualquer I/O lento
-                self._pausada = f"fila pausada: {ex}"
-                self._pausado_id = id
-            gravar(pasta, marcar(ler(pasta), etapa, "erro", self._agora(), str(ex)))
+            try:
+                gravar(pasta, marcar(ler(pasta), etapa, "erro", self._agora(), str(ex)))
+            finally:   # a pausa fica registrada mesmo se o gravar falhar
+                with self._trava:
+                    self._pausada = f"fila pausada: {ex}"
+                    self._pausado_id = id
             return False
         except Exception as ex:   # qualquer falha da etapa fica visível no episódio, a fila segue
             traceback.print_exc()
@@ -162,8 +184,8 @@ class Fila:
             if etapa is not None:
                 gravar(pasta, marcar(e, etapa, "erro", self._agora(), msg))
                 return
-        except Exception:
-            pass
+        except Exception:   # sem catch vazio: o traceback vai pro terminal antes do fallback
+            traceback.print_exc()
         with self._trava:
             self._falhas[id] = msg
 
