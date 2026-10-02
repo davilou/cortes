@@ -6,10 +6,7 @@
 // aberta — é assim que a pílula/fila do trilho aparece em qualquer tela.
 let P = null;            // /api/producao
 let epSel = null;        // id do episódio aberto
-const NOMES_ETAPA = { video: "vídeo", legenda: "legenda", sinais: "sinais", momentos: "momentos" };
-// Formato do que "Mostrar transcrição" copia: linha de tempo, depois o texto do bloco.
-const DICA_TRANSCRICAO = "Use quando o YouTube bloquear a legenda: copie em 'Mostrar transcrição' com os tempos.";
-const EXEMPLO_TRANSCRICAO = "0:10\nFala galera, tudo beleza pessoal?\n0:18\nHoje tem, hoje o bicho vai pegar…";
+const NOMES_ETAPA = { video: "vídeo", legenda: "transcrição", sinais: "sinais", momentos: "momentos" };
 
 function duracaoFmt(s) {
   if (!s) return "";
@@ -35,21 +32,12 @@ function htmlEntrada() {
     <label>Nicho<select name="nicho">${nichos}</select></label>
     <label>Formato<select name="formato">${formatos}</select></label>
     <label>Shorts<select name="n_shorts"><option value="3">3 melhores</option><option value="5" selected>5 melhores</option><option value="10">10 melhores</option></select></label>
-    <button class="botao primario">Gerar Shorts</button>
-    <details class="colar-transcricao"><summary>Colar transcrição do YouTube (opcional)</summary>
-      <p>${esc(DICA_TRANSCRICAO)}</p>
-      <textarea name="transcricao" rows="8" spellcheck="false" aria-label="Transcrição do YouTube com os tempos"
-        placeholder="${esc(EXEMPLO_TRANSCRICAO)}"></textarea>
-    </details></form>`;
+    <button class="botao primario">Gerar Shorts</button></form>`;
 }
 
-// Corpo do POST /api/episodios: `transcricao` só vai se tiver algo além de espaço — vazia
-// não é "sem transcrição" pro servidor (ele recusaria com "sem palavras").
 function pedidoNovoEpisodio(form) {
-  const { transcricao, ...d } = Object.fromEntries(new FormData(form));
-  const corpo = { ...d, n_shorts: Number(d.n_shorts) };
-  if (transcricao.trim()) corpo.transcricao = transcricao;
-  return corpo;
+  const d = Object.fromEntries(new FormData(form));
+  return { ...d, n_shorts: Number(d.n_shorts) };
 }
 
 function htmlEtapas(ep) {
@@ -62,19 +50,14 @@ function htmlEtapas(ep) {
 
 function htmlEpisodio(ep) {
   const erroEtapa = Object.values(ep.etapas).find(et => et.situacao === "erro")?.erro;
-  // Legenda em erro (ex.: 429) num episódio que já está na produção: a entrada recusaria o
-  // link repetido, então colar a transcrição mora aqui, ao lado do "tentar de novo".
-  const podeColar = ep.etapas.legenda?.situacao === "erro" && ep.fonte_legenda !== "colada";
-  const colar = podeColar ? `<button class="botao mini" data-colar="${esc(ep.id)}">colar transcrição</button>` : "";
   const dur = duracaoFmt(ep.duracao_s);
-  const colada = ep.fonte_legenda === "colada" ? `<span class="chip colada">transcrição colada</span>` : "";
   const resumo = erroEtapa
-    ? `<span class="erro-txt" title="${esc(erroEtapa)}">${esc(erroEtapa)}</span><button class="botao mini" data-tentar="${esc(ep.id)}">tentar de novo</button>${colar}`
+    ? `<span class="erro-txt" title="${esc(erroEtapa)}">${esc(erroEtapa)}</span><button class="botao mini" data-tentar="${esc(ep.id)}">tentar de novo</button>`
     : `<b>${ep.n_candidatos || "—"}</b>${ep.n_candidatos ? "candidatos" : "processando"}`;
   return `<div class="ep ${ep.id === epSel ? "sel" : ""}">
     <div class="ep-abrir" data-ep="${esc(ep.id)}" tabindex="0" role="button" aria-pressed="${ep.id === epSel}">
       <div class="capa" style="background-image:url('${thumb(ep.id)}')"><span>${esc(dur)}</span></div>
-      <div><h3>${esc(ep.titulo ?? ep.url)}</h3><p>${esc(ep.canal ?? "")} · ${esc(dataHora(ep.criado_em))}</p>${colada}</div>
+      <div><h3>${esc(ep.titulo ?? ep.url)}</h3><p>${esc(ep.canal ?? "")} · ${esc(dataHora(ep.criado_em))}</p></div>
     </div>
     ${htmlEtapas(ep)}<div class="resumo">${resumo}</div></div>`;
 }
@@ -128,7 +111,7 @@ function trilhoFila() {
     };
     return;
   }
-  const atual = f.atual ? `${esc(f.atual.etapa)} · ${esc(P.episodios.find(e => e.id === f.atual.episodio)?.titulo ?? f.atual.episodio)}` : "parada";
+  const atual = f.atual ? `${esc(NOMES_ETAPA[f.atual.etapa] ?? f.atual.etapa)} ·${esc(P.episodios.find(e => e.id === f.atual.episodio)?.titulo ?? f.atual.episodio)}` : "parada";
   el.innerHTML = `<div><b>Fila</b> · ${f.na_fila.length} na fila</div><div>${atual}</div>`;
 }
 
@@ -170,7 +153,6 @@ function ligarLista() {
       if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); abrir(); }
     };
   });
-  $$("[data-colar]").forEach(b => { b.onclick = () => abrirColar(b.dataset.colar, b); });
   $$("[data-tentar]").forEach(b => {
     b.onclick = () => {
       b.disabled = true;
@@ -180,59 +162,6 @@ function ligarLista() {
         .finally(() => { b.disabled = false; });
     };
   });
-}
-
-// Gaveta "colar transcrição" — reusa a gaveta da tela Shorts (#camada, fecharGaveta e o
-// estado aoTeclarGaveta/gatilhoGaveta de shorts.js). O polling pode redesenhar a lista com a
-// gaveta aberta e o botão de origem some do DOM: o foco volta pelo seletor, não pela referência.
-function formColar(ep) {
-  return `<div class="fundo"></div><form class="gaveta" role="dialog" aria-modal="true" aria-labelledby="gaveta-titulo">
-    <h2 id="gaveta-titulo">Colar transcrição</h2>
-    <p class="dica">${esc(ep.titulo ?? ep.id)}</p>
-    <label>Transcrição do YouTube com os tempos<textarea name="transcricao" rows="14" required spellcheck="false"
-      placeholder="${esc(EXEMPLO_TRANSCRICAO)}"></textarea></label>
-    <p class="dica">${esc(DICA_TRANSCRICAO)}</p>
-    <p class="dica" id="colar-aviso" role="status" hidden>Há texto colado: use Cancelar para descartar ou Enviar.</p>
-    <div class="acoes"><button type="button" class="botao" id="cancelar">Cancelar</button><button type="submit" class="botao primario" id="gaveta-enviar">Enviar</button></div></form>`;
-}
-
-function abrirColar(id, gatilho) {
-  const ep = P.episodios.find(e => e.id === id);
-  if (!ep) return;
-  fecharGaveta();
-  const fechar = (alvo = `[data-colar="${CSS.escape(id)}"]`) => { fecharGaveta(); $(alvo)?.focus(); };
-  gatilhoGaveta = gatilho;
-  const camada = $("#camada");
-  camada.innerHTML = formColar(ep);
-  const form = $("form", camada), enviar = $("#gaveta-enviar", camada);
-  // Escape e clique no fundo são fáceis de acertar sem querer: com texto colado (2 h de
-  // transcrição) eles não fecham — só Cancelar ou Enviar. O aviso diz isso.
-  const fecharSeVazio = () => {
-    if (!form.transcricao.value.trim()) { fechar(); return; }
-    $("#colar-aviso", camada).hidden = false;
-    form.transcricao.focus();
-  };
-  aoTeclarGaveta = ev => { if (ev.key === "Escape") fecharSeVazio(); };
-  document.addEventListener("keydown", aoTeclarGaveta);
-  $(".fundo", camada).onclick = fecharSeVazio;
-  $("#cancelar", camada).onclick = () => fechar();
-  form.transcricao.focus();
-  form.onsubmit = async ev => {
-    ev.preventDefault();
-    enviar.disabled = true;
-    try {
-      const r = await post(`/api/episodios/${encodeURIComponent(id)}/transcricao`, { transcricao: form.transcricao.value });
-      if (!r.enfileirado) avisar("transcrição salva; o episódio não estava em erro, nada foi reenfileirado");
-      gatilhoGaveta = null;   // o botão some na lista nova: o foco vai pra linha do episódio
-      fechar(`[data-ep="${CSS.escape(id)}"]`);
-      await atualizarProducao();
-      $(`[data-ep="${CSS.escape(id)}"]`)?.focus();
-    } catch (e) {
-      avisar(e.message);
-    } finally {
-      enviar.disabled = false;
-    }
-  };
 }
 
 let erroProducaoAnterior = null;   // evita repetir o aviso a cada poll de 3s enquanto o erro persiste
@@ -278,7 +207,7 @@ async function telaEpisodios(meu) {
   if (meu !== desenhar.n) return;
   if (!epSel && P.episodios.length) epSel = P.episodios.find(e => !("erro" in e))?.id ?? null;
   $("#tela").innerHTML = `<header><div><h1>Produção <em>— do episódio ao Short</em></h1>
-    <p class="sub">Cole o link do episódio. O app baixa vídeo e legenda do YouTube e acha os momentos.</p></div></header>
+    <p class="sub">Cole o link do episódio. O app baixa o vídeo, transcreve o áudio aqui no PC e acha os momentos.</p></div></header>
     ${htmlEntrada()}<div class="episodios" id="lista-episodios">${htmlLista()}</div><div id="detalhe-episodio"></div>`;
   trilhoFila();
   ligarLista();
@@ -287,7 +216,7 @@ async function telaEpisodios(meu) {
     const b = ev.submitter; b.disabled = true;
     try {
       const r = await post("/api/episodios", pedidoNovoEpisodio(ev.target));
-      epSel = r.id; ev.target.reset(); $(".colar-transcricao", ev.target).open = false; await desenhar();
+      epSel = r.id; ev.target.reset(); await desenhar();
     } catch (e) { avisar(e.message); } finally { b.disabled = false; }
   };
   if (epSel) await mostrarDetalhe(epSel, meu);

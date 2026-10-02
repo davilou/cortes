@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 
 from cortes.producao.estado import ErroProducao, novo
-from cortes.producao.etapas import ARQUIVO_FONTE, Dependencias, rodar_etapa
-from cortes.producao.legenda_yt import ARQUIVO
+from cortes.producao.etapas import Dependencias, rodar_etapa
+from cortes.tipos import Palavra
 
 AGORA = datetime(2026, 10, 2, 9)
 PERFIL = """nicho: financas
@@ -51,19 +51,16 @@ class Falsas:
             self.chamadas.append("audio")
             wav_silencio(d / "audio.wav")
 
-        def baixar_legenda(url: str, d: Path) -> Path:
-            self.chamadas.append("legenda")
-            evs = [{"tStartMs": 0, "dDurationMs": 3000, "segs": [
-                {"utf8": "Eu"}, {"utf8": " ganhei", "tOffsetMs": 300}, {"utf8": " dez", "tOffsetMs": 700},
-                {"utf8": " mil.", "tOffsetMs": 1000}]}]
-            (d / ARQUIVO).write_text(json.dumps({"events": evs}), encoding="utf-8")
-            return d / ARQUIVO
+        def transcrever(audio: Path) -> list[Palavra]:
+            self.chamadas.append(f"transcrever {audio.name}")
+            return [Palavra("Eu", 0.0, 0.3), Palavra("ganhei", 0.3, 0.7), Palavra("dez", 0.7, 1.0),
+                    Palavra("mil.", 1.0, 1.4)]
 
         def chamar_llm(prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
             self.chamadas.append("llm")
             return {"candidatos": []}
 
-        return Dependencias(baixar_video, extrair_audio, baixar_legenda, chamar_llm, "sonnet")
+        return Dependencias(baixar_video, extrair_audio, transcrever, chamar_llm, "sonnet")
 
 
 def test_etapas_em_ordem_gravam_seus_arquivos(tmp_path: Path) -> None:
@@ -74,7 +71,7 @@ def test_etapas_em_ordem_gravam_seus_arquivos(tmp_path: Path) -> None:
     f = Falsas()
     for nome in ("video", "legenda", "sinais", "momentos"):
         rodar_etapa(nome, pasta, e, raiz, f.dep())
-    assert f.chamadas == ["video", "audio", "legenda", "llm"]
+    assert f.chamadas == ["video", "audio", "transcrever audio.wav", "llm"]
     palavras = json.loads((pasta / "palavras.json").read_text(encoding="utf-8"))
     assert [p["texto"] for p in palavras] == ["Eu", "ganhei", "dez", "mil."]
     assert "energia" in json.loads((pasta / "sinais.json").read_text(encoding="utf-8"))
@@ -160,38 +157,25 @@ def test_etapas_do_estado_e_do_modulo_nao_divergem() -> None:
     assert tuple(etapas._ETAPAS) == ETAPAS
 
 
-def test_legenda_usa_transcricao_colada_sem_baixar(tmp_path: Path) -> None:
-    from tests.amostras import AMOSTRA
 
-    pasta = tmp_path / "episodios" / "abcdefghijk"
-    pasta.mkdir(parents=True)
-    (pasta / "transcricao.txt").write_text(AMOSTRA, encoding="utf-8")
-    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
-    f = Falsas()
-    rodar_etapa("legenda", pasta, e, tmp_path, f.dep())
-    assert f.chamadas == []
-    palavras = json.loads((pasta / "palavras.json").read_text(encoding="utf-8"))
-    assert palavras[0] == {"texto": "Fala", "inicio": 10.0, "fim": palavras[1]["inicio"]}
-    assert not (pasta / ARQUIVO).exists()
-    assert (pasta / ARQUIVO_FONTE).read_text(encoding="utf-8") == "colada"
-
-
-def test_legenda_baixada_marca_a_fonte_youtube(tmp_path: Path) -> None:
+def test_transcricao_grava_palavras_com_inicio_e_fim(tmp_path: Path) -> None:
     pasta = tmp_path / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
     e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
     rodar_etapa("legenda", pasta, e, tmp_path, Falsas().dep())
-    assert (pasta / ARQUIVO_FONTE).read_text(encoding="utf-8") == "youtube"
+    palavras = json.loads((pasta / "palavras.json").read_text(encoding="utf-8"))
+    assert palavras[1] == {"texto": "ganhei", "inicio": 0.3, "fim": 0.7}
 
 
-def test_legenda_com_transcricao_ruim_para_com_a_linha(tmp_path: Path) -> None:
-    from cortes.producao.transcricao_colada import ErroTranscricao
-
+def test_transcricao_que_falha_nao_grava_palavras(tmp_path: Path) -> None:
     pasta = tmp_path / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
-    (pasta / "transcricao.txt").write_text("0:10\nfala\n0:05\noi\n", encoding="utf-8")
     e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
-    f = Falsas()
-    with pytest.raises(ErroTranscricao, match="linha 3"):
-        rodar_etapa("legenda", pasta, e, tmp_path, f.dep())
-    assert f.chamadas == [] and not (pasta / "palavras.json").exists()
+
+    def sem_memoria(audio: Path) -> list[Palavra]:
+        raise RuntimeError("placa de vídeo sem memória")
+
+    dep = Dependencias(transcrever=sem_memoria)
+    with pytest.raises(RuntimeError, match="sem memória"):
+        rodar_etapa("legenda", pasta, e, tmp_path, dep)
+    assert not (pasta / "palavras.json").exists()
