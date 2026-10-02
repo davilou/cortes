@@ -295,10 +295,19 @@ video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background:
   background: var(--raised); color: var(--text); font-size: 12px; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center; padding: 0; }
 .player-ctrl .play:hover { border-color: var(--up); }
-.player-ctrl .barra { flex: 1; min-width: 0; accent-color: var(--up); height: 4px; cursor: pointer; }
+.player-ctrl .barra-wrap { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
+.player-ctrl .barra { width: 100%; accent-color: var(--up); height: 4px; cursor: pointer; }
+/* Trecho de preroll (hachurado) e a marca do início real do candidato — só aparecem com
+   preroll > 0, posicionados por % em cima da largura da barra (ver atualizarMarcaPreroll). */
+.barra-pre { position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px;
+  background: repeating-linear-gradient(45deg, var(--line) 0 4px, transparent 4px 8px); opacity: .9; pointer-events: none; }
+.barra-marca { position: absolute; top: 50%; width: 2px; height: 10px; margin-top: -5px;
+  background: var(--faint); border-radius: 1px; pointer-events: none; }
 .player-ctrl .tempo { flex: none; font: 11px var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; }
 .seg.vel { margin-top: 10px; }
 .seg.vel button { font: 11px var(--mono); padding: 5px 9px; }
+.seg.preroll { margin-top: 8px; }
+.seg.preroll button { font: 11px var(--mono); padding: 5px 9px; }
 .painel h3 { font: 400 22px/1.15 var(--serif); margin-top: 14px; }
 .painel .meta { font: 11px var(--mono); color: var(--faint); margin-top: 6px; }
 .rubrica { display: grid; gap: 7px; margin: 16px 0; }
