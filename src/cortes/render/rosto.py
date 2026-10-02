@@ -161,7 +161,8 @@ def _escolhida(p: Plano, escolhas: dict[int, int]) -> Pessoa | None:
         return None
     j = escolhas.get(p.k, p.padrao)
     if j is None or not 0 <= j < len(p.pessoas):
-        raise ErroRender(f"plano {p.k}: pessoa {j} não existe (há {len(p.pessoas)})")
+        raise ErroRender(
+            f"plano {p.k}: pessoa {j} não existe (há {len(p.pessoas)}) — escolha de novo no editor")
     return p.pessoas[j]
 
 
@@ -172,7 +173,8 @@ def trilha_fixa(r: Rosto, escolhas: dict[int, int]) -> list[list[float]]:
     pls = planos(r)
     invalidos = set(escolhas) - {p.k for p in pls if p.pessoas}
     if invalidos:
-        raise ErroRender(f"plano {sorted(invalidos)[0]} não existe ou não tem pessoa para escolher")
+        raise ErroRender(f"plano {sorted(invalidos)[0]} não existe ou não tem pessoa para escolher — "
+                         "escolha de novo no editor")
     alvos = [_escolhida(p, escolhas) for p in pls]
     if all(a is None for a in alvos):
         raise ErroRender("nenhum plano de câmera tem rosto")
