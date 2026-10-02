@@ -6,7 +6,7 @@
 // deve pintar a tela com o dado velho.
 async function desenhar() {
   const meu = ++desenhar.n;
-  const nome = TELAS[location.hash.slice(1)] ? location.hash.slice(1) : "comparar";
+  const nome = TELAS[location.hash.slice(1)] ? location.hash.slice(1) : "episodios";
   $$("[data-tela]").forEach(a => a.classList.toggle("ativo", a.dataset.tela === nome));
   try {
     await TELAS[nome](meu);
