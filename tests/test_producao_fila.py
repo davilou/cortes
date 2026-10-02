@@ -33,7 +33,7 @@ def test_processa_todas_as_etapas(tmp_path: Path) -> None:
     pasta = episodio(tmp_path)
     f, feitas = fila(tmp_path)
     f.processar("abcdefghijk")
-    assert feitas == ["video", "legenda", "sinais", "momentos"]
+    assert feitas == ["video", "legenda", "sinais", "momentos", "render"]
     assert all(et.situacao == "ok" for et in ler(pasta).etapas.values())
 
 
@@ -192,7 +192,7 @@ def test_estado_corrompido_nao_trava_a_fila_e_fica_visivel(tmp_path: Path) -> No
 
     f._rodar_um(f._proximo())  # noqa: SLF001
 
-    assert feitas == ["video", "legenda", "sinais", "momentos"]
+    assert feitas == ["video", "legenda", "sinais", "momentos", "render"]
     assert f.situacao()["na_fila"] == []
 
 

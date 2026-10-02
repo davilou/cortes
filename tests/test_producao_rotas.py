@@ -169,9 +169,9 @@ def test_fila_sobe_com_o_servidor(cfg: Config) -> None:
     c, fila = montar(cfg, lambda nome, p, e: rodadas.append(nome))
     with c:   # o lifespan chama fila.iniciar(): recupera o que ficou rodando e processa
         prazo = time.monotonic() + 5
-        while (len(rodadas) < 4 or fila.situacao()["atual"] is not None) and time.monotonic() < prazo:
+        while (len(rodadas) < 5 or fila.situacao()["atual"] is not None) and time.monotonic() < prazo:
             time.sleep(0.02)
-    assert rodadas == ["video", "legenda", "sinais", "momentos"]
+    assert rodadas == ["video", "legenda", "sinais", "momentos", "render"]
     assert concluido(ler(pasta))
 
 

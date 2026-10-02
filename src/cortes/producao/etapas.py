@@ -1,4 +1,5 @@
-"""As 4 etapas do episódio no painel: vídeo, transcrição (etapa "legenda"), sinais, momentos.
+"""As 5 etapas do episódio no painel: vídeo, legenda do YouTube (ou transcrição colada), sinais,
+momentos, render.
 
 Cada etapa grava seu arquivo e pula se ele já existe (mesmo padrão do `cortes detectar`).
 A transcrição é local, com faster-whisper (`transcricao_local`); o `cortes detectar` do
@@ -15,6 +16,8 @@ from cortes.episodio import ler_json, salvar_json
 from cortes.perfil import carregar_perfil
 from cortes.producao import transcricao_local
 from cortes.producao.estado import ETAPAS, ErroProducao, EstadoEpisodio
+from cortes.producao.render import rodar_render
+from cortes.render.pipeline import DepRender
 from cortes.segmentacao import frases
 from cortes.tipos import Palavra
 
@@ -26,6 +29,7 @@ class Dependencias:
     transcrever: Callable[[Path], list[Palavra]] = transcricao_local.transcrever
     chamar_llm: ChamarLLM = chamar_llm_real
     modelo: str = "sonnet"
+    render: DepRender | None = None   # o servidor monta com a configuração verificada na subida
 
 
 def _video(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> None:
@@ -65,7 +69,13 @@ def _momentos(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> 
     salvar_json(pasta / "candidatos.json", [asdict(c) for c in aceitos])
 
 
-_ETAPAS = {"video": _video, "legenda": _legenda, "sinais": _sinais, "momentos": _momentos}
+def _render(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> None:
+    if dep.render is None:
+        raise ErroProducao("render sem configuração: o servidor não montou Dependencias.render")
+    rodar_render(pasta, e, raiz, dep.render)
+
+
+_ETAPAS = {"video": _video, "legenda": _legenda, "sinais": _sinais, "momentos": _momentos, "render": _render}
 
 
 def rodar_etapa(nome: str, pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> None:

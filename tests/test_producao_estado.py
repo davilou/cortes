@@ -1,3 +1,5 @@
+import json
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
@@ -7,6 +9,7 @@ from cortes.producao.estado import (
     ETAPAS,
     ErroProducao,
     EstadoEpisodio,
+    Etapa,
     concluido,
     etapa_com_erro,
     gravar,
@@ -70,8 +73,8 @@ def test_erro_exige_mensagem_e_ok_nao_aceita() -> None:
 
 
 def test_etapa_desconhecida() -> None:
-    with pytest.raises(ErroProducao, match="etapa 'render'"):
-        marcar(ep(), "render", "ok", AGORA)
+    with pytest.raises(ErroProducao, match="etapa 'xyz'"):
+        marcar(ep(), "xyz", "ok", AGORA)
 
 
 def test_ida_e_volta_em_disco(tmp_path: Path) -> None:
@@ -110,3 +113,11 @@ def test_estado_com_situacao_invalida_nao_aceita(tmp_path: Path) -> None:
 def test_estado_sem_arquivo_diz_o_caminho(tmp_path: Path) -> None:
     with pytest.raises(ErroProducao, match="estado.json"):
         ler(tmp_path)
+
+
+def test_estado_do_plano_a_sem_render_migra_para_pendente(tmp_path: Path) -> None:
+    e = novo("abcdefghijk", "u", "financas", 5, "f7", datetime(2026, 10, 2))
+    d = asdict(e)
+    del d["etapas"]["render"]
+    (tmp_path / "estado.json").write_text(json.dumps(d), encoding="utf-8")
+    assert ler(tmp_path).etapas["render"] == Etapa()

@@ -6,6 +6,9 @@ Erro numa etapa fica no estado.json do episódio e a fila segue com o próximo; 
 episódio pausado: `retomar` reabre a etapa e devolve o episódio para a frente da fila.
 Uma falha que escape de `processar` (ex.: estado.json corrompido) não pode matar a thread:
 `_rodar_um` captura, imprime o traceback no terminal e tenta deixar a causa visível.
+
+`antes(pasta)` roda na thread da fila antes de cada episódio e na subida — é o que reabre a
+etapa render quando um Renderizar chega depois de ela fechar.
 """
 import threading
 import traceback
@@ -27,13 +30,20 @@ from cortes.producao.estado import (
 )
 
 RodarEtapa = Callable[[str, Path, EstadoEpisodio], None]
+Antes = Callable[[Path], None]   # roda na thread da fila antes de processar (e na subida)
+
+
+def _nada(pasta: Path) -> None:
+    return None
 
 
 class Fila:
-    def __init__(self, raiz: Path, rodar: RodarEtapa, agora: Callable[[], datetime] = datetime.now) -> None:
+    def __init__(self, raiz: Path, rodar: RodarEtapa, agora: Callable[[], datetime] = datetime.now,
+                 antes: Antes = _nada) -> None:
         self._raiz = raiz
         self._rodar = rodar
         self._agora = agora
+        self._antes = antes
         self._trava = threading.Lock()
         self._tem_trabalho = threading.Condition(self._trava)
         self._ids: list[str] = []
@@ -110,6 +120,7 @@ class Fila:
         na inicialização do processo — `iniciar` já faz isso uma vez.
         """
         for arquivo in sorted(self._raiz.glob("episodios/*/estado.json")):
+            self._antes(arquivo.parent)
             e = ler(arquivo.parent)
             if concluido(e) or etapa_com_erro(e):
                 continue
@@ -123,6 +134,7 @@ class Fila:
         propósito: quem chama de dentro da thread (`_rodar_um`) é que garante que isso não a mate.
         """
         pasta = self._pasta(id)
+        self._antes(pasta)
         try:
             while (etapa := proxima(e := ler(pasta))) is not None:
                 with self._trava:

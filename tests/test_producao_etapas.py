@@ -146,8 +146,8 @@ def test_nicho_inexistente_falha_com_caminho(tmp_path: Path) -> None:
 
 def test_etapa_desconhecida(tmp_path: Path) -> None:
     e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
-    with pytest.raises(ErroProducao, match="render"):
-        rodar_etapa("render", tmp_path, e, tmp_path, Falsas().dep())
+    with pytest.raises(ErroProducao, match="xyz"):
+        rodar_etapa("xyz", tmp_path, e, tmp_path, Falsas().dep())
 
 
 def test_etapas_do_estado_e_do_modulo_nao_divergem() -> None:

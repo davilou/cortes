@@ -10,7 +10,7 @@ from typing import Any, Literal, cast
 
 from cortes.episodio import ler_json, salvar_json
 
-ETAPAS = ("video", "legenda", "sinais", "momentos")
+ETAPAS = ("video", "legenda", "sinais", "momentos", "render")
 SITUACOES = ("pendente", "rodando", "ok", "erro")
 Situacao = Literal["pendente", "rodando", "ok", "erro"]
 
@@ -127,7 +127,10 @@ def ler(pasta: Path) -> EstadoEpisodio:
     arquivo = pasta / "estado.json"
     try:
         d = ler_json(arquivo)
-        etapas = {n: _etapa(d["etapas"][n]) for n in ETAPAS}
+        brutas = d["etapas"]
+        # 'render' entrou no plano B: o estado.json do plano A não tem a chave e a etapa nasce
+        # pendente. É migração explícita de uma etapa nova, não default para dado que falta.
+        etapas = {n: Etapa() if n == "render" and n not in brutas else _etapa(brutas[n]) for n in ETAPAS}
         return EstadoEpisodio(_texto(d, "id"), _texto(d, "url"), _texto(d, "nicho"), _n_shorts(d),
                               _texto(d, "formato"), _texto(d, "criado_em"), etapas)
     except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as ex:
