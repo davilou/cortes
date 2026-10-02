@@ -6,6 +6,7 @@ import pytest
 from cortes.producao.estado import (
     ETAPAS,
     ErroProducao,
+    EstadoEpisodio,
     concluido,
     etapa_com_erro,
     gravar,
@@ -19,7 +20,7 @@ from cortes.producao.estado import (
 AGORA = datetime(2026, 10, 2, 9, 12)
 
 
-def ep() -> object:
+def ep() -> EstadoEpisodio:
     return novo("c5xqNNWFT9w", "https://youtu.be/c5xqNNWFT9w", "financas", 5, "f7", AGORA)
 
 
@@ -48,6 +49,17 @@ def test_reabrir_volta_erro_e_rodando_para_pendente() -> None:
     e = reabrir(e)
     assert e.etapas["video"].situacao == "pendente" and e.etapas["video"].erro is None
     assert proxima(e) == "video"
+
+
+def test_reabrir_retoma_apos_queda_mantendo_o_que_terminou() -> None:
+    # Processo caiu com "video" ok e "legenda" no meio ("rodando"): a retomada
+    # devolve "legenda" para pendente e mantém "video" intocado.
+    e = marcar(marcar(ep(), "video", "rodando", AGORA), "video", "ok", AGORA)
+    e = marcar(e, "legenda", "rodando", AGORA)
+    e = reabrir(e)
+    assert e.etapas["video"].situacao == "ok"
+    assert e.etapas["legenda"].situacao == "pendente" and e.etapas["legenda"].erro is None
+    assert proxima(e) == "legenda"
 
 
 def test_erro_exige_mensagem_e_ok_nao_aceita() -> None:
@@ -81,5 +93,20 @@ def test_estado_com_campo_de_tipo_errado_nao_aceita_coercao(tmp_path: Path) -> N
     # n_shorts como texto numérico não deve ser aceito silenciosamente.
     quebrado = dados.replace('"n_shorts": 5', '"n_shorts": "5"')
     (tmp_path / "estado.json").write_text(quebrado, encoding="utf-8")
+    with pytest.raises(ErroProducao, match="estado.json"):
+        ler(tmp_path)
+
+
+def test_estado_com_situacao_invalida_nao_aceita(tmp_path: Path) -> None:
+    e = ep()
+    gravar(tmp_path, e)
+    dados = (tmp_path / "estado.json").read_text(encoding="utf-8")
+    quebrado = dados.replace('"situacao": "pendente"', '"situacao": "travado"')
+    (tmp_path / "estado.json").write_text(quebrado, encoding="utf-8")
+    with pytest.raises(ErroProducao, match="estado.json"):
+        ler(tmp_path)
+
+
+def test_estado_sem_arquivo_diz_o_caminho(tmp_path: Path) -> None:
     with pytest.raises(ErroProducao, match="estado.json"):
         ler(tmp_path)

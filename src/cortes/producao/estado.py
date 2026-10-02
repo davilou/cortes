@@ -44,6 +44,9 @@ def novo(id: str, url: str, nicho: str, n_shorts: int, formato: str, agora: date
 
 def marcar(e: EstadoEpisodio, etapa: str, situacao: Situacao, agora: datetime,
            erro: str | None = None) -> EstadoEpisodio:
+    """Grava a situação de uma etapa. A ordem/legalidade da transição é responsabilidade
+    de quem chama (a fila, de uma thread só) — aqui só se valida a etapa e a mensagem de erro.
+    """
     if etapa not in ETAPAS:
         raise ErroProducao(f"etapa '{etapa}' não existe; use uma de {ETAPAS}")
     if situacao == "erro" and not erro:
@@ -59,7 +62,10 @@ def etapa_com_erro(e: EstadoEpisodio) -> str | None:
 
 
 def proxima(e: EstadoEpisodio) -> str | None:
-    """A primeira etapa não concluída; None se acabou ou se uma etapa está em erro."""
+    """A primeira etapa não concluída (qualquer situação diferente de "ok" conta,
+    inclusive "rodando" — uma etapa que ficou rodando quando o processo caiu não
+    está feita); None se acabou ou se uma etapa está em erro.
+    """
     if etapa_com_erro(e):
         return None
     return next((n for n in ETAPAS if e.etapas[n].situacao != "ok"), None)
@@ -70,7 +76,13 @@ def concluido(e: EstadoEpisodio) -> bool:
 
 
 def reabrir(e: EstadoEpisodio) -> EstadoEpisodio:
-    """'Tentar de novo' e retomada após reinício: erro e rodando voltam a pendente."""
+    """'Tentar de novo' e retomada após reinício: erro e rodando voltam a pendente.
+
+    A fila chama isto na subida para todo episódio não concluído — uma etapa
+    "rodando" na queda do processo não quer dizer que terminou. Depois disso, cada
+    etapa decide por si, pulando o que já tem saída em disco, se precisa rodar de
+    novo ou não; esta função só limpa a situação, não decide o que refazer.
+    """
     etapas = {n: Etapa() if et.situacao in ("erro", "rodando") else et for n, et in e.etapas.items()}
     return replace(e, etapas=etapas)
 
@@ -118,5 +130,5 @@ def ler(pasta: Path) -> EstadoEpisodio:
         etapas = {n: _etapa(d["etapas"][n]) for n in ETAPAS}
         return EstadoEpisodio(_texto(d, "id"), _texto(d, "url"), _texto(d, "nicho"), _n_shorts(d),
                               _texto(d, "formato"), _texto(d, "criado_em"), etapas)
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as ex:
+    except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as ex:
         raise ErroProducao(f"{arquivo}: estado inválido ({ex!r})") from ex
