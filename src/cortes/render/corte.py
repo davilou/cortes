@@ -96,6 +96,7 @@ def _campo(x: dict[str, Any], nome: str, tipo: type | tuple[type, ...]) -> Any:
 
 
 def _int(v: Any, onde: str) -> int:
+    """Chave do JSON: o `json` grava toda chave de objeto como texto, então aceita texto numérico."""
     if isinstance(v, bool):
         raise ValueError(f"{onde}: {v!r} não é inteiro")
     try:
@@ -104,17 +105,30 @@ def _int(v: Any, onde: str) -> int:
         raise ValueError(f"{onde}: {v!r} não é inteiro") from ex
 
 
+def _int_valor(v: Any, onde: str) -> int:
+    """Valor (não chave): tem que já ser `int` de verdade — sem bool, texto nem fração."""
+    if isinstance(v, bool) or not isinstance(v, int):
+        raise ValueError(f"{onde}: {v!r} deveria ser inteiro")
+    return v
+
+
 def _edicoes(x: Any) -> Edicoes:
     """Corte do plano B não tem 'edicoes': nasce sem edição (migração explícita de campo novo)."""
     if x is None:
         return Edicoes()
     if not isinstance(x, dict):
         raise ValueError("edicoes deveria ser um objeto")
+    if not isinstance(x["legenda"], dict):
+        raise ValueError("edicoes.legenda deveria ser um objeto")
     legenda = {_int(k, "edicoes.legenda"): v for k, v in x["legenda"].items()}
     if not all(isinstance(v, str) for v in legenda.values()):
         raise ValueError("edicoes.legenda: textos deveriam ser texto")
-    mascaradas = tuple(sorted(_int(i, "edicoes.mascaradas") for i in x["mascaradas"]))
-    rostos = {_int(k, "edicoes.rostos"): _int(v, "edicoes.rostos") for k, v in x["rostos"].items()}
+    if not isinstance(x["mascaradas"], list):
+        raise ValueError("edicoes.mascaradas deveria ser uma lista")
+    mascaradas = tuple(sorted(_int_valor(i, "edicoes.mascaradas") for i in x["mascaradas"]))
+    if not isinstance(x["rostos"], dict):
+        raise ValueError("edicoes.rostos deveria ser um objeto")
+    rostos = {_int(k, "edicoes.rostos"): _int_valor(v, "edicoes.rostos") for k, v in x["rostos"].items()}
     return Edicoes(legenda, mascaradas, rostos)
 
 

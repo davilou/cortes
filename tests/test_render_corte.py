@@ -160,6 +160,11 @@ def test_concluir_limpa_alterado() -> None:
     {"legenda": {"1": 3}, "mascaradas": [], "rostos": {}},
     {"legenda": {}, "mascaradas": ["a"], "rostos": {}},
     {"legenda": {}, "mascaradas": [], "rostos": {"0": "a"}},
+    {"legenda": [], "mascaradas": [], "rostos": {}},
+    {"legenda": {}, "mascaradas": [], "rostos": []},
+    {"legenda": {}, "mascaradas": "12", "rostos": {}},
+    {"legenda": {}, "mascaradas": [1.9], "rostos": {}},
+    {"legenda": {}, "mascaradas": [], "rostos": {"0": "1"}},
 ])
 def test_edicoes_invalidas(tmp_path: Path, edicoes: dict[str, object]) -> None:
     d = pasta_corte(tmp_path, 0)
