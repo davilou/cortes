@@ -67,9 +67,19 @@ def _sem_duracao_zero(gs: list[list[Palavra]]) -> list[list[Palavra]]:
     return gs
 
 
+def _funde_ultimo_se_vazio(gs: list[list[Palavra]], dur: float) -> list[list[Palavra]]:
+    """O último grupo usa `b = dur` (não tem próximo para fechar nele); se o seu início foi
+    remapeado para `dur` ou além, a janela fica com duração ≤ 0. `_sem_duracao_zero` não pega
+    esse caso — só compara grupos adjacentes entre si, nunca contra `dur`."""
+    if len(gs) > 1 and gs[-1][0].inicio >= dur:
+        ultimo = gs.pop()
+        gs[-1] += ultimo
+    return gs
+
+
 def grupos(ws: list[Palavra], dur: float) -> list[Grupo]:
     """Fecham em pontuação (2+ palavras) ou em 5 palavras; cada um fica até o próximo, no máx. 2,6 s."""
-    gs = _sem_duracao_zero(_fundir(_brutos(ws)))
+    gs = _funde_ultimo_se_vazio(_sem_duracao_zero(_fundir(_brutos(ws))), dur)
     res: list[Grupo] = []
     for k, g in enumerate(gs):
         a = g[0].inicio

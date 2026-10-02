@@ -52,6 +52,17 @@ def test_primeiro_grupo_com_duracao_zero_funde_no_seguinte() -> None:
     assert gs[0].dur > 0
 
 
+def test_ultimo_grupo_com_duracao_zero_funde_no_anterior() -> None:
+    # grupo A (3 palavras, fecha por pontuação) e grupo B (1 palavra remapeada exatamente
+    # para `dur`, fim do corte) — a janela de B usa b=dur (não há k+1), então fica com
+    # duração zero e precisa fundir em A.
+    a = [P("Eu", 0.0), P("ganhei.", 0.6)]
+    b = [P("fim", 3.0)]
+    gs = grupos(a + b, 3.0)
+    assert [g.palavras for g in gs] == [("Eu", "ganhei.", "fim")]
+    assert gs[0].dur > 0
+
+
 def test_html_escapa_o_texto() -> None:
     html = legenda_html([Grupo(0.0, 1.0, ("<b>", "&"))])
     assert "&lt;b&gt; &amp;" in html and 'data-start="0.0" data-duration="1.0"' in html
