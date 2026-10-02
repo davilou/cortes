@@ -14,15 +14,16 @@ mesmo servidor do painel de contas (`2026-10-01-painel-contas-design.md`).
 
 ### Fora desta spec
 
-Upload de vídeo do PC, transcrição por arquivo enviado e Whisper pelo painel (o Whisper segue
-no `cortes detectar` do terminal); formatos f2, f5, f6, f8; publicação automática; nicho humor.
+Upload de vídeo do PC e transcrição por arquivo enviado; formatos f2, f5, f6, f8; publicação
+automática; nicho humor. O `cortes detectar` do terminal segue com o openai-whisper
+(`cortes/transcricao.py`) — passar o terminal para a transcrição local (§4.2) fica para depois.
 
 ## 2. Decisões
 
 | Decisão | Escolha | Motivo |
 |---|---|---|
 | Entrada | Só link do YouTube | Davi escolheu; cobre os podcasts-fonte |
-| Transcrição | Legenda do YouTube (json3), sem Whisper | Whisper é lento; a legenda tem tempo por palavra e pontuação (conferido, §4.2) |
+| Transcrição | **Local, faster-whisper `large-v3-turbo`** na GPU (Davi decidiu em 2026-10-02; substitui a legenda do YouTube) | ~35 s por hora de áudio, boa pontuação, início e fim por palavra, sem depender do YouTube (que devolveu HTTP 429) — benchmark em §4.2. Transcrição colada removida em 2026-10-02 — com a transcrição local a ~35 s/h ela virou passo extra sem ganho |
 | Render | Automático nos N melhores (padrão 5) + "Renderizar" manual nos demais | Como o Opus; rejeição vira exemplo para o detector |
 | Formatos | f7 Conversa, f1 Falante, f4 B-roll, f3 Motion | Davi escolheu; f7 é o sinal mais forte da R2, f4/f3 os que ele mais gostou |
 | Motor de render | **HyperFrames**, não Remotion | Os 8 formatos testados e aprovados foram feitos nele (`testes/`); substitui a decisão "Remotion" da spec principal §5 |
@@ -34,7 +35,7 @@ no `cortes detectar` do terminal); formatos f2, f5, f6, f8; publicação automá
 
 | Plano | Entrega | Risco |
 |---|---|---|
-| **A. Produção** | Link → vídeo + legenda do YouTube → detector, com progresso por etapa; candidatos com nota, rubrica, justificativa e player do trecho | baixo |
+| **A. Produção** | Link → vídeo + transcrição local → detector, com progresso por etapa; candidatos com nota, rubrica, justificativa e player do trecho | baixo |
 | **B. Render f1 + f7** | N melhores renderizados sozinhos; grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4 | baixo — o código existe nos protótipos |
 | **C. Editor** | Início/fim por palavra, texto da legenda, título, troca de formato, quem aparece por plano, versões | médio (multirrosto) |
 | **D. f4 B-roll** | Deixas pelo Claude → busca no YouTube → conferência visual → 3 opções por deixa no editor | médio |
@@ -47,8 +48,8 @@ no `cortes detectar` do terminal); formatos f2, f5, f6, f8; publicação automá
 ```
 src/cortes/producao/
   fila.py          # fila única, uma thread; estados; retomada após reinício
-  legenda_yt.py    # json3 do YouTube → list[Palavra] (puro) + download fino
-  etapas.py        # baixar → legenda → sinais → detector → render dos N
+  transcricao_local.py  # faster-whisper → list[Palavra] (conversão pura) + transcrição fina na GPU
+  etapas.py        # baixar → transcrição → sinais → detector → render dos N
   rotas.py         # API da Produção (montada no servidor do painel)
 src/cortes/render/
   recorte.py       # trecho.mp4 (ffmpeg), cortes de pausa
@@ -67,38 +68,37 @@ O que os protótipos em `testes/comum/` fazem (`corte.py`, `rosto.py`, `rodada.p
 como histórico da rodada de formatos. O caminho do Python com onnxruntime (hoje o venv do
 ComfyUI) vira configuração com verificação na subida, como a skill no painel de contas.
 
-### 4.2 Legenda do YouTube
+### 4.2 Transcrição local
 
-Conferido em 2026-10-02 no PrimoCast 536 (`c5xqNNWFT9w`): `yt-dlp --skip-download
---write-auto-subs --write-subs --sub-langs pt --sub-format json3` baixou 2,1 MB em < 1 s;
-20.234 palavras (Whisper: 19.752), com pontuação (1.425 fins de frase), tempo de início por
-palavra (`tStartMs` do evento + `tOffsetMs` do segmento). Regras:
+A etapa de transcrição (chave `legenda` no `estado.json`, mantida pelos episódios já gravados)
+roda o faster-whisper `large-v3-turbo` na GPU sobre o `audio.wav` do episódio
+(`producao/transcricao_local.py`) e grava `palavras.json` com início e fim por palavra.
 
-- pede **só** a faixa `pt` original (a tradução `pt-PT` levou HTTP 429);
-- legenda manual tem preferência sobre a automática quando existir;
-- descarta marcas entre colchetes (`[música]`, `[aplausos]`);
-- fim de cada palavra = início da seguinte (limitado a 1,5 s), em todo o episódio — não só
-  dentro do evento;
-- sem faixa `pt` → o episódio para com "vídeo sem legenda em português no YouTube";
-- marcas de troca de locutor (`>>`) e palavrões censurados (`[ __ ]`) são descartados; o
-  YouTube começa a palavra ~0,2–0,4 s depois do Whisper (dar folga na borda inicial do corte,
-  plano B);
-- **transcrição colada** (saída quando o YouTube bloqueia o download com HTTP 429): na entrada,
-  Davi pode colar o texto de "Mostrar transcrição" — linha de tempo (`0:10`, `1:00:03`) seguida
-  do texto do bloco, em uma ou mais linhas. A API valida (parse completo, até 5 MB, mínimo 50
-  palavras; erro diz a linha) antes de criar o episódio e grava `transcricao.txt`; a etapa
-  legenda usa esse arquivo em vez de baixar (`producao/transcricao_colada.py`). Episódio já na
-  produção com a legenda em erro recebe a transcrição por `POST /api/episodios/{id}/transcricao`
-  (recusado se a legenda já está pronta, rodando ou ok). Só o início do bloco (~5–7 s) tem
-  tempo: as palavras são distribuídas pelo tamanho (mesma regra da legenda manual) até o início
-  do bloco seguinte, mas no máximo nº de palavras × 0,35 s × 1,8 — sem esse teto, um bloco
-  seguido de silêncio ou música espalharia as palavras por minutos; o último bloco dura nº de
-  palavras × 0,35 s (~2,8 palavras/s). Linhas antes do primeiro tempo (título do vídeo ou de
-  capítulo) são ignoradas; um título de capítulo entre blocos entra no texto do bloco anterior
-  (indistinguível de fala); uma fala que seja exatamente um tempo ("2:30") é lida como tempo.
-  `fonte_legenda.txt` registra quem gerou `palavras.json` ("colada" | "youtube"). Precisão por
-  palavra estimada em ~±0,3 s — basta para achar momentos; para a legenda queimada do plano B,
-  considerar refinar (alinhamento forçado com o áudio ou Whisper só no trecho do corte).
+Benchmark de 2026-10-02 (20 min do PrimoCast 536, `c5xqNNWFT9w`, RTX 3090; Davi escolheu o
+turbo):
+
+| motor | 20 min | por hora | diferença vs legenda do YouTube |
+|---|---|---|---|
+| openai-whisper large-v3 (o do `cortes detectar`) | 358 s | ~18 min | 12,4% |
+| **faster-whisper large-v3-turbo** (int8_float16, BatchedInferencePipeline lote 16, word_timestamps) | 11,1 s | ~35 s | 12,2% |
+| faster-whisper large-v3 | 22,5 s | ~70 s | 12,3% (pontuação pior: frases sem ponto) |
+| Parakeet TDT 0.6B v3 (onnx-asr) | 55,9 s | ~3 min | 12,2% (mais erros de palavra) |
+
+O turbo é o mais rápido, pontua bem (o segmentador corta frases pela pontuação), dá início e
+fim por palavra e não depende do YouTube. A legenda do YouTube saiu do pipeline (o download
+dela levou HTTP 429), e com ela a transcrição colada (§2). Regras:
+
+- o áudio entra como array float32 16 kHz mono (`sinais.ler_wav_mono`): passar o caminho faz o
+  faster-whisper abrir com PyAV, e o PyAV instalado recusa o `metadata_errors` que ele passa;
+- o CTranslate2 precisa do CUDA 12 + cuDNN 9 (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`, que
+  convivem com o torch cu130); no Windows as pastas `bin` deles são registradas antes do
+  import — se faltarem, a etapa para com "instale nvidia-cublas-cu12 e nvidia-cudnn-cu12";
+- o modelo é carregado na primeira transcrição e fica no processo do painel; uma trava
+  serializa carga e transcrição;
+- texto sem espaço nas pontas, palavra vazia descartada, tempos com 3 casas; o início nunca
+  volta para trás da palavra anterior e o fim nunca fica antes do início; nenhuma palavra → erro;
+- conferido no trecho de 20 min pelo venv do projeto: 4.164 palavras, 10,7 s com o modelo já
+  carregado (14,9 s na primeira chamada, com a carga).
 
 ### 4.3 Dados por episódio
 
@@ -139,7 +139,7 @@ rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 **Episódios**
 1. Entrada: link, nicho, formato padrão (f7/f1; f4/f3 quando os planos D/E existirem), quantos
    renderizar (3/5/10), "Gerar Shorts". Link sem id de vídeo ou já processado → recusa com motivo.
-2. Lista de episódios: capa, título, canal, duração, barra de 5 etapas (vídeo, legenda, sinais,
+2. Lista de episódios: capa, título, canal, duração, barra de 5 etapas (vídeo, transcrição, sinais,
    momentos, render k/N) com estados ok/rodando/erro; erro mostra a causa e "tentar de novo".
 3. Episódio selecionado: grade de Shorts 9:16 (nota 0–10, status, prévia, título, duração,
    formato, ✓ ✕ Editar); tabela "Outros candidatos" (nota, início, duração, título,
@@ -184,28 +184,32 @@ rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 
 Nada de fallback silencioso:
 - Etapa com erro grava etapa, causa e arquivo no `estado.json`; o episódio mostra "tentar de novo".
-- Sem legenda `pt` → para (não cai no Whisper escondido).
-- HTTP 429 do YouTube → para com "YouTube limitou as requisições; tente em alguns minutos" (sem
-  repetição em loop — o IP já foi bloqueado uma vez na pesquisa).
+- GPU sem memória na transcrição → para com "placa de vídeo sem memória para transcrever (feche
+  o ComfyUI ou outro programa que usa a GPU e tente de novo)".
+- DLLs do CUDA 12/cuDNN 9 ausentes → para com "instale nvidia-cublas-cu12 e nvidia-cudnn-cu12".
+- Transcrição sem nenhuma palavra → para (não grava `palavras.json` vazio).
 - Render que falha mantém a versão anterior e mostra o fim do log.
 - Cota do Claude → fila pausada com aviso.
 - Configuração ausente (Python do rosto, HyperFrames, ffmpeg) → o servidor não sobe e diz o que falta.
 
 ## 9. Testes
 
-Funções puras com teste: parser do json3 (amostra real recortada do PrimoCast 536, com
-`[música]`, pontuação e fim de evento); máquina de estados da fila e retomada; grupos de
+Funções puras com teste: conversão dos segmentos do faster-whisper em palavras (segmentos
+falsos, sem GPU); máquina de estados da fila e retomada; grupos de
 legenda; quadro fixo por plano; seleção de rosto por plano; aplicação das edições do
 `corte.json`; montagem do `index.html` (placeholder sobrando = erro); schemas de deixas e de
-cenas; gravação dos exemplos bons/ruins. Render ponta a ponta: um teste marcado `lento`, fora do
-check padrão (`pytest -m "not lento"` no `CLAUDE.md`).
+cenas; gravação dos exemplos bons/ruins. O que precisa da GPU ou de minutos (transcrição de
+verdade, render ponta a ponta) é marcado `lento` e fica fora do check padrão (`addopts = -m
+"not lento"` no `pyproject.toml`; rodar com `pytest -m lento`).
 
 ## 10. Riscos
 
 - **Direitos:** cortes de podcast e B-roll do YouTube são de terceiros (spec principal §14);
   f4 marca risco alto de Content ID por visual.
-- **Legenda automática erra nomes e números** — o editor (plano C) corrige; até lá, o render
-  usa a legenda como veio.
+- **Transcrição automática erra nomes e números** — o editor (plano C) corrige; até lá, o
+  render usa a transcrição como veio.
+- **GPU dividida:** o modelo fica carregado no processo do painel; ComfyUI aberto ao mesmo tempo
+  pode faltar memória (erro claro, §8).
 - **Render de 1–4 min por Short:** N=5 → 10–20 min por episódio, em segundo plano.
 - **Detecção de rosto em CPU** pelo venv do ComfyUI: dependência externa, verificada na subida.
 - **Qualidade do f3 automático** é a maior incerteza — por isso o teste cego antes de seguir.
