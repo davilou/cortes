@@ -2,7 +2,7 @@
 num quadrado em volta do rosto. ffmpeg atrás do executor injetável."""
 from pathlib import Path
 
-from cortes.render.processo import Rodar, exigir
+from cortes.render.processo import ErroRender, Rodar, exigir
 from cortes.render.rosto import Pessoa, Plano
 
 LADO_PX = 160          # lado da miniatura na tela
@@ -19,6 +19,8 @@ def args_miniatura(trecho: Path, destino: Path, t: float, p: Pessoa, largura: in
 
 def gerar_miniatura(trecho: Path, destino: Path, plano: Plano, j: int, largura: int, altura: int,
                     rodar: Rodar) -> None:
+    if not 0 <= j < len(plano.pessoas):
+        raise ErroRender(f"plano {plano.k}: pessoa {j} não existe (há {len(plano.pessoas)})")
     destino.parent.mkdir(parents=True, exist_ok=True)
     t = (plano.ini + plano.fim) / 2
     exigir(rodar, args_miniatura(trecho, destino, t, plano.pessoas[j], largura, altura), None, "miniatura")

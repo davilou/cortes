@@ -33,6 +33,15 @@ def test_gerar_usa_o_meio_do_plano(tmp_path: Path) -> None:
     assert destino.read_bytes() == b"jpg" and vistos[0][vistos[0].index("-ss") + 1] == "2.000"
 
 
+def test_gerar_pessoa_inexistente_e_erro(tmp_path: Path) -> None:
+    def rodar(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        raise AssertionError("não deveria rodar o ffmpeg")
+
+    plano = Plano(0, 1.0, 3.0, (Pessoa(960, 540, 80, 3, 0.9),), 0)
+    with pytest.raises(ErroRender, match="pessoa 1"):
+        gerar_miniatura(Path("t.mp4"), tmp_path / "m.jpg", plano, 1, 1920, 1080, rodar)
+
+
 def test_runtime_entra_logo_depois_do_head() -> None:
     esperado = f'<html>\n  <head>\n<script src="{RUNTIME}"></script>\n<meta>'
     assert com_runtime("<html>\n  <head>\n<meta>") == esperado
