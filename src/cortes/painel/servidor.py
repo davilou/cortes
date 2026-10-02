@@ -29,9 +29,11 @@ from cortes.producao import rotas as rotas_producao
 from cortes.producao.estado import ErroProducao
 from cortes.producao.etapas import Dependencias, rodar_etapa
 from cortes.producao.fila import Fila
+from cortes.producao.previas import Previas
 from cortes.producao.render import reabrir_render
 from cortes.render.montagem import FORMATOS, caminho_template
-from cortes.render.pipeline import SCRIPT_ROSTO, DepRender
+from cortes.render.pipeline import SCRIPT_ROSTO, DepRender, montar_projeto
+from cortes.render.processo import ErroRender, Rodar, rodar_processo
 
 HOSTS_LOCAIS = ("127.0.0.1", "localhost")
 
@@ -89,15 +91,20 @@ class PedidoAtualizar(BaseModel):
 
 def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
               abrir: coleta.Abridor = coleta._abrir,
-              agora: Callable[[], datetime] = datetime.now, fila: Fila | None = None) -> FastAPI:
+              agora: Callable[[], datetime] = datetime.now, fila: Fila | None = None,
+              previas: Previas | None = None, rodar: Rodar = rodar_processo) -> FastAPI:
     carregar_vocabulario(cfg.raiz)       # configuração inválida: não sobe
     coleta.verificar_skill(cfg.skill_dir)
     npx = verificar_render(cfg)
-    fila = fila if fila is not None else _fila_real(cfg, agora, npx)
+    dep = DepRender(cfg.py_visao, cfg.modelo_rosto, npx, rodar=rodar)
+    fila = fila if fila is not None else _fila_real(cfg, agora, dep)
+    previas = previas if previas is not None else Previas(
+        cfg.raiz, lambda pasta, c: montar_projeto(pasta, c, cfg.raiz, dep))
 
     @asynccontextmanager
     async def ciclo(_: FastAPI) -> AsyncIterator[None]:
         fila.iniciar()   # só sob uvicorn (ou `with TestClient`): retoma o que ficou rodando
+        previas.iniciar()
         yield
         # Sem fase de desligamento, de propósito: a thread da fila é daemon e morre com o
         # processo; o que estava "rodando" é reaberto por `recuperar` na próxima subida.
@@ -125,9 +132,13 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     async def _erro_producao(_: Request, e: ErroProducao) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(e)})
 
+    @app.exception_handler(ErroRender)
+    async def _erro_render(_: Request, e: ErroRender) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(e)})
+
     _rotas_leitura(app, cfg, estado)
     _rotas_acao(app, cfg, estado, escrita, executar, abrir, agora)
-    rotas_producao.montar(app, cfg.raiz, fila, escrita, agora)
+    rotas_producao.montar(app, cfg.raiz, fila, escrita, agora, previas, rodar)
     formatos_rotas.montar(app, cfg.raiz)
     app.mount("/", StaticFiles(directory=cfg.estatico, html=True), name="web")
     return app
@@ -148,8 +159,8 @@ def verificar_render(cfg: Config) -> str:
     return npx
 
 
-def _fila_real(cfg: Config, agora: Callable[[], datetime], npx: str) -> Fila:
-    dep = Dependencias(render=DepRender(cfg.py_visao, cfg.modelo_rosto, npx))
+def _fila_real(cfg: Config, agora: Callable[[], datetime], dep_render: DepRender) -> Fila:
+    dep = Dependencias(render=dep_render)
     return Fila(cfg.raiz, lambda nome, pasta, e: rodar_etapa(nome, pasta, e, cfg.raiz, dep), agora,
                antes=lambda pasta: reabrir_render(pasta, agora()))
 

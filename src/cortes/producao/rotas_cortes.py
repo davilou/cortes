@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from cortes.producao import curadoria
 from cortes.producao.estado import ErroProducao, ler
 from cortes.producao.fila import Fila
+from cortes.producao.previas import Previas
 from cortes.render.corte import (
     ARQUIVO,
     Corte,
@@ -45,7 +46,9 @@ def cortes_json(pasta: Path) -> list[dict[str, Any]]:
     return [{**asdict(c), "video": _video(c)} for c in cortes_do_episodio(pasta)]
 
 
-def pedir_render(pasta: Path, indice: int, formato: str | None) -> None:
+def pedir_render(pasta: Path, indice: int, formato: str | None, preparando: bool) -> None:
+    if preparando:
+        raise ErroProducao("a prévia deste corte está sendo preparada; espere terminar para renderizar")
     e = ler(pasta)
     if e.etapas["momentos"].situacao != "ok":
         raise ErroProducao(f"episódio {e.id} ainda não tem os momentos; espere a etapa terminar")
@@ -64,24 +67,34 @@ def pedir_render(pasta: Path, indice: int, formato: str | None) -> None:
         gravar_corte(d, novo_corte(indice, cands[indice], formato or e.formato))
 
 
-def montar(app: FastAPI, pasta_de: Callable[[str], Path], fila: Fila, escrita: threading.Lock) -> None:
+def montar(app: FastAPI, pasta_de: Callable[[str], Path], fila: Fila, escrita: threading.Lock,
+          previas: Previas) -> None:
     @app.post("/api/episodios/{id}/cortes/{indice}/renderizar", status_code=202)
     def api_renderizar(id: str, indice: int, pedido: PedidoRender) -> dict[str, bool]:
         pasta = pasta_de(id)
         with escrita:
-            pedir_render(pasta, indice, pedido.formato)
+            pedir_render(pasta, indice, pedido.formato, previas.preparando(id, indice))
         fila.enfileirar(id)
         return {"enfileirado": True}
 
     @app.get("/api/episodios/{id}/cortes/{indice}/video")
-    def api_video_corte(id: str, indice: int, baixar: bool = False) -> FileResponse:
+    def api_video_corte(
+        id: str, indice: int, baixar: bool = False, versao: int | None = None,
+    ) -> FileResponse:
         pasta = pasta_de(id)
         d = pasta_corte(pasta, indice)
         if not (d / ARQUIVO).exists():
             raise ErroProducao(f"corte {indice} não existe")
         c = ler_corte(d)
-        arq = video(pasta, c)
-        if arq is None or not arq.exists():
-            raise ErroProducao(f"corte {indice} ainda sem vídeo")
-        nome = f"{id}-{indice}-v{c.versao}.mp4" if baixar else None
+        arq: Path
+        if versao is not None:
+            arq = d / f"short-v{versao}.mp4"
+            if not arq.exists():
+                raise ErroProducao(f"versão {versao} do corte {indice} não existe")
+        else:
+            achado = video(pasta, c)
+            if achado is None or not achado.exists():
+                raise ErroProducao(f"corte {indice} ainda sem vídeo")
+            arq, versao = achado, c.versao
+        nome = f"{id}-{indice}-v{versao}.mp4" if baixar else None
         return FileResponse(arq, media_type="video/mp4", filename=nome)

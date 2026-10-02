@@ -15,11 +15,13 @@ from pydantic import BaseModel
 from cortes.episodio import id_do_video
 from cortes.painel.dados import VIDEO_ID
 from cortes.perfil import CRITERIOS
-from cortes.producao import curadoria, rotas_cortes
+from cortes.producao import curadoria, rotas_cortes, rotas_editor
 from cortes.producao.estado import ErroProducao, etapa_com_erro, gravar, ler, novo, reabrir
 from cortes.producao.fila import Fila
+from cortes.producao.previas import Previas
 from cortes.render.corte import cortes_do_episodio
 from cortes.render.montagem import FORMATOS
+from cortes.render.processo import Rodar, rodar_processo
 
 FORMATOS_RENDER = FORMATOS   # render/montagem.py; planos D e E acrescentam f4 e f3
 N_SHORTS_MAX = 10
@@ -103,13 +105,14 @@ def _validar(raiz: Path, pedido: NovoEpisodio) -> str:
 
 
 
-def montar(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock,
-           agora: Callable[[], datetime] = datetime.now) -> None:
+def montar(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock, agora: Callable[[], datetime],
+           previas: Previas, rodar: Rodar = rodar_processo) -> None:
     """`escrita` é a trava do servidor: serializa criar episódio e gravar curadoria (que
     escreve nos exemplos do nicho e não trava nada sozinha)."""
     _rotas_leitura(app, raiz, fila)
     _rotas_acao(app, raiz, fila, escrita, agora)
-    rotas_cortes.montar(app, lambda id: _pasta(raiz, id), fila, escrita)
+    rotas_cortes.montar(app, lambda id: _pasta(raiz, id), fila, escrita, previas)
+    rotas_editor.montar(app, lambda id: _pasta(raiz, id), previas, rodar)
 
 
 def _rotas_leitura(app: FastAPI, raiz: Path, fila: Fila) -> None:
