@@ -28,6 +28,34 @@ function htmlCandidatos(D) {
       <span class="decisao ${esc(c.decisao ?? "")}"${c.decisao ? ` title="${esc(c.decisao)}" aria-label="${esc(c.decisao)}"` : ""}>${c.decisao ? esc(c.decisao) : ""}</span></div>`).join("")}</div>`;
 }
 
+const VELOCIDADES = [1, 1.25, 1.5, 2];
+const CHAVE_VELOCIDADE = "cortes_velocidade";
+
+function velocidadeSalva() {
+  try {
+    const v = Number(localStorage.getItem(CHAVE_VELOCIDADE));
+    return VELOCIDADES.includes(v) ? v : 1;
+  } catch { return 1; }
+}
+function salvarVelocidade(v) {
+  try { localStorage.setItem(CHAVE_VELOCIDADE, String(v)); } catch { /* localStorage indisponível: segue só na sessão */ }
+}
+
+function htmlPlayer(D, c) {
+  const dur = c.fim - c.inicio;
+  return `<div class="player">
+    <video class="trecho" preload="metadata" playsinline src="/api/episodios/${encodeURIComponent(D.id)}/video#t=${c.inicio},${c.fim}"></video>
+    <div class="player-ctrl">
+      <button class="play" type="button" aria-label="Tocar trecho">▶</button>
+      <input class="barra" type="range" min="0" max="${dur.toFixed(1)}" step="0.1" value="0" aria-label="Posição no trecho">
+      <span class="tempo">0:00 / ${tempo(dur)}</span>
+    </div>
+    <div class="seg vel" role="group" aria-label="Velocidade">
+      ${VELOCIDADES.map(v => `<button type="button" data-vel="${v}" aria-pressed="false">${String(v).replace(".", ",")}×</button>`).join("")}
+    </div>
+  </div>`;
+}
+
 function htmlPainel(D, c) {
   const rub = D.rubrica.map(k => `<div class="rub"><span>${esc(NOMES_RUBRICA[k] ?? k)}</span>
     <div class="b"><i style="width:${rubPct(c.notas[k])}%"></i></div><span>${c.notas[k] ?? "—"}</span></div>`).join("");
@@ -37,7 +65,7 @@ function htmlPainel(D, c) {
      <div class="motivo" hidden><select id="motivo-cat">${D.motivos.map(m => `<option>${esc(m)}</option>`).join("")}</select>
       <input id="motivo-txt" placeholder="detalhe (opcional)"><button class="botao mini no" id="motivo-ok">Rejeitar</button></div>`;
   return `<aside class="painel">
-    <video class="trecho" controls preload="metadata" src="/api/episodios/${encodeURIComponent(D.id)}/video#t=${c.inicio},${c.fim}"></video>
+    ${htmlPlayer(D, c)}
     <h3>${esc(c.titulo)}</h3>
     <p class="meta">${esc(D.titulo ?? D.id)} · ${tempo(c.inicio)} → ${tempo(c.fim)} · nota ${nota10(c.nota_final)}</p>
     <div class="rubrica">${rub}</div>
@@ -46,13 +74,98 @@ function htmlPainel(D, c) {
     ${decidido}</aside>`;
 }
 
+// Loop de rAF do player atual — cancelado no início de ligarVideo() a cada redesenho do painel
+// (blocoEpisodio troca o HTML inteiro a cada troca de candidato/decisão) e também se o próprio
+// <video> saiu do DOM (troca de tela), pra nunca deixar um loop órfão rodando pra sempre.
+let rafPlayer = null;
+
+function marcarVelocidadeAtiva(seg, vel) {
+  $$("[data-vel]", seg).forEach(b => {
+    const ativo = Number(b.dataset.vel) === vel;
+    b.classList.toggle("ativo", ativo);
+    b.setAttribute("aria-pressed", String(ativo));
+  });
+}
+
+// Mantém a barra de progresso e o relógio (0:07 / 0:42, relativos ao trecho — não ao episódio)
+// sincronizados com v.currentTime via rAF, porque arrastar a barra ou tocar não dispara
+// timeupdate com frequência suficiente pra uma barra fluida.
+function posRelativa(v, c, dur) {
+  return Math.min(Math.max(v.currentTime - c.inicio, 0), dur);
+}
+
+function atualizarBarra(v, c, dur, barra, tempoEl) {
+  const p = posRelativa(v, c, dur);
+  barra.value = p.toFixed(1);
+  tempoEl.textContent = `${tempo(p)} / ${tempo(dur)}`;
+}
+
 // O fragmento #t= só posiciona o vídeo na carga inicial; depois disso o navegador não respeita
-// mais o recorte (pausar/arrastar a barra escapa do trecho). timeupdate reimpõe os dois limites:
-// ao dar play fora do trecho, volta pro início; ao alcançar o fim tocando, pausa ali — sem forçar
-// currentTime de volta (isso faria o controle de progresso "pular" visualmente a cada tick).
-function ligarVideo(v, c) {
-  v.onplay = () => { if (v.currentTime < c.inicio || v.currentTime >= c.fim) v.currentTime = c.inicio; };
-  v.ontimeupdate = () => { if (!v.paused && v.currentTime >= c.fim) v.pause(); };
+// mais o recorte (pausar/arrastar a barra escapa do trecho) — por isso o play/pausa, a barra e
+// a velocidade são tudo customizado aqui, sem <video controls> nativo. onplay reimpõe o início
+// (dar play fora do trecho volta pro início); ontimeupdate pausa e trava no fim ao alcançá-lo.
+function ligarVideo(painel, c) {
+  const v = $("video.trecho", painel);
+  const dur = c.fim - c.inicio;
+  const btnPlay = $(".play", painel);
+  const barra = $(".barra", painel);
+  const tempoEl = $(".tempo", painel);
+  const segVel = $(".seg.vel", painel);
+
+  if (rafPlayer) cancelAnimationFrame(rafPlayer);
+
+  const vel = velocidadeSalva();
+  v.playbackRate = vel;
+  v.preservesPitch = true;
+  marcarVelocidadeAtiva(segVel, vel);
+
+  const loop = () => {
+    if (!document.body.contains(v)) { rafPlayer = null; return; }
+    if (!v.paused) atualizarBarra(v, c, dur, barra, tempoEl);
+    rafPlayer = requestAnimationFrame(loop);
+  };
+  rafPlayer = requestAnimationFrame(loop);
+
+  v.onplay = () => {
+    if (v.currentTime < c.inicio || v.currentTime >= c.fim) v.currentTime = c.inicio;
+    btnPlay.textContent = "❚❚";
+    btnPlay.setAttribute("aria-label", "Pausar trecho");
+  };
+  v.onpause = () => {
+    btnPlay.textContent = "▶";
+    btnPlay.setAttribute("aria-label", "Tocar trecho");
+  };
+  v.ontimeupdate = () => {
+    if (!v.paused && v.currentTime >= c.fim) { v.currentTime = c.fim; v.pause(); }
+    atualizarBarra(v, c, dur, barra, tempoEl);
+  };
+  v.onclick = () => { if (v.paused) v.play(); else v.pause(); };
+  btnPlay.onclick = () => { if (v.paused) v.play(); else v.pause(); };
+
+  barra.oninput = () => {
+    v.currentTime = c.inicio + Math.min(Math.max(Number(barra.value), 0), dur);
+    atualizarBarra(v, c, dur, barra, tempoEl);
+  };
+
+  $$("[data-vel]", segVel).forEach(b => {
+    b.onclick = () => {
+      const novaVel = Number(b.dataset.vel);
+      v.playbackRate = novaVel;
+      salvarVelocidade(novaVel);
+      marcarVelocidadeAtiva(segVel, novaVel);
+    };
+  });
+
+  // Espaço e ←/→ só quando o foco está no player — não quando está no select/input do motivo
+  // de rejeição (ligarPainel vive no mesmo <aside>, e Espaço lá digita espaço num texto livre).
+  $(".player", painel).onkeydown = ev => {
+    if (ev.target.closest(".motivo") || ["SELECT", "INPUT"].includes(ev.target.tagName)) return;
+    if (ev.key === " ") { ev.preventDefault(); if (v.paused) v.play(); else v.pause(); }
+    else if (ev.key === "ArrowLeft") { ev.preventDefault(); v.currentTime = Math.max(c.inicio, v.currentTime - 5); }
+    else if (ev.key === "ArrowRight") { ev.preventDefault(); v.currentTime = Math.min(c.fim, v.currentTime + 5); }
+  };
+
+  atualizarBarra(v, c, dur, barra, tempoEl);
 }
 
 // Todos os controles de decisão do painel (aprovar, rejeitar, e os do motivo) — desabilitados
@@ -95,7 +208,7 @@ function ligarPainel(D, c) {
     const motivo = txt ? `${$("#motivo-cat").value}: ${txt}` : $("#motivo-cat").value;
     decidir(D, c, "rejeitado", motivo, controlesDecisao(painel));
   };
-  ligarVideo($("video.trecho", painel), c);
+  ligarVideo(painel, c);
 }
 
 async function blocoEpisodio(id, meu) {

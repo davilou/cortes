@@ -286,7 +286,19 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
 
 .painel { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow: auto;
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; }
-video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background: #000; display: block; }
+video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background: #000; display: block; cursor: pointer; }
+
+/* Player customizado do trecho (só play/pausa, barra e velocidade — nunca a timeline dos
+   25 min do episódio inteiro, ver nota em episodio.js/ligarVideo). */
+.player-ctrl { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.player-ctrl .play { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--raised); color: var(--text); font-size: 12px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0; }
+.player-ctrl .play:hover { border-color: var(--up); }
+.player-ctrl .barra { flex: 1; min-width: 0; accent-color: var(--up); height: 4px; cursor: pointer; }
+.player-ctrl .tempo { flex: none; font: 11px var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; }
+.seg.vel { margin-top: 10px; }
+.seg.vel button { font: 11px var(--mono); padding: 5px 9px; }
 .painel h3 { font: 400 22px/1.15 var(--serif); margin-top: 14px; }
 .painel .meta { font: 11px var(--mono); color: var(--faint); margin-top: 6px; }
 .rubrica { display: grid; gap: 7px; margin: 16px 0; }
