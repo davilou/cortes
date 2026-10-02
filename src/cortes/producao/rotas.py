@@ -66,7 +66,6 @@ def _resumo(pasta: Path) -> dict[str, Any]:
             "duracao_s": meta.get("duracao_s"), "n_candidatos": len(_candidatos(pasta))}
 
 
-
 def _episodios(raiz: Path) -> list[dict[str, Any]]:
     """Um episódio com arquivo ruim não some com a lista: vira `{"id", "erro"}`. Os quebrados
     vêm primeiro (por id), depois os bons do mais novo para o mais antigo."""

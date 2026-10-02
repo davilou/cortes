@@ -93,12 +93,15 @@ dela levou HTTP 429), e com ela a transcrição colada (§2). Regras:
 - o CTranslate2 precisa do CUDA 12 + cuDNN 9 (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`, que
   convivem com o torch cu130); no Windows as pastas `bin` deles são registradas antes do
   import — se faltarem, a etapa para com "instale nvidia-cublas-cu12 e nvidia-cudnn-cu12";
-- o modelo é carregado na primeira transcrição e fica no processo do painel; uma trava
-  serializa carga e transcrição;
+- o modelo é carregado a cada transcrição (~4 s; 3,2 s medidos) e liberado em seguida
+  (`unload_model` do CTranslate2 + `gc.collect()`), para não prender VRAM que o ComfyUI usa
+  (~1 GB a menos depois de liberar); uma trava serializa carga e transcrição;
+- o modelo vem só do cache local do Hugging Face: sem ele, a etapa para com o comando que o
+  baixa uma vez (a fila não baixa nada escondido);
 - texto sem espaço nas pontas, palavra vazia descartada, tempos com 3 casas; o início nunca
   volta para trás da palavra anterior e o fim nunca fica antes do início; nenhuma palavra → erro;
-- conferido no trecho de 20 min pelo venv do projeto: 4.164 palavras, 10,7 s com o modelo já
-  carregado (14,9 s na primeira chamada, com a carga).
+- conferido no trecho de 20 min pelo venv do projeto: 4.164 palavras em ~15 s por chamada,
+  carga e liberação incluídas.
 
 ### 4.3 Dados por episódio
 
@@ -187,6 +190,7 @@ Nada de fallback silencioso:
 - GPU sem memória na transcrição → para com "placa de vídeo sem memória para transcrever (feche
   o ComfyUI ou outro programa que usa a GPU e tente de novo)".
 - DLLs do CUDA 12/cuDNN 9 ausentes → para com "instale nvidia-cublas-cu12 e nvidia-cudnn-cu12".
+- Modelo `large-v3-turbo` fora do cache → para com o comando que o baixa uma vez com internet.
 - Transcrição sem nenhuma palavra → para (não grava `palavras.json` vazio).
 - Render que falha mantém a versão anterior e mostra o fim do log.
 - Cota do Claude → fila pausada com aviso.
@@ -208,8 +212,8 @@ verdade, render ponta a ponta) é marcado `lento` e fica fora do check padrão (
   f4 marca risco alto de Content ID por visual.
 - **Transcrição automática erra nomes e números** — o editor (plano C) corrige; até lá, o
   render usa a transcrição como veio.
-- **GPU dividida:** o modelo fica carregado no processo do painel; ComfyUI aberto ao mesmo tempo
-  pode faltar memória (erro claro, §8).
+- **GPU dividida:** o modelo só ocupa a placa durante a transcrição, mas o ComfyUI rodando
+  junto pode deixar faltar memória nesse momento (erro claro, §8).
 - **Render de 1–4 min por Short:** N=5 → 10–20 min por episódio, em segundo plano.
 - **Detecção de rosto em CPU** pelo venv do ComfyUI: dependência externa, verificada na subida.
 - **Qualidade do f3 automático** é a maior incerteza — por isso o teste cego antes de seguir.

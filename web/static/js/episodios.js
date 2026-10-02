@@ -111,7 +111,7 @@ function trilhoFila() {
     };
     return;
   }
-  const atual = f.atual ? `${esc(NOMES_ETAPA[f.atual.etapa] ?? f.atual.etapa)} ·${esc(P.episodios.find(e => e.id === f.atual.episodio)?.titulo ?? f.atual.episodio)}` : "parada";
+  const atual = f.atual ? `${esc(NOMES_ETAPA[f.atual.etapa] ?? f.atual.etapa)} · ${esc(P.episodios.find(e => e.id === f.atual.episodio)?.titulo ?? f.atual.episodio)}` : "parada";
   el.innerHTML = `<div><b>Fila</b> · ${f.na_fila.length} na fila</div><div>${atual}</div>`;
 }
 

@@ -157,7 +157,6 @@ def test_etapas_do_estado_e_do_modulo_nao_divergem() -> None:
     assert tuple(etapas._ETAPAS) == ETAPAS
 
 
-
 def test_transcricao_grava_palavras_com_inicio_e_fim(tmp_path: Path) -> None:
     pasta = tmp_path / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)

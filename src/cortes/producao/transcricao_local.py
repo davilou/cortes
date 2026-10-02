@@ -10,6 +10,7 @@ faster-whisper abrir com PyAV, e o PyAV instalado recusa o `metadata_errors` que
 O CTranslate2 precisa do cuBLAS do CUDA 12 e do cuDNN 9 (pacotes `nvidia-*-cu12`); no Windows
 as DLLs deles só são achadas com as pastas `bin` registradas antes do import.
 """
+import gc
 import os
 import sys
 import sysconfig
@@ -28,7 +29,9 @@ IDIOMA = "pt"
 PASTAS_DLL = ("nvidia/cublas/bin", "nvidia/cudnn/bin")
 SEM_MEMORIA = ("placa de vídeo sem memória para transcrever (feche o ComfyUI ou outro programa "
                "que usa a GPU e tente de novo)")
-_SINAIS_OOM = ("out of memory", "cublas_status_alloc_failed")
+SEM_MODELO = (f"modelo {MODELO} não está baixado: rode `.venv/Scripts/python -c \"from faster_whisper "
+              f"import WhisperModel; WhisperModel('{MODELO}')\"` uma vez com internet")
+_SINAIS_OOM = ("out of memory", "alloc_failed")   # CUDA; CUBLAS_/CUDNN_STATUS_ALLOC_FAILED
 
 
 class ErroTranscricao(RuntimeError):
@@ -79,38 +82,57 @@ def sem_memoria(ex: BaseException) -> bool:
     return any(s in msg for s in _SINAIS_OOM)
 
 
+_TRAVA = threading.Lock()
+_dlls_registradas = False
+
+
 def _registrar_dlls() -> None:
-    if sys.platform != "win32":
+    """Uma vez por processo: repetir empilharia as mesmas pastas no PATH a cada episódio."""
+    global _dlls_registradas
+    if _dlls_registradas or sys.platform != "win32":
         return
     for pasta in pastas_dll(Path(sysconfig.get_paths()["purelib"])):
         os.add_dll_directory(str(pasta))
         os.environ["PATH"] = str(pasta) + os.pathsep + os.environ["PATH"]
-
-
-_TRAVA = threading.Lock()
-_pipeline: Any = None   # BatchedInferencePipeline (faster-whisper não tem tipos), carregado uma vez
+    _dlls_registradas = True
 
 
 def _carregar() -> Any:
-    global _pipeline
-    if _pipeline is None:
-        _registrar_dlls()
-        from faster_whisper import BatchedInferencePipeline, WhisperModel
+    """BatchedInferencePipeline novo (faster-whisper não tem tipos). Só do cache local: sem o
+    modelo baixado, para com o comando que baixa — a fila não fica esperando download."""
+    _registrar_dlls()
+    from faster_whisper import BatchedInferencePipeline, WhisperModel
+    from huggingface_hub.errors import LocalEntryNotFoundError
 
-        _pipeline = BatchedInferencePipeline(model=WhisperModel(MODELO, device="cuda", compute_type=COMPUTE))
-    return _pipeline
+    try:
+        modelo = WhisperModel(MODELO, device="cuda", compute_type=COMPUTE, local_files_only=True)
+    except LocalEntryNotFoundError as ex:
+        raise ErroTranscricao(SEM_MODELO) from ex
+    return BatchedInferencePipeline(model=modelo)
+
+
+def _liberar(pipeline: Any) -> None:
+    """Tira os pesos da GPU (`ctranslate2.models.Whisper.unload_model`) em vez de esperar o
+    coletor: o ComfyUI usa a mesma placa."""
+    pipeline.model.model.unload_model()
+    gc.collect()
 
 
 def transcrever(audio: Path) -> list[Palavra]:
-    """Modelo carregado na primeira chamada e mantido no processo. A trava
-    serializa carga e transcrição: duas ao mesmo tempo disputariam a memória da placa."""
+    """O modelo é carregado a cada transcrição (~4 s) e liberado em seguida, para não prender
+    VRAM que o ComfyUI usa. A trava serializa: duas ao mesmo tempo disputariam a placa."""
     amostras = sinais.ler_wav_mono(audio)
     with _TRAVA:
+        pipeline = None
         try:
-            segmentos, _ = _carregar().transcribe(amostras, language=IDIOMA, batch_size=BATCH,
-                                                  word_timestamps=True)
+            pipeline = _carregar()
+            segmentos, _ = pipeline.transcribe(amostras, language=IDIOMA, batch_size=BATCH,
+                                               word_timestamps=True)
             return palavras_dos_segmentos(segmentos)   # gerador: a GPU trabalha aqui, na iteração
         except RuntimeError as ex:
             if isinstance(ex, ErroTranscricao) or not sem_memoria(ex):
                 raise
             raise ErroTranscricao(SEM_MEMORIA) from ex
+        finally:
+            if pipeline is not None:
+                _liberar(pipeline)
