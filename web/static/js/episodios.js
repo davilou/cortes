@@ -8,6 +8,7 @@ let P = null;            // /api/producao
 let epSel = null;        // id do episódio aberto
 const NOMES_ETAPA = { video: "vídeo", legenda: "legenda", sinais: "sinais", momentos: "momentos" };
 // Formato do que "Mostrar transcrição" copia: linha de tempo, depois o texto do bloco.
+const DICA_TRANSCRICAO = "Use quando o YouTube bloquear a legenda: copie em 'Mostrar transcrição' com os tempos.";
 const EXEMPLO_TRANSCRICAO = "0:10\nFala galera, tudo beleza pessoal?\n0:18\nHoje tem, hoje o bicho vai pegar…";
 
 function duracaoFmt(s) {
@@ -36,7 +37,7 @@ function htmlEntrada() {
     <label>Shorts<select name="n_shorts"><option value="3">3 melhores</option><option value="5" selected>5 melhores</option><option value="10">10 melhores</option></select></label>
     <button class="botao primario">Gerar Shorts</button>
     <details class="colar-transcricao"><summary>Colar transcrição do YouTube (opcional)</summary>
-      <p>Use quando o YouTube bloquear a legenda: copie em 'Mostrar transcrição' com os tempos.</p>
+      <p>${esc(DICA_TRANSCRICAO)}</p>
       <textarea name="transcricao" rows="8" spellcheck="false" aria-label="Transcrição do YouTube com os tempos"
         placeholder="${esc(EXEMPLO_TRANSCRICAO)}"></textarea>
     </details></form>`;
@@ -61,10 +62,14 @@ function htmlEtapas(ep) {
 
 function htmlEpisodio(ep) {
   const erroEtapa = Object.values(ep.etapas).find(et => et.situacao === "erro")?.erro;
+  // Legenda em erro (ex.: 429) num episódio que já está na produção: a entrada recusaria o
+  // link repetido, então colar a transcrição mora aqui, ao lado do "tentar de novo".
+  const podeColar = ep.etapas.legenda?.situacao === "erro" && ep.fonte_legenda !== "colada";
+  const colar = podeColar ? `<button class="botao mini" data-colar="${esc(ep.id)}">colar transcrição</button>` : "";
   const dur = duracaoFmt(ep.duracao_s);
   const colada = ep.fonte_legenda === "colada" ? `<span class="chip colada">transcrição colada</span>` : "";
   const resumo = erroEtapa
-    ? `<span class="erro-txt" title="${esc(erroEtapa)}">${esc(erroEtapa)}</span><button class="botao mini" data-tentar="${esc(ep.id)}">tentar de novo</button>`
+    ? `<span class="erro-txt" title="${esc(erroEtapa)}">${esc(erroEtapa)}</span><button class="botao mini" data-tentar="${esc(ep.id)}">tentar de novo</button>${colar}`
     : `<b>${ep.n_candidatos || "—"}</b>${ep.n_candidatos ? "candidatos" : "processando"}`;
   return `<div class="ep ${ep.id === epSel ? "sel" : ""}">
     <div class="ep-abrir" data-ep="${esc(ep.id)}" tabindex="0" role="button" aria-pressed="${ep.id === epSel}">
@@ -165,6 +170,7 @@ function ligarLista() {
       if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); abrir(); }
     };
   });
+  $$("[data-colar]").forEach(b => { b.onclick = () => abrirColar(b.dataset.colar, b); });
   $$("[data-tentar]").forEach(b => {
     b.onclick = () => {
       b.disabled = true;
@@ -174,6 +180,50 @@ function ligarLista() {
         .finally(() => { b.disabled = false; });
     };
   });
+}
+
+// Gaveta "colar transcrição" — reusa a gaveta da tela Shorts (#camada, fecharGaveta e o
+// estado aoTeclarGaveta/gatilhoGaveta de shorts.js). O polling pode redesenhar a lista com a
+// gaveta aberta e o botão de origem some do DOM: o foco volta pelo seletor, não pela referência.
+function formColar(ep) {
+  return `<div class="fundo"></div><form class="gaveta" role="dialog" aria-modal="true" aria-labelledby="gaveta-titulo">
+    <h2 id="gaveta-titulo">Colar transcrição</h2>
+    <p class="dica">${esc(ep.titulo ?? ep.id)}</p>
+    <label>Transcrição do YouTube com os tempos<textarea name="transcricao" rows="14" required spellcheck="false"
+      placeholder="${esc(EXEMPLO_TRANSCRICAO)}"></textarea></label>
+    <p class="dica">${esc(DICA_TRANSCRICAO)}</p>
+    <div class="acoes"><button type="button" class="botao" id="cancelar">Cancelar</button><button type="submit" class="botao primario" id="gaveta-enviar">Enviar</button></div></form>`;
+}
+
+function abrirColar(id, gatilho) {
+  const ep = P.episodios.find(e => e.id === id);
+  if (!ep) return;
+  fecharGaveta();
+  const fechar = (alvo = `[data-colar="${CSS.escape(id)}"]`) => { fecharGaveta(); $(alvo)?.focus(); };
+  gatilhoGaveta = gatilho;
+  const camada = $("#camada");
+  camada.innerHTML = formColar(ep);
+  const form = $("form", camada), enviar = $("#gaveta-enviar", camada);
+  aoTeclarGaveta = ev => { if (ev.key === "Escape") fechar(); };
+  document.addEventListener("keydown", aoTeclarGaveta);
+  $(".fundo", camada).onclick = () => fechar();
+  $("#cancelar", camada).onclick = () => fechar();
+  form.transcricao.focus();
+  form.onsubmit = async ev => {
+    ev.preventDefault();
+    enviar.disabled = true;
+    try {
+      await post(`/api/episodios/${encodeURIComponent(id)}/transcricao`, { transcricao: form.transcricao.value });
+      gatilhoGaveta = null;   // o botão some na lista nova: o foco vai pra linha do episódio
+      fechar(`[data-ep="${CSS.escape(id)}"]`);
+      await atualizarProducao();
+      $(`[data-ep="${CSS.escape(id)}"]`)?.focus();
+    } catch (e) {
+      avisar(e.message);
+    } finally {
+      enviar.disabled = false;
+    }
+  };
 }
 
 let erroProducaoAnterior = null;   // evita repetir o aviso a cada poll de 3s enquanto o erro persiste

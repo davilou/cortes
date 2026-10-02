@@ -32,6 +32,10 @@ class NovoEpisodio(BaseModel):
     transcricao: str | None = None   # colada de "Mostrar transcrição" do YouTube (spec §4.2)
 
 
+class PedidoTranscricao(BaseModel):
+    transcricao: str
+
+
 class PedidoDecisao(BaseModel):
     decisao: Literal["aprovado", "rejeitado"]
     motivo: str | None = None   # obrigatório ao rejeitar (validado em curadoria.decidir)
@@ -130,6 +134,7 @@ def montar(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock,
     escreve nos exemplos do nicho e não trava nada sozinha)."""
     _rotas_leitura(app, raiz, fila)
     _rotas_acao(app, raiz, fila, escrita, agora)
+    _rota_transcricao(app, raiz, fila, escrita)
 
 
 def _rotas_leitura(app: FastAPI, raiz: Path, fila: Fila) -> None:
@@ -192,3 +197,22 @@ def _rotas_acao(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock,
     def api_retomar() -> dict[str, bool]:
         fila.retomar()   # ErroProducao (episódio pausado ilegível) → 422; a fila segue pausada
         return {"retomada": True}
+
+
+def _rota_transcricao(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock) -> None:
+    @app.post("/api/episodios/{id}/transcricao", status_code=202)
+    def api_transcricao(id: str, pedido: PedidoTranscricao) -> dict[str, bool]:
+        """Saída para episódio já na produção com a legenda bloqueada (429): grava a transcrição
+        colada e, se há etapa em erro, reabre e enfileira como o 'tentar de novo'."""
+        pasta = _pasta(raiz, id)
+        with escrita:
+            if (pasta / "palavras.json").exists():
+                raise ErroProducao("a legenda deste episódio já está pronta")
+            _validar_transcricao(pedido.transcricao)
+            salvar_texto(pasta / transcricao_colada.ARQUIVO, pedido.transcricao)
+            e = ler(pasta)
+            reabrir_agora = etapa_com_erro(e) is not None
+            if reabrir_agora:
+                gravar(pasta, reabrir(e))
+                fila.enfileirar(id)
+        return {"enfileirado": reabrir_agora}
