@@ -101,3 +101,21 @@ def test_recortar_grava_por_parcial_e_falha_alto(tmp_path: Path) -> None:
     with pytest.raises(ErroRender, match="recorte do trecho falhou"):
         recortar(Path("v.mp4"), tmp_path / "outro.mp4", 0.0, [(0.0, 1.0)], lambda a, c: (1, "ruim"))
     assert not (tmp_path / "outro.mp4").exists()
+    assert not list(tmp_path.glob("*.parcial.mp4"))
+
+
+def test_recortar_sem_arquivo_gerado_e_erro(tmp_path: Path) -> None:
+    with pytest.raises(ErroRender, match="sem gerar"):
+        recortar(Path("v.mp4"), tmp_path / "trecho.mp4", 0.0, [(0.0, 1.0)], lambda a, c: (0, "ok"))
+    assert not (tmp_path / "trecho.mp4").exists()
+    assert not list(tmp_path.glob("*.parcial.mp4"))
+
+
+def test_recortar_que_falha_depois_de_escrever_nao_deixa_parcial(tmp_path: Path) -> None:
+    def falha_depois_de_escrever(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        Path(args[-1]).write_bytes(b"lixo")
+        return 1, "ruim"
+
+    with pytest.raises(ErroRender, match="recorte do trecho falhou"):
+        recortar(Path("v.mp4"), tmp_path / "trecho.mp4", 0.0, [(0.0, 1.0)], falha_depois_de_escrever)
+    assert not list(tmp_path.glob("*.parcial.mp4"))

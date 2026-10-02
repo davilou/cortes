@@ -137,7 +137,13 @@ def args_recorte(video: Path, destino: Path, ini: float, segs: list[Segmento]) -
 
 def recortar(video: Path, destino: Path, ini: float, segs: list[Segmento], rodar: Rodar) -> None:
     parcial = destino.with_name(destino.stem + ".parcial.mp4")
-    exigir(rodar, args_recorte(video, parcial, ini, segs), None, "recorte do trecho")
+    try:
+        exigir(rodar, args_recorte(video, parcial, ini, segs), None, "recorte do trecho")
+        if not parcial.exists() or parcial.stat().st_size == 0:
+            raise ErroRender(f"recorte do trecho terminou sem gerar {parcial.name}")
+    except ErroRender:
+        parcial.unlink(missing_ok=True)
+        raise
     parcial.replace(destino)
 
 

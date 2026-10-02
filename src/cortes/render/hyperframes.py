@@ -24,11 +24,17 @@ def criar_projeto(proj: Path, html: str) -> None:
 
 
 def renderizar(proj: Path, saida: Path, npx: str, rodar: Rodar) -> None:
-    parcial = saida.with_name(saida.stem + ".parcial.mp4")
-    codigo, log = rodar([npx, "--yes", HYPERFRAMES, "render", "--output", str(parcial)], proj)
-    salvar_texto(proj / "render.log", log)
-    if codigo != 0:
-        raise ErroRender(f"render falhou (código {codigo}): {log[-CAUDA:]}")
-    if not parcial.exists() or parcial.stat().st_size == 0:
-        raise ErroRender(f"render terminou sem gerar {parcial.name}: {log[-CAUDA:]}")
+    """`parcial` é absoluto: o processo roda com `cwd=proj`, então um `saida` relativo (relativo ao
+    cwd do app, não do processo) escreveria no lugar errado se ficasse relativo."""
+    parcial = saida.resolve().with_name(saida.stem + ".parcial.mp4")
+    try:
+        codigo, log = rodar([npx, "--yes", HYPERFRAMES, "render", "--output", str(parcial)], proj)
+        salvar_texto(proj / "render.log", log)
+        if codigo != 0:
+            raise ErroRender(f"render falhou (código {codigo}): {log[-CAUDA:]}")
+        if not parcial.exists() or parcial.stat().st_size == 0:
+            raise ErroRender(f"render terminou sem gerar {parcial.name}: {log[-CAUDA:]}")
+    except ErroRender:
+        parcial.unlink(missing_ok=True)
+        raise
     parcial.replace(saida)
