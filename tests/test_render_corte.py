@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ from cortes.producao.estado import ErroProducao
 from cortes.render.corte import (
     PLANEJADO,
     Corte,
+    Edicoes,
     concluir,
     cortes_do_episodio,
     falhar,
@@ -129,3 +131,40 @@ def test_planejar_uma_vez_sem_pisar_no_manual(tmp_path: Path) -> None:
     planejar(tmp_path, "f7", 2, CANDS)
     assert [(c.indice, c.formato) for c in cortes_do_episodio(tmp_path)] == [(1, "f1"), (2, "f7")]
     assert (tmp_path / "cortes" / PLANEJADO).exists()
+
+
+def test_edicoes_vao_e_voltam_do_disco(tmp_path: Path) -> None:
+    ed = Edicoes({5: "ChatGPT", 6: ""}, (9,), {1: 0})
+    c = replace(novo_corte(2, CANDS[2], "f7"), edicoes=ed, alterado=True)
+    gravar_corte(pasta_corte(tmp_path, 2), c)
+    assert ler_corte(pasta_corte(tmp_path, 2)) == c
+
+
+def test_corte_do_plano_b_sem_edicoes_migra(tmp_path: Path) -> None:
+    d = pasta_corte(tmp_path, 0)
+    d.mkdir(parents=True)
+    x = {"indice": 0, "inicio": 10.0, "fim": 40.0, "formato": "f7", "titulo": "A", "status": "na_fila",
+         "versao": 0, "erro": None}
+    (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
+    c = ler_corte(d)
+    assert c.edicoes == Edicoes() and c.alterado is False
+
+
+def test_concluir_limpa_alterado() -> None:
+    c = replace(iniciar(novo_corte(0, CANDS[0], "f7")), alterado=True)
+    assert concluir(c).alterado is False
+
+
+@pytest.mark.parametrize("edicoes", [
+    {"legenda": {"x": "a"}, "mascaradas": [], "rostos": {}},
+    {"legenda": {"1": 3}, "mascaradas": [], "rostos": {}},
+    {"legenda": {}, "mascaradas": ["a"], "rostos": {}},
+    {"legenda": {}, "mascaradas": [], "rostos": {"0": "a"}},
+])
+def test_edicoes_invalidas(tmp_path: Path, edicoes: dict[str, object]) -> None:
+    d = pasta_corte(tmp_path, 0)
+    gravar_corte(d, novo_corte(0, CANDS[0], "f7"))
+    x = json.loads((d / "corte.json").read_text(encoding="utf-8"))
+    (d / "corte.json").write_text(json.dumps({**x, "edicoes": edicoes}), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="edicoes"):
+        ler_corte(d)

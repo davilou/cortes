@@ -4,7 +4,7 @@ episodios/<id>/cortes/<indice>/corte.json. O `indice` é o do candidato em candi
 curadoria do plano A (curadoria.json, por índice) vale para o Short. Aprovado e rejeitado ficam lá,
 não aqui (uma decisão, um arquivo); o status deste arquivo é só o do render.
 """
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -18,6 +18,15 @@ PLANEJADO = "planejado.json"   # marcador: os N melhores já foram postos na fil
 
 
 @dataclass(frozen=True)
+class Edicoes:
+    """Edições do editor (plano C). Chaves de legenda/mascaradas são índices em palavras.json — não
+    mudam quando início/fim mudam. Rostos: plano de câmera → pessoa (zera com novo início/fim)."""
+    legenda: dict[int, str] = field(default_factory=dict)   # "" tira a palavra da legenda
+    mascaradas: tuple[int, ...] = ()
+    rostos: dict[int, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class Corte:
     indice: int
     inicio: float
@@ -27,6 +36,8 @@ class Corte:
     status: Status
     versao: int = 0            # última versão pronta (short-v<versao>.mp4); 0 = nenhuma
     erro: str | None = None
+    edicoes: Edicoes = field(default_factory=Edicoes)
+    alterado: bool = False     # edição salva e ainda não renderizada
 
 
 def pasta_corte(pasta_ep: Path, indice: int) -> Path:
@@ -50,7 +61,7 @@ def iniciar(c: Corte) -> Corte:
 
 
 def concluir(c: Corte) -> Corte:
-    return replace(c, status="pronto", versao=c.versao + 1, erro=None)
+    return replace(c, status="pronto", versao=c.versao + 1, erro=None, alterado=False)
 
 
 def falhar(c: Corte, msg: str) -> Corte:
@@ -84,6 +95,51 @@ def _campo(x: dict[str, Any], nome: str, tipo: type | tuple[type, ...]) -> Any:
     return v
 
 
+def _int(v: Any, onde: str) -> int:
+    if isinstance(v, bool):
+        raise ValueError(f"{onde}: {v!r} não é inteiro")
+    try:
+        return int(v)
+    except (TypeError, ValueError) as ex:
+        raise ValueError(f"{onde}: {v!r} não é inteiro") from ex
+
+
+def _edicoes(x: Any) -> Edicoes:
+    """Corte do plano B não tem 'edicoes': nasce sem edição (migração explícita de campo novo)."""
+    if x is None:
+        return Edicoes()
+    if not isinstance(x, dict):
+        raise ValueError("edicoes deveria ser um objeto")
+    legenda = {_int(k, "edicoes.legenda"): v for k, v in x["legenda"].items()}
+    if not all(isinstance(v, str) for v in legenda.values()):
+        raise ValueError("edicoes.legenda: textos deveriam ser texto")
+    mascaradas = tuple(sorted(_int(i, "edicoes.mascaradas") for i in x["mascaradas"]))
+    rostos = {_int(k, "edicoes.rostos"): _int(v, "edicoes.rostos") for k, v in x["rostos"].items()}
+    return Edicoes(legenda, mascaradas, rostos)
+
+
+def _basicos(x: dict[str, Any], d: Path) -> Corte:
+    """Campos simples do corte (sem edicoes/alterado); extraído para `ler_corte` caber em 50 linhas."""
+    if x["status"] not in STATUS:
+        raise ValueError(f"status '{x['status']}' inválido; use um de {STATUS}")
+    if x["erro"] is not None and not isinstance(x["erro"], str):
+        raise ValueError("campo 'erro' deveria ser texto ou nulo")
+    indice = _campo(x, "indice", int)
+    if indice != int(d.name):
+        raise ValueError(f"indice {indice} não bate com a pasta '{d.name}'")
+    inicio, fim = float(_campo(x, "inicio", (int, float))), float(_campo(x, "fim", (int, float)))
+    if inicio >= fim:
+        raise ValueError(f"inicio {inicio} deveria ser menor que fim {fim}")
+    versao = _campo(x, "versao", int)
+    if versao < 0:
+        raise ValueError(f"versao {versao} não pode ser negativa")
+    status = cast(Status, x["status"])
+    if status == "pronto" and versao < 1:
+        raise ValueError("status 'pronto' exige versao >= 1")
+    return Corte(indice, inicio, fim, _campo(x, "formato", str), _campo(x, "titulo", str),
+                 status, versao, x["erro"])
+
+
 def ler_corte(d: Path) -> Corte:
     """`indice` tem que bater com o nome da pasta (uma fonte da verdade só); `versao` não pode ser
     negativa; `status == "pronto"` exige `versao >= 1` (pronto sem MP4 nenhum não existe); `inicio`
@@ -91,24 +147,12 @@ def ler_corte(d: Path) -> Corte:
     arq = d / ARQUIVO
     try:
         x = ler_json(arq)
-        if x["status"] not in STATUS:
-            raise ValueError(f"status '{x['status']}' inválido; use um de {STATUS}")
-        if x["erro"] is not None and not isinstance(x["erro"], str):
-            raise ValueError("campo 'erro' deveria ser texto ou nulo")
-        indice = _campo(x, "indice", int)
-        if indice != int(d.name):
-            raise ValueError(f"indice {indice} não bate com a pasta '{d.name}'")
-        inicio, fim = float(_campo(x, "inicio", (int, float))), float(_campo(x, "fim", (int, float)))
-        if inicio >= fim:
-            raise ValueError(f"inicio {inicio} deveria ser menor que fim {fim}")
-        versao = _campo(x, "versao", int)
-        if versao < 0:
-            raise ValueError(f"versao {versao} não pode ser negativa")
-        status = cast(Status, x["status"])
-        if status == "pronto" and versao < 1:
-            raise ValueError("status 'pronto' exige versao >= 1")
-        return Corte(indice, inicio, fim, _campo(x, "formato", str), _campo(x, "titulo", str),
-                     status, versao, x["erro"])
+        c = _basicos(x, d)
+        edicoes = _edicoes(x.get("edicoes"))
+        alterado = x.get("alterado", False)   # ausente: corte do plano B (migração)
+        if not isinstance(alterado, bool):
+            raise ValueError("campo 'alterado' deveria ser booleano")
+        return replace(c, edicoes=edicoes, alterado=alterado)
     except (OSError, KeyError, TypeError, ValueError) as ex:
         raise ErroProducao(f"{arq}: corte inválido ({ex})") from ex
 
