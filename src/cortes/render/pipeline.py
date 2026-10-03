@@ -4,7 +4,8 @@ Trecho e rosto são caros e só dependem de início/fim: ficam gravados com `rec
 marcador, que é escrito por último. Se início/fim mudarem (editor, plano C), os dois são refeitos,
 e os assets do formato (fundo do f8, gameplay do f5; render/assets.py) são apagados e refeitos.
 O f4 (B-roll) tem ainda a etapa do B-roll (render/ilustracao_etapa.py), com cache em
-`ilustracao/`, apagada junto quando o trecho é refeito.
+`ilustracao/`, e o f3 (motion) a das cenas (render/motion_cache.py), com cache em `motion/`; as duas
+pastas são apagadas junto quando o trecho é refeito.
 `montar_projeto` (trecho + rosto + index.html com as edições) é o que a prévia do editor mostra;
 `renderizar_corte` chama `montar_projeto` e depois gera o MP4.
 """
@@ -27,6 +28,9 @@ from cortes.render.ilustracao_etapa import DepIlustracao, ilustrar
 from cortes.render.ilustracao_imagens import BuscaImagens, ddgs_real, rodar_download_real
 from cortes.render.legenda import grupos, palavras_do_corte
 from cortes.render.montagem import caminho_template, montar_html, usa_rosto, valores
+from cortes.render.motion import Cena
+from cortes.render.motion_cache import PASTA as PASTA_MOTION
+from cortes.render.motion_cache import preparar_cenas
 from cortes.render.processo import ErroRender, Rodar, rodar_processo
 from cortes.render.recorte import (
     LerAudio,
@@ -53,7 +57,7 @@ class DepRender:
     npx: str
     rodar: Rodar = rodar_processo
     ler_audio: LerAudio = ler_trecho_wav
-    chamar_llm: ChamarLLM = chamar_llm_real                    # deixas do f4
+    chamar_llm: ChamarLLM = chamar_llm_real                    # deixas do f4 e cenas do f3
     chamar_llm_com_read: ChamarComRead = chamar_com_read_real  # conferência visual do f4
     ddgs: Callable[[], BuscaImagens] = ddgs_real               # busca de fotos do f4
     rodar_download: Rodar = rodar_download_real                # download das fotos do f4 (30 s)
@@ -95,7 +99,7 @@ def preparar_trecho(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> lis
     trecho = d / "projeto" / "assets" / "trecho.mp4"
     trecho.parent.mkdir(parents=True, exist_ok=True)
     # quadros e ilustrações do trecho anterior: o trecho mudou, eles não valem mais
-    for velha in (d / "miniaturas", d / PASTA_ILUSTRACAO):
+    for velha in (d / "miniaturas", d / PASTA_ILUSTRACAO, d / PASTA_MOTION):
         if velha.exists():
             shutil.rmtree(velha)
     apagar_assets(trecho.parent)   # fundo e gameplay saem do trecho (e da duração) anterior
@@ -127,13 +131,14 @@ def _palavras_trecho(pasta_ep: Path, c: Corte, segs: list[Segmento], *, com_masc
     return palavras_sem_pausa(palavras_do_corte(todas, ini, fim), segs)
 
 
-def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento], ilus: list[Ilustracao]) -> str:
+def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento], ilus: list[Ilustracao],
+          cenas: list[Cena]) -> str:
     ws = _palavras_trecho(pasta_ep, c, segs, com_mascara=True)
     dur = duracao(segs)
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
     rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json") if usa_rosto(tpl) else None
     return montar_html(tpl, valores(tpl, dur, rosto, grupos(ws, dur), c.edicoes.rostos, c.formato, c.titulo,
-                                    ilustracoes=ilus))
+                                    ilustracoes=ilus, cenas=cenas))
 
 
 def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> list[Ilustracao]:
@@ -148,6 +153,15 @@ def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) ->
     return ilustrar(d, ini, fim, palavras, duracao(segs), d / "projeto" / "assets", deps)
 
 
+def _cenas(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> list[Cena]:
+    """Só o f3. Erro de LLM ou "nada vira painel" vira ErroRender e o corte fica em erro."""
+    if c.formato != "f3":
+        return []
+    ini, fim = janela(c)
+    palavras = _palavras_trecho(pasta_ep, c, segs, com_mascara=False)
+    return preparar_cenas(pasta_corte(pasta_ep, c.indice), ini, fim, palavras, duracao(segs), dep.chamar_llm)
+
+
 def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
     """Trecho + rosto (com cache) e o index.html com as edições — o que a prévia do editor mostra
     e o render grava em MP4. Rápido quando início/fim não mudaram (só regera o HTML)."""
@@ -156,7 +170,8 @@ def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None
     proj = pasta_corte(pasta_ep, c.indice) / "projeto"
     preparar_assets(proj / "assets", c.formato, c.indice, duracao(segs), raiz, dep.rodar)
     ilus = _ilustrar(pasta_ep, c, segs, dep)
-    criar_projeto(proj, _html(pasta_ep, c, raiz, segs, ilus))
+    cenas = _cenas(pasta_ep, c, segs, dep)
+    criar_projeto(proj, _html(pasta_ep, c, raiz, segs, ilus, cenas))
 
 
 def renderizar_corte(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:

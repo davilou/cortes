@@ -16,9 +16,9 @@ formatos:
   f3:
     nome: Motion dinâmico
     obs: troca de imagem por fala
-    descricao: "Painéis e grafismos que trocam no ritmo da fala (números, lista, mapa, chat)."
+    descricao: "Painéis animados que mostram o que a pessoa diz (valor contando, comparação, lista, rota, chat, capa de gancho), numa faixa em cima do rosto ou em tela cheia, com corte seco; o Claude escolhe as cenas e só entra número dito na fala."
     evidencia: "Mais trocas de plano separam top de meio (R2 9×3); caso Hype Automotivo."
-    no_app: "plano E"
+    no_app: "plano B"
     demo: "testes/short-400mil-dinamica/short-400mil-dinamica-v2.mp4"
   f4:
     nome: B-roll real
