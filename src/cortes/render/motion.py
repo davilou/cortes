@@ -10,12 +10,18 @@ do f4.
 from dataclasses import dataclass
 from typing import Any
 
-from cortes.detector import ChamarLLM, chamar_llm_real
+from cortes.detector import ChamarLLM
 from cortes.llm import ErroLLM
 from cortes.render.ilustracao import fala_numerada
 from cortes.render.motion_numeros import nao_ditos, numeros_da_fala
 from cortes.render.motion_params import ErroParams, Params, ler_params, textos_da_tela
-from cortes.render.motion_prompt import SCHEMA_CENAS, SISTEMA_CENAS, regras
+from cortes.render.motion_prompt import (
+    SCHEMA_CENAS,
+    SISTEMA_CENAS,
+    Contexto,
+    contexto_do_episodio,
+    regras,
+)
 from cortes.render.motion_ritmo import DUR_MAX_S, DUR_MIN_S, Bruta, Descartada, ritmo
 from cortes.render.motion_sincronia import tempos_das_batidas
 from cortes.render.processo import ErroRender
@@ -40,8 +46,9 @@ class Resultado:
     descartadas: list[Descartada]
 
 
-def prompt_cenas(palavras: list[Palavra]) -> str:
-    return f"{regras()}\n\nFala do Short (palavras numeradas):\n{fala_numerada(palavras)}"
+def prompt_cenas(palavras: list[Palavra], contexto: Contexto) -> str:
+    return (f"{regras()}\n\n{contexto_do_episodio(contexto)}\n\n"
+            f"Fala do Short (palavras numeradas):\n{fala_numerada(palavras)}")
 
 
 def _tempos(item: dict[str, Any], palavras: list[Palavra], dur: float) -> tuple[float, float]:
@@ -71,7 +78,7 @@ def _bruta(item: dict[str, Any], palavras: list[Palavra], dur: float) -> Bruta |
     return Bruta(comp, ini, fim, p, tempos_das_batidas(p, palavras, ini, fim))
 
 
-def cenas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM = chamar_llm_real,
+def cenas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM, contexto: Contexto,
                    modelo: str = "sonnet") -> Resultado:
     """`palavras` no tempo do trecho sem pausas, sem máscara (as mesmas das deixas do f4); `dur` é
     a duração desse trecho, a base do limite de motion."""
@@ -79,7 +86,7 @@ def cenas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM = cham
         raise ErroRender("corte sem palavras: não há fala para virar painel")
     if dur <= 0:
         raise ErroRender(f"duração do corte inválida para o motion: {dur}")
-    bruto = chamar(prompt_cenas(palavras), SCHEMA_CENAS, SISTEMA_CENAS, modelo)
+    bruto = chamar(prompt_cenas(palavras, contexto), SCHEMA_CENAS, SISTEMA_CENAS, modelo)
     lidas = [_bruta(item, palavras, dur) for item in bruto["cenas"]]
     descartadas = [x for x in lidas if isinstance(x, Descartada)]
     ficam, fora = ritmo([x for x in lidas if isinstance(x, Bruta)], dur)

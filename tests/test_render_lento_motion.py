@@ -3,7 +3,7 @@ por corte. Fora do check padrão. É o teste cego do plano E (2026-10-03-motion)
 
 Precisa de CORTES_EPISODIOS apontando para a pasta com os episódios c5xqNNWFT9w (o corte "400 mil
 reais em 10 anos" do protótipo feito à mão) e wxCto9WSZcI (um tema fora do protótipo). Os episódios
-são só lidos: vídeo, áudio e palavras entram por hardlink (ou cópia) numa raiz temporária, e o
+são só lidos: vídeo, áudio, palavras e meta entram por hardlink (ou cópia) numa raiz temporária, e o
 render grava só lá. CORTES_LENTO_DESTINO=<pasta> copia o MP4 (f3-<nome>.mp4) e o cenas.json.
 """
 import json
@@ -29,7 +29,7 @@ CORTES = [("c5xqNNWFT9w", "400 mil reais em 10 anos", "400mil"),
 def _preparar_raiz(tmp_path: Path, ep: str) -> Path:
     pasta = tmp_path / "episodios" / ep
     pasta.mkdir(parents=True)
-    for arq in ("video.mp4", "audio.wav", "palavras.json"):
+    for arq in ("video.mp4", "audio.wav", "palavras.json", "meta.json"):
         try:
             os.link(EPISODIOS / ep / arq, pasta / arq)
         except OSError:
