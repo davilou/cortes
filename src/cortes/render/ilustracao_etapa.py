@@ -16,6 +16,7 @@ from cortes.detector import ChamarLLM
 from cortes.llm import ErroLLM
 from cortes.render.assets import apagar_clipes
 from cortes.render.broll_candidatos import Achadas, DepCandidatos, YouTube, achar
+from cortes.render.broll_candidatos_cache import apagar_achadas, gravar_achadas, ler_achadas
 from cortes.render.broll_folha import LinhaFolha, dividir_folhas, gerar_folha
 from cortes.render.broll_video import foto_cheia
 from cortes.render.ilustracao import Deixa, deixas_do_corte
@@ -56,6 +57,20 @@ class DepIlustracao:
         return DepCandidatos(self.ddgs, self.rodar_download, self.rodar_busca_video, self.rodar_video)
 
 
+def _foto(k: int, deixa: Deixa, a: Achadas, e: Escolha, j: int, dep: DepIlustracao) -> Ilustracao:
+    """A foto escolhida montada em tela cheia; se o ffmpeg falha, a deixa fica sem visual com o
+    motivo (refazer não muda a foto nem o ffmpeg: não é transitório)."""
+    cand, foto = a.fotos[j - 1]
+    cheia = foto.with_name(f"{foto.stem}-cheia.jpg")
+    try:
+        foto_cheia(foto, cheia, dep.rodar_video)
+    except ErroRender as erro:
+        return Ilustracao(k, deixa, None, None, None, f"sem visual: a foto {e.candidato} foi escolhida, "
+                          f"mas não montou em tela cheia: {erro}", tuple(a.falhas), False)
+    return Ilustracao(k, deixa, "foto", cheia, Fonte(cand.origem or cand.url), e.motivo, tuple(a.falhas),
+                      False)
+
+
 def _ilustracao(k: int, deixa: Deixa, a: Achadas, e: Escolha | None, dep: DepIlustracao) -> Ilustracao:
     """A escolha vira o arquivo do clipe: o trecho já baixado, ou a foto montada em tela cheia."""
     falhas = tuple(a.falhas)
@@ -63,24 +78,35 @@ def _ilustracao(k: int, deixa: Deixa, a: Achadas, e: Escolha | None, dep: DepIlu
         motivo = a.motivo if e is None else e.motivo
         return Ilustracao(k, deixa, None, None, None, motivo, falhas, a.transitorio)
     j = int(e.candidato[1:])
-    if e.candidato[0] == "V":
-        v = a.videos[j - 1]
-        fonte = Fonte(v.candidato.url, v.candidato.canal, v.candidato.titulo)
-        return Ilustracao(k, deixa, "video", v.trecho, fonte, e.motivo, falhas, False)
-    cand, foto = a.fotos[j - 1]
-    cheia = foto.with_name(f"{foto.stem}-cheia.jpg")
-    foto_cheia(foto, cheia, dep.rodar_video)
-    return Ilustracao(k, deixa, "foto", cheia, Fonte(cand.origem or cand.url), e.motivo, falhas, False)
+    if e.candidato[0] == "F":
+        return _foto(k, deixa, a, e, j, dep)
+    v = a.videos[j - 1]
+    fonte = Fonte(v.candidato.url, v.candidato.canal, v.candidato.titulo)
+    return Ilustracao(k, deixa, "video", v.trecho, fonte, e.motivo, falhas, False)
 
 
-def _escolher(pasta: Path, numeradas: list[tuple[int, Deixa]], dep: DepIlustracao) -> list[Ilustracao]:
-    """Busca, baixa e confere as deixas dadas (k, deixa) — numa conferência só. As deixas vão em
-    série: o YouTube nunca recebe dois pedidos ao mesmo tempo."""
+def _achar(pasta: Path, chave: Chave, numeradas: list[tuple[int, Deixa]],
+           dep: DepIlustracao) -> dict[int, Achadas]:
+    """Os candidatos de cada deixa: os guardados de uma tentativa que falhou depois dos downloads
+    ou, sem eles, busca e download — em série, o YouTube nunca recebe dois pedidos ao mesmo tempo.
+    Tudo é guardado antes da conferência."""
+    guardadas = ler_achadas(pasta, chave, numeradas)
     yt = YouTube()
-    achadas = {k: achar(k, deixa, pasta, dep.candidatos(), yt) for k, deixa in numeradas}
+    achadas = {k: guardadas[k] if k in guardadas else achar(k, deixa, pasta, dep.candidatos(), yt)
+               for k, deixa in numeradas}
+    gravar_achadas(pasta, chave, numeradas, achadas)
+    return achadas
+
+
+def _escolher(pasta: Path, chave: Chave, numeradas: list[tuple[int, Deixa]],
+              dep: DepIlustracao) -> list[Ilustracao]:
+    """Busca, baixa e confere as deixas dadas (k, deixa) — numa conferência só."""
+    achadas = _achar(pasta, chave, numeradas, dep)
     linhas = [achadas[k].linha(k, deixa) for k, deixa in numeradas]
     escolhas = _conferir(pasta, linhas, dep) if any(ln.rotulos() for ln in linhas) else {}
-    return [_ilustracao(k, deixa, achadas[k], escolhas.get(k), dep) for k, deixa in numeradas]
+    ilus = [_ilustracao(k, deixa, achadas[k], escolhas.get(k), dep) for k, deixa in numeradas]
+    apagar_achadas(pasta)
+    return ilus
 
 
 def _conferir(pasta: Path, linhas: list[LinhaFolha], dep: DepIlustracao) -> dict[int, Escolha]:
@@ -106,8 +132,9 @@ def _deixas(pasta: Path, chave: Chave, palavras: list[Palavra], dur: float,
     return deixas
 
 
-def _refazer_temporarias(pasta: Path, ilus: list[Ilustracao], dep: DepIlustracao) -> list[Ilustracao]:
-    novas = {i.k: i for i in _escolher(pasta, [(i.k, i.deixa) for i in ilus if i.transitorio], dep)}
+def _refazer_temporarias(pasta: Path, chave: Chave, ilus: list[Ilustracao],
+                         dep: DepIlustracao) -> list[Ilustracao]:
+    novas = {i.k: i for i in _escolher(pasta, chave, [(i.k, i.deixa) for i in ilus if i.transitorio], dep)}
     return [novas.get(i.k, i) for i in ilus]
 
 
@@ -151,9 +178,9 @@ def _resolver(pasta: Path, chave: Chave, palavras: list[Palavra], dur: float,
     ilus = _cache_vale(pasta, chave)
     if ilus is None:
         deixas = _deixas(pasta, chave, palavras, dur, dep)
-        return _gravar(pasta, chave, _escolher(pasta, list(enumerate(deixas, start=1)), dep))
+        return _gravar(pasta, chave, _escolher(pasta, chave, list(enumerate(deixas, start=1)), dep))
     if any(i.transitorio for i in ilus):
-        return _gravar(pasta, chave, _refazer_temporarias(pasta, ilus, dep))
+        return _gravar(pasta, chave, _refazer_temporarias(pasta, chave, ilus, dep))
     return ilus
 
 

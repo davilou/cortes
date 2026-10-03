@@ -280,3 +280,42 @@ def test_ytdlp_quebrado_na_busca_derruba_o_corte_com_a_mensagem(tmp_path: Path) 
     with pytest.raises(ErroRender, match="No module named yt_dlp") as ex:
         montar_projeto(pasta, C4, tmp_path, replace(il.dep(f), rodar_busca_video=quebrado))
     assert TEMPORARIA not in str(ex.value) and il.conferencias == 0
+
+
+def test_foto_que_nao_monta_em_tela_cheia_fica_sem_visual_com_o_motivo(tmp_path: Path) -> None:
+    pasta, f = ep4(tmp_path), Falso()
+    il = Ilustra([VANS, TEMPO], [_e(1, "F1"), _e(2, "V1")])
+    video = il.video
+
+    def cheia_quebra(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        if any(a.endswith("-cheia.parcial.jpg") for a in args):
+            return 1, "Invalid data found when processing input"
+        return video(args, cwd)
+
+    montar_projeto(pasta, C4, tmp_path, replace(il.dep(f), rodar_video=cheia_quebra))
+    vans, tempo = _lido(pasta).ilustracoes
+    assert vans.midia is None and not vans.transitorio and tempo.midia == "video"
+    assert "tela cheia" in vans.motivo and "Invalid data" in vans.motivo
+
+
+def test_erro_do_llm_na_conferencia_nao_refaz_os_downloads(tmp_path: Path) -> None:
+    pasta, f = ep4(tmp_path), Falso()
+    il = Ilustra([VANS, TEMPO], [_e(1, "F1"), _e(2, "V2")])
+    conferir = il.chamar_com_read
+
+    def falha_uma_vez(*args: Any) -> dict[str, Any]:
+        if il.conferencias == 0:
+            il.conferencias += 1
+            raise ErroLLM("claude saiu com código 1")
+        return conferir(*args)
+
+    dep = replace(il.dep(f), chamar_llm_com_read=falha_uma_vez)
+    with pytest.raises(ErroRender, match="B-roll: claude saiu com código 1"):
+        montar_projeto(pasta, C4, tmp_path, dep)
+    baixados = (list(il.buscas_yt), list(il.trechos), list(il.buscas), list(il.downloads))
+    montar_projeto(pasta, C4, tmp_path, dep)
+    assert (il.buscas_yt, il.trechos, il.buscas, il.downloads) == baixados and il.llm == 1
+    vans, tempo = _lido(pasta).ilustracoes
+    assert vans.midia == "foto" and tempo.midia == "video" and tempo.fonte is not None
+    assert tempo.fonte.url.endswith(vid(TEMPO["busca"], 2)) and tempo.fonte.canal == "Canal 2"
+    assert not (_d(pasta) / "ilustracao" / "candidatos.json").exists()
