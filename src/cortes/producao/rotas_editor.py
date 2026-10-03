@@ -1,7 +1,7 @@
 """API do editor (plano C; spec produção §5 "Editor"): estado do editor, edições, a prévia no
 navegador (o projeto HyperFrames do corte com o runtime injetado), miniaturas dos rostos por plano,
-o B-roll do f4 (leitura e "refazer") e as versões renderizadas. `pasta_de` vem de rotas.py (valida o
-id do episódio)."""
+o B-roll do f4 e as cenas do f3 (leitura e "refazer") e as versões renderizadas. `pasta_de` vem de
+rotas.py (valida o id do episódio)."""
 import re
 import shutil
 import threading
@@ -27,6 +27,9 @@ from cortes.render.ilustracao_cache import PASTA as PASTA_ILUSTRACAO
 from cortes.render.ilustracao_cache import Fonte, ler_ilustracoes, miniatura
 from cortes.render.miniatura import gerar_miniatura
 from cortes.render.montagem import FORMATOS
+from cortes.render.motion_cache import PASTA as PASTA_MOTION
+from cortes.render.motion_cache import ler_cenas
+from cortes.render.motion_params import params_json
 from cortes.render.previa import com_runtime
 from cortes.render.processo import ErroRender, Rodar
 from cortes.render.rosto import Plano, Rosto, ler_rosto, planos
@@ -132,6 +135,24 @@ def _broll_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str |
             for i in lido.ilustracoes], None
 
 
+def _motion_json(d: Path, c: Corte) -> tuple[dict[str, Any] | None, str | None]:
+    """Só o f3: as cenas e as descartadas (com o motivo), só leitura. Cache ilegível não derruba o
+    editor: fica em `motion_erro`."""
+    if c.formato != "f3":
+        return None, None
+    try:
+        lido = ler_cenas(d)
+    except ErroRender as ex:
+        return None, str(ex)
+    if lido is None:
+        return None, None
+    r = lido.resultado
+    return {"cenas": [{"k": x.k, "componente": x.componente, "inicio": x.inicio, "fim": x.fim,
+                       "params": params_json(x.params)} for x in r.cenas],
+            "descartadas": [{"componente": x.componente, "inicio": x.inicio, "fim": x.fim,
+                             "params": x.params, "motivo": x.motivo} for x in r.descartadas]}, None
+
+
 def situacao_previa(previas: Previas, d: Path, id: str, c: Corte) -> dict[str, Any]:
     """Memória da thread primeiro; sem ela (painel reiniciado), o disco. Sem edição salva desde o
     último render (`alterado is False`) a prévia está sempre pronta — o render grava o index.html e
@@ -169,10 +190,11 @@ def estado_editor(pasta: Path, n: int, previas: Previas) -> dict[str, Any]:
     abertura = " ".join(p.texto for p in todas[i0:i0 + PALAVRAS_AVISO])
     planos_json, rosto_erro = _planos_json(id, d, c)
     broll, broll_erro = _broll_json(id, d, c)
+    motion, motion_erro = _motion_json(d, c)
     return {"corte": asdict(c), "episodio": {"id": id, "titulo": meta.get("titulo")},
             "palavras": _palavras_json(todas, c), "inicio_palavra": i0, "fim_palavra": i1,
             "aviso_inicio": comeca_no_meio(abertura), "planos": planos_json, "rosto_erro": rosto_erro,
-            "broll": broll, "broll_erro": broll_erro,
+            "broll": broll, "broll_erro": broll_erro, "motion": motion, "motion_erro": motion_erro,
             "previa": situacao_previa(previas, d, id, c), "versoes": _versoes(id, d, n),
             "formatos": list(FORMATOS), "editavel": editavel(previas, id, c)}
 
@@ -224,6 +246,19 @@ def refazer_broll(pasta: Path, n: int, previas: Previas) -> None:
         shutil.rmtree(d / PASTA_ILUSTRACAO)
     if (d / "projeto" / "assets").exists():
         apagar_clipes(d / "projeto" / "assets")
+    previas.pedir(pasta.name, n)
+
+
+def refazer_motion(pasta: Path, n: int, previas: Previas) -> None:
+    """Apaga o cache do f3 (`motion/`) e pede a prévia: o LLM escolhe as cenas de novo. Recusado
+    enquanto a prévia ou o render usam a pasta."""
+    c = corte_de(pasta, n)
+    if c.formato != "f3":
+        raise ErroProducao(f"corte {n} não é Motion (f3): não há motion para refazer")
+    _exigir_editavel(previas, pasta.name, c)
+    d = pasta_corte(pasta, n)
+    if (d / PASTA_MOTION).exists():
+        shutil.rmtree(d / PASTA_MOTION)
     previas.pedir(pasta.name, n)
 
 
@@ -301,6 +336,13 @@ def _rotas_edicao(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previa
         pasta = pasta_de(id)
         with escrita:
             refazer_broll(pasta, n, previas)
+        return estado_editor(pasta, n, previas)
+
+    @app.post("/api/episodios/{id}/cortes/{n}/motion/refazer")
+    def api_refazer_motion(id: str, n: int) -> Any:
+        pasta = pasta_de(id)
+        with escrita:
+            refazer_motion(pasta, n, previas)
         return estado_editor(pasta, n, previas)
 
     @app.post("/api/episodios/{id}/cortes/{n}/previa")

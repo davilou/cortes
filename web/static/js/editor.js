@@ -2,7 +2,7 @@
 // Editor do Short (plano C, spec produção §5 "Editor"): três colunas — prévia 9:16 tocando o
 // próprio projeto HyperFrames no navegador (<hyperframes-player>), transcrição palavra a palavra
 // (transcricao.js) e ajustes: título, formato, quem aparece (planos.js), o B-roll do f4
-// (broll.js, com "refazer"), renderizar e versões.
+// (broll.js, com "refazer"), as cenas do f3 (motion.js, com "refazer"), renderizar e versões.
 // Toda edição vai por POST .../editar, que devolve o estado novo; a prévia é refeita fora da fila
 // do render e a tela acompanha até ela ficar pronta.
 let ED = null;   // /api/episodios/{id}/cortes/{n}/editor + {id, n}
@@ -39,6 +39,7 @@ function htmlAjustes(ed) {
     ${c.erro ? `<p class="erro-txt" title="${esc(c.erro)}">${esc(c.erro)}</p>` : ""}
     <h3>Quem aparece</h3>${htmlPlanos(ed)}
     ${c.formato === "f4" ? `<h3>B-roll</h3>${htmlBroll(ed)}` : ""}
+    ${c.formato === "f3" ? `<h3>Motion</h3>${htmlMotion(ed)}` : ""}
     <h3>Versões</h3>${htmlVersoes(ed)}`;
 }
 
@@ -124,6 +125,7 @@ function ligarEditor() {
   ligarTranscricao();
   ligarPlanos();
   ligarBroll();
+  ligarMotion();
   const t = $("#ed-titulo");
   if (t) t.onchange = () => { const v = t.value.trim(); if (v && v !== ED.corte.titulo) editar({ titulo: v }); };
   const f = $("#ed-formato");
