@@ -35,7 +35,10 @@ _FLAGS = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
 
 
 def _texto_prazo(s: int) -> str:
-    return f"{s // 60} min" if s >= 60 else f"{s} s"
+    if s < 60:
+        return f"{s} s"
+    minutos, resto = divmod(s, 60)
+    return f"{minutos} min" + (f" {resto} s" if resto else "")
 
 
 def rodar_processo(args: list[str], cwd: Path | None) -> tuple[int, str]:

@@ -98,3 +98,9 @@ def test_taskkill_que_falha_mas_processo_morto_e_so_o_erro_de_prazo(monkeypatch:
     monkeypatch.setattr(subprocess, "run", _taskkill(128, []))   # 128: o processo já tinha saído
     with pytest.raises(ErroRender, match=r"passou de 2 s e foi interrompido \(taskkill.*código 128"):
         rodar_com_prazo(2)(["ffmpeg"], None)
+
+
+@pytest.mark.parametrize(("s", "texto"), [(30, "30 s"), (60, "1 min"), (90, "1 min 30 s"), (120, "2 min")])
+def test_texto_prazo_nao_arredonda_minuto_quebrado(s: int, texto: str) -> None:
+    """O prazo de 90 s do trecho do B-roll aparecia como "passou de 1 min" (render real de 2026-10-03)."""
+    assert processo_mod._texto_prazo(s) == texto
