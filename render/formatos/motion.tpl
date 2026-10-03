@@ -128,11 +128,16 @@
         const milhar = i.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
         return f ? milhar + "," + f : milhar;
       }
+      // O texto vai com um espaço de largura zero na frente: sem ele o GSAP lê "1.500" como o número
+      // 1,5 e escreve "1.5" (o teste cego do plano E pegou isso no "mil e quinhentos").
+      const SEM_NUMERO = "​";
       function contar(sel, de, ate, casas, t0, dur) {
         const el = document.querySelector(sel);
         const n = Math.max(1, Math.round(dur * 30));
         const ease = gsap.parseEase("sine.inOut");
-        for (let q = 0; q <= n; q++) tl.set(el, { textContent: fmt(de + (ate - de) * ease(q / n), casas) }, t0 + dur * q / n);
+        for (let q = 0; q <= n; q++) {
+          tl.set(el, { textContent: SEM_NUMERO + fmt(de + (ate - de) * ease(q / n), casas) }, t0 + dur * q / n);
+        }
       }
 
       // estados: cada troca entre "cheio" e "div" é um corte seco

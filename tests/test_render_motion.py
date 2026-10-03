@@ -37,7 +37,7 @@ def _chamar(*cenas: dict[str, Any]) -> Any:
 
 def test_prompt_numera_as_palavras_e_cita_as_regras() -> None:
     p = prompt_cenas(PALAVRAS)
-    assert "[0] (0.0s) Eu" in p and "[19] 400" in p and '"contador"' in p and "70%" in p
+    assert "[0] (0.0s) Eu" in p and "[19] 400" in p and '"contador"' in p and "de 40% a 70%" in p
 
 
 def test_cenas_validas_com_tempo_das_palavras_e_batidas_na_fala() -> None:

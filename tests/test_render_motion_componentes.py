@@ -67,3 +67,9 @@ def test_template_f3_monta_sem_sobra_com_as_duas_janelas() -> None:
     assert "width: 3413px" in html and "width: 2304px; height: 1296px" in html
     assert 'id="m7"' in html and 'contar("#m2-n"' in html and ">Oi<" in html
     assert "const TRILHA" not in html and 'posicionar("#q-div", [[0.0, ' in html
+
+
+def test_contagem_nao_deixa_o_gsap_ler_o_texto_como_numero() -> None:
+    """Sem o espaço de largura zero, o GSAP escrevia "1.500" como "1.5" (teste cego, plano E)."""
+    tpl = caminho_template(REPO, "f3").read_text(encoding="utf-8")
+    assert 'const SEM_NUMERO = "\u200B";' in tpl and "textContent: SEM_NUMERO + fmt(" in tpl

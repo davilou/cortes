@@ -10,6 +10,7 @@ from cortes.render.motion_params import COMPONENTES, ITENS_MAX, ITENS_MIN, LIMIT
 from cortes.render.motion_ritmo import DUR_MAX_S, DUR_MIN_S, FRACAO_MAX, GANCHO_S, ROSTO_MIN_S
 
 MAX_CENAS = 10
+COBERTURA_MIN = 0.4   # alvo do prompt (o teste cego do plano E saiu com 23–38% sem ele)
 _NAO_VAZIO = r"\S"
 _TXT: dict[str, Any] = {"type": "string", "pattern": _NAO_VAZIO}
 _NUM: dict[str, Any] = {"type": "number", "minimum": 0}
@@ -90,5 +91,9 @@ você (nem porcentagem que ela não falou): cena com número não dito é descar
 - Textos curtos, com as palavras da fala; respeite os limites de caracteres.
 - Ritmo: só a capa entra antes de {GANCHO_S:.0f} s; cada cena dura de {DUR_MIN_S:.1f} a \
 {DUR_MAX_S:.0f} s; pelo menos {ROSTO_MIN_S:.1f} s de rosto entre uma cena e a próxima; somadas, no \
-máximo {FRACAO_MAX:.0%} do Short. Prefira poucas cenas fortes a muitas fracas.
+máximo {FRACAO_MAX:.0%} do Short.
+- Cobertura: mostre cada valor dito, cada veredito ou comparação (ex.: "perdi dinheiro" → \
+comparacao com carimbo), cada lista e cada ida de um lugar a outro. Em geral uma cena a cada 4 a \
+7 s de fala, somando de {COBERTURA_MIN:.0%} a {FRACAO_MAX:.0%} do Short; trecho sem nada \
+mostrável fica com o rosto.
 - No máximo {MAX_CENAS} cenas. Se nada da fala vira painel, devolva a lista vazia."""
