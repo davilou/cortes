@@ -21,11 +21,19 @@ function tempo(s) {
 const NOMES_CORTE = { na_fila: "na fila do render", renderizando: "renderizando…", pronto: "Short pronto", erro: "erro no render" };
 const corteDe = (D, indice) => D.cortes.find(k => k.indice === indice);
 
+// Formato que Davi escolheu no seletor e ainda não mandou renderizar, por episódio e candidato
+// ({id: {indice: formato}}): o polling redesenha o detalhe a cada mudança da fila, e sem isto o
+// seletor voltaria ao formato padrão no meio da escolha. Sai quando o render é pedido.
+const formatosEscolhidos = {};
+const escolhaDe = (id, indice) => formatosEscolhidos[id]?.[indice];
+
 // Seletor de formato + botão que pede o render nesse formato: "Renderizar" (candidato sem corte,
 // com o formato padrão do episódio marcado), "tentar de novo" e "Renderizar de novo" (o do corte).
-function htmlRender(indice, rotulo, formato) {
+// A escolha ainda não pedida (formatosEscolhidos) vence o formato padrão.
+function htmlRender(D, indice, rotulo, formato) {
+  const marcado = escolhaDe(D.id, indice) ?? formato;
   return `<span class="render-escolha">
-    <select data-formato-de="${indice}" aria-label="Formato do Short">${opcoesFormato(formato)}</select>
+    <select data-formato-de="${indice}" aria-label="Formato do Short">${opcoesFormato(marcado)}</select>
     <button class="botao mini" type="button" data-renderizar="${indice}">${esc(rotulo)}</button></span>`;
 }
 
@@ -36,7 +44,7 @@ const htmlCancelar = indice =>
 // da curadoria continua na última coluna — são coisas diferentes, ver desvio 1 do plano B).
 function htmlAcaoRender(D, c) {
   return c.corte ? `<span class="chip">${esc(NOMES_CORTE[c.corte])}</span>`
-    : htmlRender(c.indice, "Renderizar", D.formato);
+    : htmlRender(D, c.indice, "Renderizar", D.formato);
 }
 
 function htmlCandidatos(D) {
@@ -75,14 +83,14 @@ function htmlMidia(D, c) {
     ? `<a class="botao mini" href="#editor/${encodeURIComponent(D.id)}/${c.indice}">Editar</a>` : "";
   const erro = k?.status === "erro"
     ? `<p class="erro-txt corte-erro" title="${esc(k.erro)}">${esc(k.erro)}</p>
-       <div class="short-acoes">${htmlRender(c.indice, "tentar de novo", k.formato)}
+       <div class="short-acoes">${htmlRender(D, c.indice, "tentar de novo", k.formato)}
        ${k.video ? "" : linkEditar}</div>` : "";
   const acoes = k?.video
     ? `<div class="short-acoes"><a class="botao mini" href="${esc(k.video)}?baixar=true" download>Baixar MP4</a>
         <button class="botao mini" type="button" data-copiar>Copiar título</button>${linkEditar}
         <span class="num">v${k.versao} · ${esc(k.formato_pronto)}</span></div>` : "";
   const denovo = k?.status === "pronto"
-    ? `<div class="short-acoes">${htmlRender(c.indice, "Renderizar de novo", k.formato)}</div>` : "";
+    ? `<div class="short-acoes">${htmlRender(D, c.indice, "Renderizar de novo", k.formato)}</div>` : "";
   const cancelar = k?.status === "na_fila" ? `<div class="short-acoes">${htmlCancelar(c.indice)}</div>` : "";
   return `${htmlPlayer(faixaDe(D, c))}${acoes}${denovo}${cancelar}${erro}`;
 }
@@ -135,6 +143,7 @@ async function acaoCorte(D, indice, botao, acao, corpo) {
   botao.disabled = true;
   try {
     await post(`/api/episodios/${encodeURIComponent(D.id)}/cortes/${indice}/${acao}`, corpo);
+    if (acao === "renderizar") delete formatosEscolhidos[D.id]?.[indice];   // o corte já tem o formato
     atualizarProducao();
     if (meu !== desenhar.n || D.id !== epSel) return;
     await blocoEpisodio(D.id, desenhar.n);
@@ -190,7 +199,10 @@ function ligarSelecao(alvo, id) {
 // Os controles vivem dentro da linha/cartão clicável (role=button): stopPropagation impede que o
 // clique no seletor ou no botão também reselecione o candidato e redesenhe o detalhe.
 function ligarAcoesCorte(D, alvo) {
-  $$("[data-formato-de]", alvo).forEach(s => { s.onclick = ev => ev.stopPropagation(); });
+  $$("[data-formato-de]", alvo).forEach(s => {
+    s.onclick = ev => ev.stopPropagation();
+    s.onchange = () => { (formatosEscolhidos[D.id] ??= {})[Number(s.dataset.formatoDe)] = s.value; };
+  });
   $$("[data-renderizar]", alvo).forEach(b => {
     b.onclick = ev => {
       ev.stopPropagation();
