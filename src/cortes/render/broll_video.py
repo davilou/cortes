@@ -28,6 +28,9 @@ TRECHO_S = 3.0
 # do início pedido, e o ffmpeg de `args_cheio` (que recodifica de qualquer jeito) corta os TRECHO_S.
 # Medido em 2026-10-03: ~43 s no yt-dlp com ou sem a recodificação e com 1080p ou 720p — o tempo é da
 # leitura HTTP da seção, não do tamanho; o 720p sai visivelmente mais mole no 1080×1920, então fica 1080p.
+# URL direta (`yt-dlp -g`) + `ffmpeg -ss <ini> -i <url>` não acelera: é o mesmo caminho que o yt-dlp usa
+# na seção, e com ou sem os cabeçalhos dele passou de 90 s sem gravar nada (2026-10-03). Suspeita: sem runtime
+# JS o yt-dlp não resolve o desafio "n" e a URL vem estrangulada (spec §11, tempo do trecho).
 SECAO_S = 5.0
 POSICAO_TRECHO = 0.25       # o trecho começa a 25% do vídeo: passa da vinheta e da apresentação
 FORMATO = "bv*[height<=1080][ext=mp4]/bv*[height<=1080]"   # só vídeo, sem áudio, até 1080p

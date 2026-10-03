@@ -14,9 +14,9 @@ mesmo servidor do painel de contas (`2026-10-01-painel-contas-design.md`).
 
 ### Fora desta spec
 
-Upload de vídeo do PC e transcrição por arquivo enviado; formato f2; f4 B-roll e f3 Motion (ficam
-nos planos D e E — dependem de material que o app ainda não produz: clipes buscados e painéis
-gerados); publicação automática; nicho humor. O `cortes detectar` do terminal segue com o
+Upload de vídeo do PC e transcrição por arquivo enviado; formato f2; f3 Motion (fica no plano E —
+depende de painéis gerados, que o app ainda não produz); publicação automática; nicho humor. O
+`cortes detectar` do terminal segue com o
 openai-whisper (`cortes/transcricao.py`) — passar o terminal para a transcrição local (§4.2) fica
 para depois.
 
@@ -27,7 +27,7 @@ para depois.
 | Entrada | Só link do YouTube | Davi escolheu; cobre os podcasts-fonte |
 | Transcrição | **Local, faster-whisper `large-v3-turbo`** na GPU (Davi decidiu em 2026-10-02; substitui a legenda do YouTube) | ~35 s por hora de áudio, boa pontuação, início e fim por palavra, sem depender do YouTube (que devolveu HTTP 429) — benchmark em §4.2. Transcrição colada removida em 2026-10-02 — com a transcrição local a ~35 s/h ela virou passo extra sem ganho |
 | Render | **Sem render automático** (decisão de 2026-10-02): nada renderiza sem pedido. "Renderizar" por candidato, com seletor de formato; "Cancelar" tira da fila um Short que ainda não começou | O "N melhores" automático gastava render em Short que Davi ia rejeitar sem assistir; cada Short só é feito no formato que Davi escolher |
-| Formatos | f7 Conversa, f1 Falante, f6 Hormozi, f8 Desfoque, f5 Gameplay e f9 Ilustrado no app; f4 B-roll e f3 Motion nos planos D e E | Davi escolheu; f7 é o sinal mais forte da R2; f6/f8/f5 só dependem de template e entraram junto (decisão de 2026-10-02); f9 a pedido do Davi em 2026-10-02 (§11); f4/f3 dependem de material que o app ainda não produz (clipes buscados, painéis gerados) |
+| Formatos | f7 Conversa, f1 Falante, f6 Hormozi, f8 Desfoque, f5 Gameplay e f4 B-roll automático no app; f3 Motion no plano E | Davi escolheu; f7 é o sinal mais forte da R2; f6/f8/f5 só dependem de template e entraram junto (decisão de 2026-10-02); o f9 Ilustrado (cartão de foto, pedido do Davi em 2026-10-02) virou o f4 B-roll automático em 2026-10-03 (§11); f3 depende de painéis gerados, que o app ainda não produz |
 | Motor de render | **HyperFrames**, não Remotion | Os 8 formatos testados e aprovados foram feitos nele (`testes/`); substitui a decisão "Remotion" da spec principal §5 |
 | Nota mostrada | Nota do detector (0–10) com a rubrica aberta | Explica o porquê, em vez de "viralidade" opaca |
 | Execução | Uma fila, um trabalho por vez | GPU, cota do Claude e CPU do render são únicos |
@@ -40,8 +40,7 @@ para depois.
 | **A. Produção** | Link → vídeo + transcrição local → detector, com progresso por etapa; candidatos com nota, rubrica, justificativa e player do trecho | baixo |
 | **B. Render f1 + f7** | Renderizar sob pedido (sem automático), com formato por Short e Cancelar; f6 Hormozi, f8 Desfoque e f5 Gameplay somam-se a f1/f7 (Davi, 2026-10-02); grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4; pausas cortadas sempre; sem trilha; transições em corte seco, sem flash nem zoom nas emendas em nenhum formato | baixo — o código existe nos protótipos |
 | **C. Editor** | Início/fim por palavra, texto da legenda, título, troca de formato, quem aparece por plano, versões | médio (multirrosto) |
-| **D. f4 B-roll** | Deixas pelo Claude → busca no YouTube → conferência visual → 3 opções por deixa no editor | médio |
-| **Ilustrado (f9)** | A coisa concreta citada na fala aparece num cartão enquanto a pessoa fala (§11) | médio — imagem de terceiros |
+| **D. f4 B-roll** | Automático (§11): deixas pelo Claude → vídeo do YouTube (foto de reserva na deixa literal) → conferência visual → clipe de 1,5–3 s em tela cheia, corte seco; substitui o f9 Ilustrado | médio — vídeo e foto de terceiros; YouTube lento e sujeito a bloqueio |
 | **E. f3 Motion** | Biblioteca de componentes + cenas em JSON pelo Claude; teste cego contra o f3 manual | alto |
 
 ## 4. Arquitetura
@@ -61,15 +60,19 @@ src/cortes/render/
   montagem.py      # plano de corte → index.html a partir do template (puro)
   hyperframes.py   # projeto, render, log (executor injetável)
   corte.py         # corte.json: modelo, transições, planejar, próximo
-  pipeline.py      # um corte: trecho → rosto → (ilustração, f9) → html → mp4
-  ilustracao.py    # f9: deixas pelo Claude (schema + regras de tempo no código)
-  ilustracao_imagens.py      # f9: busca ddgs, download por ffmpeg, folha de conferência
-  ilustracao_conferencia.py  # f9: conferência visual numa chamada com Read
-  ilustracao_etapa.py        # f9: a etapa inteira, com cache em cortes/<n>/ilustracao/
+  pipeline.py      # um corte: trecho → rosto → (B-roll, f4) → html → mp4
+  ilustracao.py    # f4: deixas pelo Claude (schema com tipo + ritmo no código)
+  broll_video.py   # f4: busca e trecho de 3 s do YouTube, quadros, foto em tela cheia
+  ilustracao_imagens.py      # f4: busca ddgs e download da foto de reserva
+  broll_candidatos.py        # f4: vídeos e fotos de uma deixa, em série, YouTube fora no bloqueio
+  broll_folha.py             # f4: folha mista V/F de conferência
+  ilustracao_conferencia.py  # f4: conferência visual numa chamada com Read
+  ilustracao_cache.py        # f4: cache em cortes/<n>/ilustracao/
+  ilustracao_etapa.py        # f4: a etapa inteira
   processo.py      # executor injetável, ErroRender, exigir()
-  broll.py         # plano D
   cenas.py         # plano E
-render/formatos/   # falante.tpl, conversa.tpl, broll.tpl, motion.tpl (no git)
+render/formatos/   # falante.tpl, conversa.tpl, hormozi.tpl, desfoque.tpl, gameplay.tpl, broll.tpl;
+                   # motion.tpl no plano E (no git)
 render/componentes/# plano E: componentes parametrizados
 render/visao/rosto.py  # detector (Python do ComfyUI, fora do mypy)
 ```
@@ -144,9 +147,11 @@ episodios/<id>/
                      # atual, e a medição roda de novo.
       miniaturas/    # p<plano>-<pessoa>.jpg: quadro do meio do plano, recortado em volta do
                      # rosto (editor, "quem aparece"). Apaga quando início/fim muda (trecho novo).
-      ilustracao/    # só f9 (§11): ilustracao.json (início/fim do corte + uma entrada por
-                     # deixa), candidatas D<k>-c<j>.jpg e folha-<i>.jpg. Apaga quando
-                     # início/fim muda, como miniaturas/.
+      ilustracao/    # só f4 (§11): deixas.json, ilustracao.json (formato 4: início/fim e hash
+                     # do texto do corte + uma entrada por deixa), trechos D<k>-v<j>.mp4 com os
+                     # quadros -q1..-q3.jpg, fotos D<k>-c<j>.jpg (-cheia.jpg a escolhida) e
+                     # folha-<i>.jpg. Apaga quando início/fim muda, como miniaturas/. O clipe
+                     # escolhido é copiado para projeto/assets/broll-<k>.mp4|jpg.
       projeto/       # projeto HyperFrames
       short-v<k>.mp4 # versões; a anterior é mantida
 ```
@@ -245,6 +250,11 @@ rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 
 ## 6. B-roll (plano D)
 
+> **Feito como f4 B-roll automático — ver §11**, que vale no lugar desta seção onde as duas
+> divergem: clipe em tela cheia (não dividido/cheio), escolha automática pela conferência (não 3
+> opções no editor), vídeos de 20 s a 20 min, foto de reserva na deixa literal. O texto abaixo é o
+> desenho original, mantido como histórico.
+
 1. **Deixas:** `claude -p` (schema obrigatório) lê a transcrição do corte e devolve
    `{inicio, duracao, tipo: literal|acontecimento, busca}`.
 2. **Busca:** `yt-dlp ytsearch` como o protótipo (`buscar_broll.py`): vídeo de 30 s–30 min,
@@ -295,8 +305,10 @@ verdade, render ponta a ponta) é marcado `lento` e fica fora do check padrão (
 ## 10. Riscos
 
 - **Direitos:** cortes de podcast e B-roll do YouTube são de terceiros (spec principal §14);
-  f4 marca risco alto de Content ID por visual. As imagens do f9 vêm da busca de imagens do
-  DuckDuckGo: fotos de loja e de terceiros, com `fonte_url` e `licenca: desconhecida` (§11).
+  f4 marca risco alto de Content ID por visual. A foto de reserva do f4 vem da busca de imagens
+  do DuckDuckGo: fotos de loja e de terceiros, com `fonte_url` e `licenca: desconhecida` (§11).
+- **YouTube lento e sujeito a bloqueio no B-roll:** cada trecho leva ~45 s e às vezes estoura o
+  prazo; um f4 levou 13–16 min no render real (§11).
 - **Transcrição automática erra nomes e números** — o editor (plano C) corrige; até lá, o
   render usa a transcrição como veio.
 - **GPU dividida:** o modelo só ocupa a placa durante a transcrição, mas o ComfyUI rodando
@@ -305,63 +317,95 @@ verdade, render ponta a ponta) é marcado `lento` e fica fora do check padrão (
 - **Detecção de rosto em CPU** pelo venv do ComfyUI: dependência externa, verificada na subida.
 - **Qualidade do f3 automático** é a maior incerteza — por isso o teste cego antes de seguir.
 
-## 11. f9 Ilustrado
+## 11. f4 B-roll automático
 
-Pedido do Davi em 2026-10-02: quando a pessoa fala de uma coisa concreta, a imagem dela aparece
-enquanto ela fala ("Vans" mostra o tênis; "camisa do Corinthians", a camisa). Plano
-`2026-10-02-ilustrado.md`. Base: o f7 (tela cheia no rosto, corte seco na troca de câmera,
-legenda embaixo); a imagem entra num **cartão** branco arredondado na metade de cima
-(`render/formatos/ilustrado.tpl`: 920×920 com 860×860 úteis, `top: 220px`, `object-fit: contain`).
+Decisões do Davi em 2026-10-03 (plano `2026-10-03-broll-automatico.md`): quando a pessoa fala de
+uma coisa concreta ou de um acontecimento, o Short corta seco para um clipe de 1,5 a 3 s que mostra
+aquilo **em tela cheia** e volta para ela. A fonte principal é **vídeo do YouTube**. Sem vídeo que
+passe na conferência, entra **foto** do DuckDuckGo, mas só na deixa de coisa (`literal`), nunca no
+acontecimento. É o f4 B-roll do plano D (§6), agora automático, e **substitui o f9 Ilustrado**
+(cartão de foto do plano `2026-10-02-ilustrado.md`, de 2026-10-02), que deixou de existir.
 
-Etapa do corte, só no f9, antes do `index.html`:
+Etapa do corte, só no f4, antes do `index.html`:
 
 1. **Deixas:** `claude -p` com schema lê a fala numerada do corte (já sem pausas e com as edições)
-   e devolve `{inicio_palavra, fim_palavra, coisa, busca}`, até 12, só coisas que dá para
-   fotografar (produto, marca com objeto, lugar, veículo, comida, animal, roupa); nada abstrato;
-   cada coisa uma vez só, sem busca genérica para uma coisa específica já citada ("a camiseta"
-   depois de "camisa do Corinthians" trouxe a camisa da seleção no render real de 2026-10-02).
-   As regras de tempo vão no prompt **e** no código: nada no primeiro 1 s (gancho com o rosto),
-   no máximo uma deixa a cada 3 s, duração esticada a 1,2 s e cortada em 3,0 s. Índice de palavra
-   inválido é resposta errada (erro), não deixa descartada em silêncio.
-2. **Busca e download:** busca de imagens do DuckDuckGo (biblioteca `ddgs`, sem chave), até 4
-   candidatas por deixa, descartando as menores que 400 px quando o tamanho vem informado.
-   Download pelo ffmpeg, que normaliza para JPEG de até 1080 px. Limites, porque a URL vem da
-   web: só `http`/`https` (na URL e no `-protocol_whitelist`), só demuxers de imagem
-   (`-format_whitelist`; nada de hls, concat ou vídeo), `-max_pixels` contra bomba de
-   descompressão e **prazo de 30 s por candidata**, matando a árvore. Falha numa candidata não
-   para as outras e vai para `falhas` da deixa. Busca sem resultado e busca fora do ar são
-   coisas diferentes: a segunda vira "a busca de imagens falhou" e não é guardada em cache.
-3. **Conferência:** as candidatas viram **folhas** (uma linha por deixa, uma coluna por
-   candidata, rótulo `D<k>-<j>` numa faixa acima da foto), **até 6 deixas por folha** para a
-   foto continuar legível depois que o modelo reduz a imagem. **Uma chamada só** por corte confere
-   todas as folhas (~3,7 mil tokens fixos por `claude -p`; uma por deixa custaria 5–8× mais
-   cota) e devolve, por deixa, o número da foto que mostra a coisa ou `null`. Foto ou deixa
-   inexistente na resposta é erro; deixa que sumiu da resposta fica sem imagem, com motivo.
-   **Read preso à pasta das folhas:** o `claude -p` roda com cwd na pasta, `--tools Read`,
-   `--permission-mode dontAsk` (nega tudo que pediria permissão, inclusive Read fora do cwd) e
-   `--disallowedTools` para as outras ferramentas; qualquer `permission_denials` na resposta
-   vira `ErroLLM`. Texto dentro das fotos é dado, nunca instrução (sistema da conferência).
-4. **Montagem:** cada deixa com imagem vira um cartão que entra e sai só por opacidade (0,15 s),
-   sem flash e sem zoom — o cartão é conteúdo e não pode piscar. A deixa sem imagem fica
-   registrada como **"sem imagem"**, com o motivo, visível no editor; **nunca** entra uma imagem
-   qualquer (mesma regra do B-roll, §6). Se nenhuma deixa ganhou imagem, o corte para em erro
-   ("nenhuma coisa concreta ilustrável neste corte — use outro formato") em vez de sair um f9
-   que não ilustra nada.
+   e devolve `{inicio_palavra, fim_palavra, coisa, busca, tipo}`, até 12.
+   - `tipo: "literal"` é a coisa citada (Vans, camisa do Corinthians); `"acontecimento"` é a cena
+     que a fala evoca ("a pandemia" → rua vazia; "fui de jatinho" → jato decolando). A busca do
+     acontecimento pode ser em inglês quando render mais vídeo.
+   - Nada abstrato. Cada coisa entra uma vez só, sem busca genérica para uma coisa específica já
+     citada ("a camiseta" depois de "camisa do Corinthians" trouxe a camisa da seleção no render
+     de 2026-10-02).
+   - **Ritmo no prompt e no código** (`ilustracao.deixas_do_corte`): nada no primeiro 1 s (gancho
+     com o rosto); cada clipe de 1,5 a 3,0 s; pelo menos 1,5 s de rosto entre um clipe e o próximo;
+     somados, no máximo 60% do Short (R2, pista). Passou de 60%: saem as últimas, as do meio não
+     são encurtadas. Índice de palavra ou tipo inválido é resposta errada (erro), não deixa
+     descartada em silêncio.
+2. **Candidatos por deixa** (`broll_candidatos.py`), sempre **em série**, nunca em paralelo no
+   YouTube:
+   - **2 vídeos:** `yt-dlp ytsearch8:` filtrado para 20 s a 20 min, os 2 primeiros. De cada um
+     baixa só uma seção de 5 s a partir de 25% da duração (passa da vinheta), até 1080p, só vídeo,
+     e o ffmpeg tira 3 s em 1080×1920 em **cover** com corte central (o 16:9 preenche a tela).
+     Id validado (`^[A-Za-z0-9_-]{11}$`), argumentos em lista, sem shell.
+   - **2 fotos**, só na deixa literal: busca ddgs, download pelo ffmpeg com os limites do f9
+     (só `http`/`https`, só demuxers de imagem, `-max_pixels`, prazo de 30 s por foto). A foto
+     escolhida vira um 1080×1920 com a imagem inteira (contain) sobre ela mesma desfocada e
+     escurecida — o produto não é cortado (mesma ideia do f8).
+   - **YouTube fora da rodada no primeiro bloqueio:** a primeira busca que falha, ou um 429 / "não
+     é um robô" na saída do yt-dlp, marca o YouTube como fora; as deixas seguintes nem tentam e
+     ficam transitórias (a foto ainda cobre a literal). Nada é repetido em laço (§8: o IP já foi
+     bloqueado uma vez).
+3. **Conferência:** os candidatos viram **folhas mistas** — uma linha por deixa, tiles `D<k>-V<j>`
+   (3 quadros do trecho: início, meio e fim) e `D<k>-F<j>` (a foto), rótulo numa faixa acima de
+   cada tile — com **até 4 deixas por folha** (com 2 vídeos + 2 fotos a linha fica larga; 6
+   deixas deixavam o quadro ilegível depois que o modelo reduz a imagem). **Uma chamada só** por
+   corte confere todas as folhas e devolve, por deixa, `V<j>`, `F<j>` ou `null`. O prompt manda
+   **preferir vídeo** quando ele mostra a coisa, recusar vídeo em que a coisa aparece num quadro só
+   ou que é alguém falando para a câmera, e foto só na literal. Read preso à pasta das folhas como
+   no f9 (`--tools Read`, `--permission-mode dontAsk`, `permission_denials` vira `ErroLLM`).
+4. **Montagem** (`render/formatos/broll.tpl`, base do f7): cada deixa com visual vira um
+   `<video class="clip broll">` (ou `<div class="clip broll"><img>`) em tela cheia, que aparece e
+   some **seco** — sem Ken Burns, sem flash, sem zoom, sem opacidade gradual. A legenda continua
+   por cima. Clipe que sobraria menos de 0,3 s antes do fim do Short não entra.
+5. **Sem visual:** a deixa sem candidato aprovado fica **"sem visual"**, com o motivo, visível no
+   editor; nunca entra um visual qualquer. Se nenhuma deixa ganhou visual, o corte para em erro:
+   "nada a mostrar em B-roll" (guardado, não refaz sozinho) ou, se alguma falha foi transitória,
+   "falha temporária do YouTube ou da busca de fotos — tente de novo mais tarde" (refeita no
+   próximo render).
 
-Cache em `cortes/<n>/ilustracao/ilustracao.json` (§4.3), válido enquanto início e fim do corte
-não mudam; cada entrada guarda `coisa`, `busca`, tempos, `imagem`, `fonte_url` (página de
-origem), `licenca: desconhecida`, `motivo` e `falhas`. Trocar o formato ou editar a legenda não
-refaz a busca.
+Cache em `cortes/<n>/ilustracao/` (§4.3), formato 4 (o cache do f9 é refeito), com chave
+(início, fim, hash do texto): `deixas.json` evita chamar o Claude de novo, e só as deixas
+transitórias são buscadas outra vez. Cada entrada guarda `coisa`, `busca`, `tipo`, tempos, `midia`
+(`video`/`foto`/null), arquivo, `motivo`, `falhas` e a fonte: no vídeo `fonte_url`, `canal`,
+`titulo`, `licenca: desconhecida (YouTube)` e `risco: alto`; na foto `fonte_url` (página de
+origem) e `licenca: desconhecida`. Trocar o formato ou editar a legenda sem mudar o texto não refaz
+a busca. Os nomes internos seguem `ilustracao*` (renomear custava caro e não muda nada para o
+Davi); na tela é "B-roll".
 
-**Decisões (tomadas sem o Davi, que estava dormindo; ele pode rever):**
-- **Fonte: busca na web (DuckDuckGo), não geração de imagem.** Testado em 2026-10-02: "tênis
-  Vans Old Skool", "camisa do Corinthians" e "carro Fiat Uno" trouxeram o produto exato. A
-  Wikimedia (gratuita e licenciada) errou produto; a geração (FlowPool) gasta crédito e erra
-  marca. **Risco de direitos:** são fotos de terceiros, como o B-roll do YouTube (§10); por isso
-  `fonte_url` e `licenca: desconhecida` por imagem.
-- **Dependência nova `ddgs`:** a única busca de imagem sem chave testada; não há chave de Pexels,
-  Bing ou Serp no ambiente.
-- **Conferência numa chamada por corte**, com folhas de até 6 deixas (acima).
-- **Cartão sem flash e sem zoom** (acima).
-- **Editor só leitura:** no f9 mostra as deixas com a miniatura escolhida (ou "sem imagem" e o
-  motivo). Trocar ou tirar uma ilustração fica para depois.
+**f9 removido:** saiu de `montagem.FORMATOS` e de `contas/formatos.yaml` (`f4` passou a
+`no_app: "plano B"`), `ilustrado.tpl` virou `broll.tpl`, e um `corte.json` com `formato: "f9"` dá
+erro claro no render ("o formato f9 virou o f4 B-roll; renderize de novo em f4"), sem conversão
+silenciosa.
+
+**Editor:** a seção "B-roll" mostra, por deixa, o tipo (vídeo, foto ou sem visual), a miniatura (um
+quadro do vídeo ou a foto) e o motivo, e tem o botão "Refazer B-roll". Trocar ou tirar um clipe à
+mão fica para depois.
+
+**Tempo do trecho (medido em 2026-10-03):** é o gargalo.
+- `yt-dlp --download-sections` leva ~43 s por trecho, igual com ou sem recodificar e em 1080p ou
+  720p; o 720p sai mole no 1080×1920, então fica 1080p. Prazo do trecho: 90 s.
+- **URL direta não acelera:** `yt-dlp -g` leva 2,5–3,7 s, mas `ffmpeg -ss <ini> -i <url>` passou
+  de 90 s sem gravar nada, com e sem os cabeçalhos do yt-dlp — é o mesmo caminho que o yt-dlp usa
+  na seção. Ficou o caminho do yt-dlp.
+- **Causa provável, não confirmada:** sem runtime JS o yt-dlp avisa (escondido por
+  `--no-warnings`) que não resolve o desafio "n" do YouTube, e a URL vem estrangulada. Com
+  `--js-runtimes node` e o pacote `yt-dlp-ejs` (dependência nova, fora do venv) a URL deu 403 no
+  único teste; não insisti para não arriscar bloqueio. Fica para investigar.
+- **Render real** (episódio `wxCto9WSZcI`, 2 cortes): 769 s e 935 s por corte, dos quais ~400 s
+  no YouTube (8 trechos por corte). 7 dos 16 trechos estouraram os 90 s (outros 2 falharam: vídeo indisponível e seção sem vídeo); nenhum 429.
+
+**Render real de 2026-10-03** (cortes "Camisa de 700 reais, sério?" e "Bota boa por 250, não
+600"): 7 clipes, 2 de vídeo e 5 de foto; nos quadros o clipe mostra a coisa, entra e sai seco e o
+rosto volta entre um clipe e outro. A foto domina porque metade dos vídeos não baixou no prazo e a
+conferência recusou vídeo com texto grande ou com a coisa num quadro só. Um "negócio que evita
+torção" (peça de uma bota) virou foto de bota de motociclista: deixa vaga demais para buscar.
