@@ -41,7 +41,7 @@ def _e(k: int, img: int | None, motivo: str = "ok") -> dict[str, Any]:
 
 def test_prompt_cita_a_folha_e_so_as_deixas_com_candidata() -> None:
     p = prompt_conferencia(FOLHAS, LINHAS)
-    assert str(FOLHA) in p
+    assert "- folha-1.jpg" in p and str(FOLHA.parent) not in p   # o claude roda com cwd = pasta
     assert "D1" in p and "tênis Vans Old Skool" in p and "D1-1 a D1-2" in p
     assert "D2-1" in p and "D3" not in p
 
@@ -52,7 +52,7 @@ def test_prompt_lista_todas_as_folhas_numa_chamada_so() -> None:
     conferir(folhas, LINHAS, chamar)
     assert len(chamar.chamadas) == 1
     prompt = chamar.chamadas[0][0]
-    assert str(folhas[0]) in prompt and str(folhas[1]) in prompt
+    assert "- folha-1.jpg\n- folha-2.jpg" in prompt and str(FOLHA.parent) not in prompt
     assert "rótulo D<deixa>-<número> acima" in prompt
 
 

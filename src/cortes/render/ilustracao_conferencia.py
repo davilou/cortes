@@ -66,7 +66,7 @@ def prompt_conferencia(folhas: Sequence[Path], linhas: Sequence[LinhaFolha]) -> 
         f"- D{ln.k}: \"{ln.deixa.coisa}\" (busca: {ln.deixa.busca}) — candidatas "
         f"D{ln.k}-1 a D{ln.k}-{len(ln.imagens)}"
         for ln in linhas if ln.imagens)
-    arquivos = "\n".join(f"- {f}" for f in folhas)
+    arquivos = "\n".join(f"- {f.name}" for f in folhas)   # o claude roda com cwd = pasta das folhas
     return f"""Leia com a ferramenta Read cada uma destas folhas de fotos, e só elas:
 {arquivos}
 
