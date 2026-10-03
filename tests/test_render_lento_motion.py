@@ -67,7 +67,11 @@ def test_render_real_motion(tmp_path: Path, ep: str, titulo: str, nome: str) -> 
     html = (d / "projeto" / "index.html").read_text(encoding="utf-8")
     assert all(f'id="m{c.k}"' in html for c in lido.resultado.cenas)
 
-    print(f"\n{titulo}: {len(lido.resultado.cenas)} cena(s); mp4 {dur:.2f}s; total {total:.0f}s")
+    cenas = lido.resultado.cenas
+    cob = sum(c.fim - c.inicio for c in cenas) / dur
+    bordas = {round(t, 2) for c in cenas for t in (c.inicio, c.fim) if 0.01 < t < dur - 0.01}
+    print(f"\n{titulo}: {len(cenas)} cena(s); cobertura {cob:.0%}; {10 * len(bordas) / dur:.2f} "
+          f"trocas/10 s; mp4 {dur:.2f}s; total {total:.0f}s")
     for c in lido.resultado.cenas:
         print(f"  C{c.k} [{c.inicio:.2f}-{c.fim:.2f}] {c.componente}: {c.params} batidas {c.batidas}")
     for x in lido.resultado.descartadas:
