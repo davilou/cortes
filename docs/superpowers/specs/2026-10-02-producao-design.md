@@ -14,8 +14,8 @@ mesmo servidor do painel de contas (`2026-10-01-painel-contas-design.md`).
 
 ### Fora desta spec
 
-Upload de vídeo do PC e transcrição por arquivo enviado; formato f2; f3 Motion (fica no plano E —
-depende de painéis gerados, que o app ainda não produz); publicação automática; nicho humor. O
+Upload de vídeo do PC e transcrição por arquivo enviado; formato f2; publicação automática; nicho
+humor. (O f3 Motion entrou no plano E, §7.) O
 `cortes detectar` do terminal segue com o
 openai-whisper (`cortes/transcricao.py`) — passar o terminal para a transcrição local (§4.2) fica
 para depois.
@@ -27,7 +27,7 @@ para depois.
 | Entrada | Só link do YouTube | Davi escolheu; cobre os podcasts-fonte |
 | Transcrição | **Local, faster-whisper `large-v3-turbo`** na GPU (Davi decidiu em 2026-10-02; substitui a legenda do YouTube) | ~35 s por hora de áudio, boa pontuação, início e fim por palavra, sem depender do YouTube (que devolveu HTTP 429) — benchmark em §4.2. Transcrição colada removida em 2026-10-02 — com a transcrição local a ~35 s/h ela virou passo extra sem ganho |
 | Render | **Sem render automático** (decisão de 2026-10-02): nada renderiza sem pedido. "Renderizar" por candidato, com seletor de formato; "Cancelar" tira da fila um Short que ainda não começou | O "N melhores" automático gastava render em Short que Davi ia rejeitar sem assistir; cada Short só é feito no formato que Davi escolher |
-| Formatos | f7 Conversa, f1 Falante, f6 Hormozi, f8 Desfoque, f5 Gameplay e f4 B-roll automático no app; f3 Motion no plano E | Davi escolheu; f7 é o sinal mais forte da R2; f6/f8/f5 só dependem de template e entraram junto (decisão de 2026-10-02); o f9 Ilustrado (cartão de foto, pedido do Davi em 2026-10-02) virou o f4 B-roll automático em 2026-10-03 (§11); f3 depende de painéis gerados, que o app ainda não produz |
+| Formatos | f7 Conversa, f1 Falante, f6 Hormozi, f8 Desfoque, f5 Gameplay, f4 B-roll automático e f3 Motion automático (plano E, §7) no app | Davi escolheu; f7 é o sinal mais forte da R2; f6/f8/f5 só dependem de template e entraram junto (decisão de 2026-10-02); o f9 Ilustrado (cartão de foto, pedido do Davi em 2026-10-02) virou o f4 B-roll automático em 2026-10-03 (§11); o f3 Motion entrou em 2026-10-03 com cenas escolhidas pelo Claude e montadas pelo código (§7), à espera do veredito do Davi no teste cego |
 | Motor de render | **HyperFrames**, não Remotion | Os 8 formatos testados e aprovados foram feitos nele (`testes/`); substitui a decisão "Remotion" da spec principal §5 |
 | Nota mostrada | Nota do detector (0–10) com a rubrica aberta | Explica o porquê, em vez de "viralidade" opaca |
 | Execução | Uma fila, um trabalho por vez | GPU, cota do Claude e CPU do render são únicos |
@@ -41,7 +41,7 @@ para depois.
 | **B. Render f1 + f7** | Renderizar sob pedido (sem automático), com formato por Short e Cancelar; f6 Hormozi, f8 Desfoque e f5 Gameplay somam-se a f1/f7 (Davi, 2026-10-02); grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4; pausas cortadas sempre; sem trilha; transições em corte seco, sem flash nem zoom nas emendas em nenhum formato | baixo — o código existe nos protótipos |
 | **C. Editor** | Início/fim por palavra, texto da legenda, título, troca de formato, quem aparece por plano, versões | médio (multirrosto) |
 | **D. f4 B-roll** | Automático (§11): deixas pelo Claude → vídeo do YouTube (foto de reserva na deixa literal) → conferência visual → clipe de 1,5–3 s em tela cheia, corte seco; substitui o f9 Ilustrado | médio — vídeo e foto de terceiros; YouTube lento e sujeito a bloqueio |
-| **E. f3 Motion** | Biblioteca de componentes + cenas em JSON pelo Claude; teste cego contra o f3 manual | alto |
+| **E. f3 Motion** | Feito (§7): 7 componentes + cenas em JSON pelo Claude, regra dos números e ritmo no código; teste cego contra o f3 manual | alto |
 
 ## 4. Arquitetura
 
@@ -60,7 +60,7 @@ src/cortes/render/
   montagem.py      # plano de corte → index.html a partir do template (puro)
   hyperframes.py   # projeto, render, log (executor injetável)
   corte.py         # corte.json: modelo, transições, planejar, próximo
-  pipeline.py      # um corte: trecho → rosto → (B-roll, f4) → html → mp4
+  pipeline.py      # um corte: trecho → rosto → (B-roll, f4 | cenas, f3) → html → mp4
   ilustracao.py    # f4: deixas pelo Claude (schema com tipo + ritmo no código)
   broll_video.py   # f4: busca e trecho de 3 s do YouTube, quadros, foto em tela cheia
   ilustracao_imagens.py      # f4: busca ddgs e download da foto de reserva
@@ -70,10 +70,12 @@ src/cortes/render/
   ilustracao_cache.py        # f4: cache em cortes/<n>/ilustracao/
   ilustracao_etapa.py        # f4: a etapa inteira
   processo.py      # executor injetável, ErroRender, exigir()
-  cenas.py         # plano E
-render/formatos/   # falante.tpl, conversa.tpl, hormozi.tpl, desfoque.tpl, gameplay.tpl, broll.tpl;
-                   # motion.tpl no plano E (no git)
-render/componentes/# plano E: componentes parametrizados
+  motion.py        # f3: cenas pelo Claude → validadas (parâmetros, números, ritmo)
+  motion_prompt.py / motion_params.py / motion_numeros.py / motion_ritmo.py / motion_sincronia.py
+  motion_componentes.py / motion_animacao.py  # f3: HTML e GSAP de cada componente (puro)
+  motion_cache.py  # f3: cache em cortes/<n>/motion/cenas.json e a etapa
+render/formatos/   # falante.tpl, conversa.tpl, hormozi.tpl, desfoque.tpl, gameplay.tpl, broll.tpl,
+                   # motion.tpl
 render/visao/rosto.py  # detector (Python do ComfyUI, fora do mypy)
 ```
 
@@ -192,8 +194,7 @@ Trilho com dois grupos: **Produção** (Episódios) e **Retorno** (Contas, Short
 rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 
 **Episódios**
-1. Entrada: link, nicho, **formato padrão** (f7/f1/f6/f8/f5; f4/f3 quando os planos D/E
-   existirem) — só o valor pré-marcado no seletor de cada Short, não um campo "Shorts"/quantos
+1. Entrada: link, nicho, **formato padrão** (f7/f1/f6/f8/f5/f4/f3) — só o valor pré-marcado no seletor de cada Short, não um campo "Shorts"/quantos
    renderizar, que saiu (decisão de 2026-10-02: sem render automático). "Gerar Shorts". Link sem
    id de vídeo ou já processado → recusa com motivo.
 2. Lista de episódios: capa, título, canal, duração, barra de etapas (vídeo, transcrição, sinais,
@@ -246,7 +247,7 @@ rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
   existe mais no plano, por exemplo depois de remedir) volta ao padrão com aviso
   (`escolha_invalida`), em vez de recusar a tela inteira. "Editar" só existe para candidato que
   já tem corte (`corte.json`), ou seja, que foi renderizado ou pedido; no f4, as opções de
-  B-roll por deixa; no f3, as cenas.
+  B-roll por deixa; no f3, as cenas (só leitura, com as descartadas e o motivo) e "Refazer motion".
 
 ## 6. B-roll (plano D)
 
@@ -267,13 +268,61 @@ rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 
 ## 7. Motion (plano E)
 
-- Os painéis feitos à mão em `testes/short-400mil-dinamica/modelo.tpl` viram componentes
-  parametrizados: contador de valor (já existe no registry do HyperFrames), barra de
-  progresso, lista numerada, mapa de rota, card de número grande, caixa de chat.
-- `claude -p` devolve **JSON validado por schema** (componente, parâmetros, início, duração) —
-  nunca HTML. O código monta a timeline; números na tela só os ditos na fala ou calculados
-  deles (regra dos testes).
-- Primeira tarefa: teste cego, f3 automático × f3 manual no mesmo corte. Davi decide se segue.
+Feito em 2026-10-03 (plano `2026-10-03-motion.md`). O f3 mostra o que a pessoa diz em painéis
+animados, portados dos feitos à mão em `testes/short-400mil-dinamica/modelo.tpl`, alternando em
+**corte seco** dois estados: **div** (painel numa faixa de 680 px em cima, rosto na janela de
+baixo, 1080×1240, escala 1,2, rosto em (540, 400)) e **cheio** (cartão na tela inteira, ou o rosto).
+Sem flash, sem zoom de transição e sem o `scale 1.04` da capa; a câmera não segue o rosto — trilha
+fixa por plano de câmera nas duas janelas (`rosto.trilha_fixa`, `JANELA_DIV`/`ALVO_DIV`). Ficam as
+entradas dos elementos (descer de cima, barra crescendo, contagem, pino no mapa). Tema e fontes do
+protótipo.
+
+- **Componentes** (`render/motion_params.py`, tipados, com limite de caracteres pelo layout):
+  `capa` (cheio, 0–2,2 s, título com 1 palavra destacada), `contador` (div, de 0 ao valor, com
+  `marcos` e barra de progresso opcionais), `valor_cheio` (cheio, com `de` e `selo`), `comparacao`
+  (cheio, 2 barras e `carimbo`), `chat` (div), `lista` (div, 2–4 itens), `rota` (div). A contagem é
+  escrita quadro a quadro no próprio template (como o count-up do registry), sem subcomposição.
+- **Cenas:** `claude -p` (sonnet) lê as palavras numeradas e devolve **JSON validado por schema**
+  (componente, palavras de início e fim, parâmetros) — nunca HTML. Todo texto do LLM passa por
+  `html.escape`; o JavaScript só leva ids e números. Índice de palavra inválido é erro do LLM;
+  parâmetro inválido, número não dito ou ritmo descartam só a cena, que fica registrada com o
+  motivo.
+- **Números:** só os **ditos na fala até o fim da cena** (não só dentro da janela da cena — a
+  pergunta ao ChatGPT retoma "isso", dito antes; mas nada que ainda vai ser dito). O leitor entende
+  algarismo ("400", "1.500", "37,5%", "R$7.500"), extenso ("mil e duzentos", "trinta e sete") e
+  "pau" ("3 pau e meio" = 3.500); "por cento" e pontuação separam números, e "um/uma" sozinho é
+  artigo. Número da tela com multiplicador vale quando a fala disse só a base ("tava valendo 550"
+  sustenta "R$ 550 mil"); zero sempre passa. Número calculado (o "+37,5%" do protótipo manual) é
+  recusado — decisão do plano, mais estrita que a regra antiga "ou calculados deles".
+- **Ritmo** (`render/motion_ritmo.py`): capa só uma, em 0–2,2 s; nenhuma outra cena antes de 1 s;
+  cada cena de 1,5 a 4 s; pelo menos 1 s de rosto entre cenas; motion ≤ 70% (saem as últimas). O
+  prompt pede de 40% a 70% de cobertura.
+- **Sincronia** (`render/motion_sincronia.py`): a cena entra na palavra que o LLM apontou; dentro
+  dela, cada "batida" (item da lista, destino da rota, selo, carimbo, fim da barra dos marcos)
+  entra na palavra que a diz — o número escrito nela ou a palavra mais longa —, e a que a fala não
+  diz com essas letras entra num passo regular.
+- **Cache** em `cortes/<n>/motion/cenas.json`, chave (início, fim, hash do texto), com cenas e
+  descartadas; apagado quando o trecho é refeito ou por "Refazer motion". Sem cena válida: "nada
+  neste trecho vira painel — use outro formato", com as descartadas no erro.
+
+**Teste cego (2026-10-03),** `tests/test_render_lento_motion.py`, numa raiz temporária com
+hardlinks (~3 min por corte, LLM + rosto + render):
+- "400 mil reais em 10 anos" (c5xqNNWFT9w): capa (0–2,2), `valor_cheio` 400→550 mil com selo
+  "10 ANOS" na palavra "10" (3,8–6,6), `chat` "Quanto que renderia isso na renda fixa?"
+  (8,9–11,1), `lista` "Oportunidade"/"Localização" entrando nas palavras (20,0–23,8). Números
+  corretos, painéis no tempo da fala, sem sobreposição com legenda nem rosto. Os primeiros 11 s
+  ficam muito perto do manual. Onde perde: não fez o "PERDI DINHEIRO" (comparação) nem a rota
+  Rio → Saquarema (a transcrição diz "saco arema"), deixando 8 s seguidos só de rosto; ~40% de
+  motion contra ~60% do manual; o "+37,5%" do manual seria recusado pela regra.
+- "Uber à noite pagou a dívida" (wxCto9WSZcI): capa, `valor_cheio` 1.200→1.500 ("mil e duzentos,
+  mil e quinhentos") e `comparacao` 4,5 mil × 1.500 com carimbo "PAGOU A DÍVIDA" ("quatro pau e
+  meio"). ~30% de motion.
+- Defeito achado e corrigido: o GSAP lia o texto "1.500" como o número 1,5 e escrevia "1.5"; a
+  contagem vai com um espaço de largura zero na frente. A primeira rodada saiu com 23–38% de
+  motion, e o prompt passou a pedir cobertura (efeito pequeno na segunda rodada).
+- Gosto, para o Davi: o rótulo da capa sai como tema ("Investimento imobiliário"), não o nome de
+  quem fala (o prompt não recebe o nome); a escolha das cenas ainda é conservadora. Davi decide se
+  segue.
 
 ## 8. Erros
 
@@ -316,7 +365,8 @@ verdade, render ponta a ponta) é marcado `lento` e fica fora do check padrão (
   junto pode deixar faltar memória nesse momento (erro claro, §8).
 - **Render de 1–4 min por Short:** N=5 → 10–20 min por episódio, em segundo plano.
 - **Detecção de rosto em CPU** pelo venv do ComfyUI: dependência externa, verificada na subida.
-- **Qualidade do f3 automático** é a maior incerteza — por isso o teste cego antes de seguir.
+- **Qualidade do f3 automático** é a maior incerteza — por isso o teste cego antes de seguir
+  (§7: números e tempo certos, mas menos cenas que o manual).
 
 ## 11. f4 B-roll automático
 
