@@ -5,6 +5,7 @@ import pytest
 from cortes.producao.estado import ErroProducao
 from cortes.render.corte import Edicoes, novo_corte
 from cortes.render.edicao import (
+    AUTOMATICO,
     Edicao,
     aplicar,
     eh_palavrao,
@@ -72,6 +73,16 @@ def test_legenda_mascarar_e_palavroes() -> None:
 def test_sem_mudanca_nao_marca_alterado() -> None:
     assert aplicar(C, Edicao(titulo="T"), TODAS, []).alterado is False
     assert aplicar(C, Edicao(rosto=(0, 1)), TODAS, [2]).edicoes.rostos == {0: 1}
+
+
+def test_rosto_automatico_apaga_a_escolha_do_plano() -> None:
+    """Pessoa AUTOMATICO (-1) desfaz a escolha manual: o plano volta à padrão e, no f7, a alternar."""
+    escolhido = aplicar(C, Edicao(rosto=(0, 1)), TODAS, [2])
+    de_volta = aplicar(escolhido, Edicao(rosto=(0, AUTOMATICO)), TODAS, [2])
+    assert de_volta.edicoes.rostos == {} and de_volta.alterado is True
+    assert aplicar(C, Edicao(rosto=(0, AUTOMATICO)), TODAS, [2]) == C
+    with pytest.raises(ErroProducao, match="pessoa -2"):
+        aplicar(C, Edicao(rosto=(0, -2)), TODAS, [2])
 
 
 def test_mudar_trecho_e_escolher_rosto_junto_e_recusado() -> None:

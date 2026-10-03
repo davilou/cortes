@@ -26,7 +26,7 @@ from cortes.render.ilustracao_cache import Ilustracao
 from cortes.render.ilustracao_conferencia import ChamarComRead, chamar_com_read_real
 from cortes.render.ilustracao_etapa import DepIlustracao, ilustrar
 from cortes.render.ilustracao_imagens import BuscaImagens, ddgs_real, rodar_download_real
-from cortes.render.legenda import grupos, palavras_do_corte
+from cortes.render.legenda import Grupo, grupos, palavras_do_corte
 from cortes.render.montagem import caminho_template, montar_html, usa_rosto, valores
 from cortes.render.motion import Cena
 from cortes.render.motion_cache import PASTA as PASTA_MOTION
@@ -129,6 +129,20 @@ def _palavras_trecho(pasta_ep: Path, c: Corte, segs: list[Segmento], *, com_masc
     todas = palavras_editadas([Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")], c.edicoes,
                               com_mascara=com_mascara)
     return palavras_sem_pausa(palavras_do_corte(todas, ini, fim), segs)
+
+
+def grupos_do_trecho(pasta_ep: Path, c: Corte) -> tuple[list[Grupo], float] | None:
+    """Grupos de legenda e duração do trecho já recortado, com as edições — o que a trilha do f7
+    usa para alternar (o editor mostra o ritmo). None sem recorte do início/fim atual: a prévia faz."""
+    marca = pasta_corte(pasta_ep, c.indice) / "recorte.json"
+    if not marca.exists():
+        return None
+    r = ler_json(marca)
+    if (r["inicio"], r["fim"]) != janela(c):
+        return None
+    segs = [(float(a), float(b)) for a, b in r["segmentos"]]
+    dur = duracao(segs)
+    return grupos(_palavras_trecho(pasta_ep, c, segs, com_mascara=True), dur), dur
 
 
 def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento], ilus: list[Ilustracao],

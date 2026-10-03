@@ -18,6 +18,7 @@ PALAVROES = frozenset({
     "porra", "merda", "puta", "puto", "caralho", "foda", "foder", "fodido", "fodeu", "cacete",
     "bosta", "buceta", "cu", "cagado", "cagada", "cagar", "desgraca", "desgracado", "arrombado",
 })
+AUTOMATICO = -1            # pessoa "automático": apaga a escolha do plano (padrão; no f7, alterna)
 _VOGAL = re.compile(r"(?<=\w)[aeiouáéíóúâêôãõà]", re.IGNORECASE)
 
 
@@ -30,7 +31,7 @@ class Edicao:
     legenda: dict[int, str | None] = field(default_factory=dict)   # None volta ao original
     mascarar: dict[int, bool] = field(default_factory=dict)
     mascarar_palavroes: bool = False
-    rosto: tuple[int, int] | None = None                           # (plano, pessoa)
+    rosto: tuple[int, int] | None = None                           # (plano, pessoa ou AUTOMATICO)
 
 
 def mascarar(texto: str) -> str:
@@ -116,6 +117,9 @@ def _rosto(c: Corte, ed: Edicao, pessoas_por_plano: list[int]) -> Corte:
     k, j = ed.rosto
     if not 0 <= k < len(pessoas_por_plano):
         raise ErroProducao(f"plano {k} não existe (o trecho tem {len(pessoas_por_plano)})")
+    if j == AUTOMATICO:
+        rostos = {p: x for p, x in c.edicoes.rostos.items() if p != k}
+        return replace(c, edicoes=replace(c.edicoes, rostos=rostos))
     if not 0 <= j < pessoas_por_plano[k]:
         raise ErroProducao(f"pessoa {j} não existe no plano {k}")
     return replace(c, edicoes=replace(c.edicoes, rostos={**c.edicoes.rostos, k: j}))

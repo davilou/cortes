@@ -20,6 +20,7 @@ from cortes.producao.estado import ErroProducao
 from cortes.producao.previas import Previas
 from cortes.regra_inicio import comeca_no_meio
 from cortes.render.assets import FUNDO, GAMEPLAY, apagar_clipes
+from cortes.render.conversa import RITMO_ALVO, alternancias, ritmo
 from cortes.render.corte import ARQUIVO, Corte, gravar_corte, ler_corte, pasta_corte
 from cortes.render.edicao import Edicao, aplicar, indices_do_corte, mascarar
 from cortes.render.ilustracao_cache import ARQUIVO as ARQUIVO_ILUSTRACAO
@@ -30,6 +31,7 @@ from cortes.render.montagem import FORMATOS
 from cortes.render.motion_cache import PASTA as PASTA_MOTION
 from cortes.render.motion_cache import ler_cenas
 from cortes.render.motion_params import params_json
+from cortes.render.pipeline import grupos_do_trecho
 from cortes.render.previa import com_runtime
 from cortes.render.processo import ErroRender, Rodar
 from cortes.render.rosto import Plano, Rosto, ler_rosto, planos
@@ -84,29 +86,47 @@ def rosto_do_corte(d: Path) -> tuple[Rosto, list[Plano]] | None:
     return r, planos(r)
 
 
-def _plano_json(id: str, c: Corte, v: int, p: Plano) -> dict[str, Any]:
+def _plano_json(id: str, c: Corte, v: int, p: Plano, alterna: bool) -> dict[str, Any]:
     escolhida = c.edicoes.rostos.get(p.k)
     invalida = escolhida is not None and not 0 <= escolhida < len(p.pessoas)
     escolha = p.padrao if escolhida is None or invalida else escolhida
     return {"k": p.k, "ini": p.ini, "fim": p.fim, "padrao": p.padrao, "escolha": escolha,
-            "escolha_invalida": invalida,
+            "escolha_invalida": invalida, "manual": escolhida is not None, "alterna": alterna,
             "pessoas": [{"j": j, "x": s.x, "y": s.y, "n": s.n,
                          "miniatura": f"{_url(id, c.indice)}/planos/{p.k}/pessoas/{j}?v={v}"}
                         for j, s in enumerate(p.pessoas)]}
 
 
-def _planos_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str | None]:
-    """ErroRender (ex.: rosto.json de formato velho, plano B) não pode derrubar o editor — fica
-    visível em `rosto_erro`; a prévia refaz a medição e resolve."""
+Json = dict[str, Any]
+
+
+def _conversa_json(pasta: Path, c: Corte, rp: tuple[Rosto, list[Plano]]) -> tuple[Json | None, set[int]]:
+    """Só o f7: o ritmo de trocas (alvo 0,6–0,8 por 10 s; render/conversa.py) e os planos que
+    alternam. None antes de haver recorte do início/fim atual."""
+    gd = grupos_do_trecho(pasta, c) if c.formato == "f7" else None
+    if gd is None:
+        return None, set()
+    (r, pls), (gs, dur) = rp, gd
+    rt = ritmo(r, c.edicoes.rostos, gs, dur)
+    return ({"trocas_10s": rt.trocas_10s, "alvo": list(RITMO_ALVO), "reais": rt.reais,
+             "alternancias": rt.alternancias},
+            {a.k for a in alternancias(pls, c.edicoes.rostos, gs, dur, r.largura)})
+
+
+def _planos_json(id: str, pasta: Path, c: Corte) -> tuple[list[Json], str | None, Json | None]:
+    """Planos, erro do rosto e ritmo do f7. ErroRender (ex.: rosto.json de formato velho, plano B)
+    não pode derrubar o editor — fica visível em `rosto_erro`; a prévia refaz a medição e resolve."""
+    d = pasta_corte(pasta, c.indice)
     try:
         rp = rosto_do_corte(d)
     except ErroRender as ex:
-        return [], str(ex)
+        return [], str(ex), None
     if rp is None:
-        return [], None
+        return [], None, None
     marca = d / "recorte.json"
     v = int(marca.stat().st_mtime) if marca.exists() else 0
-    return [_plano_json(id, c, v, p) for p in rp[1]], None
+    rit, alternam = _conversa_json(pasta, c, rp)
+    return [_plano_json(id, c, v, p, p.k in alternam) for p in rp[1]], None, rit
 
 
 def _link(f: Fonte | None) -> str | None:
@@ -188,12 +208,13 @@ def estado_editor(pasta: Path, n: int, previas: Previas) -> dict[str, Any]:
     i0, i1 = indices_do_corte(todas, c.inicio, c.fim)
     meta = ler_json(pasta / "meta.json") if (pasta / "meta.json").exists() else {}
     abertura = " ".join(p.texto for p in todas[i0:i0 + PALAVRAS_AVISO])
-    planos_json, rosto_erro = _planos_json(id, d, c)
+    planos_json, rosto_erro, rit = _planos_json(id, pasta, c)
     broll, broll_erro = _broll_json(id, d, c)
     motion, motion_erro = _motion_json(d, c)
     return {"corte": asdict(c), "episodio": {"id": id, "titulo": meta.get("titulo")},
             "palavras": _palavras_json(todas, c), "inicio_palavra": i0, "fim_palavra": i1,
             "aviso_inicio": comeca_no_meio(abertura), "planos": planos_json, "rosto_erro": rosto_erro,
+            "ritmo": rit,
             "broll": broll, "broll_erro": broll_erro, "motion": motion, "motion_erro": motion_erro,
             "previa": situacao_previa(previas, d, id, c), "versoes": _versoes(id, d, n),
             "formatos": list(FORMATOS), "editavel": editavel(previas, id, c)}
