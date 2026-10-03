@@ -27,7 +27,7 @@ para depois.
 | Entrada | Só link do YouTube | Davi escolheu; cobre os podcasts-fonte |
 | Transcrição | **Local, faster-whisper `large-v3-turbo`** na GPU (Davi decidiu em 2026-10-02; substitui a legenda do YouTube) | ~35 s por hora de áudio, boa pontuação, início e fim por palavra, sem depender do YouTube (que devolveu HTTP 429) — benchmark em §4.2. Transcrição colada removida em 2026-10-02 — com a transcrição local a ~35 s/h ela virou passo extra sem ganho |
 | Render | **Sem render automático** (decisão de 2026-10-02): nada renderiza sem pedido. "Renderizar" por candidato, com seletor de formato; "Cancelar" tira da fila um Short que ainda não começou | O "N melhores" automático gastava render em Short que Davi ia rejeitar sem assistir; cada Short só é feito no formato que Davi escolher |
-| Formatos | f7 Conversa, f1 Falante, f6 Hormozi, f8 Desfoque, f5 Gameplay no app; f4 B-roll e f3 Motion nos planos D e E | Davi escolheu; f7 é o sinal mais forte da R2; f6/f8/f5 só dependem de template e entraram junto (decisão de 2026-10-02); f4/f3 dependem de material que o app ainda não produz (clipes buscados, painéis gerados) |
+| Formatos | f7 Conversa, f1 Falante, f6 Hormozi, f8 Desfoque, f5 Gameplay e f9 Ilustrado no app; f4 B-roll e f3 Motion nos planos D e E | Davi escolheu; f7 é o sinal mais forte da R2; f6/f8/f5 só dependem de template e entraram junto (decisão de 2026-10-02); f9 a pedido do Davi em 2026-10-02 (§11); f4/f3 dependem de material que o app ainda não produz (clipes buscados, painéis gerados) |
 | Motor de render | **HyperFrames**, não Remotion | Os 8 formatos testados e aprovados foram feitos nele (`testes/`); substitui a decisão "Remotion" da spec principal §5 |
 | Nota mostrada | Nota do detector (0–10) com a rubrica aberta | Explica o porquê, em vez de "viralidade" opaca |
 | Execução | Uma fila, um trabalho por vez | GPU, cota do Claude e CPU do render são únicos |
@@ -41,6 +41,7 @@ para depois.
 | **B. Render f1 + f7** | Renderizar sob pedido (sem automático), com formato por Short e Cancelar; f6 Hormozi, f8 Desfoque e f5 Gameplay somam-se a f1/f7 (Davi, 2026-10-02); grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4; pausas cortadas sempre; sem trilha; transições em corte seco, sem flash nem zoom nas emendas em nenhum formato | baixo — o código existe nos protótipos |
 | **C. Editor** | Início/fim por palavra, texto da legenda, título, troca de formato, quem aparece por plano, versões | médio (multirrosto) |
 | **D. f4 B-roll** | Deixas pelo Claude → busca no YouTube → conferência visual → 3 opções por deixa no editor | médio |
+| **Ilustrado (f9)** | A coisa concreta citada na fala aparece num cartão enquanto a pessoa fala (§11) | médio — imagem de terceiros |
 | **E. f3 Motion** | Biblioteca de componentes + cenas em JSON pelo Claude; teste cego contra o f3 manual | alto |
 
 ## 4. Arquitetura
@@ -60,7 +61,11 @@ src/cortes/render/
   montagem.py      # plano de corte → index.html a partir do template (puro)
   hyperframes.py   # projeto, render, log (executor injetável)
   corte.py         # corte.json: modelo, transições, planejar, próximo
-  pipeline.py      # um corte: trecho → rosto → html → mp4
+  pipeline.py      # um corte: trecho → rosto → (ilustração, f9) → html → mp4
+  ilustracao.py    # f9: deixas pelo Claude (schema + regras de tempo no código)
+  ilustracao_imagens.py      # f9: busca ddgs, download por ffmpeg, folha de conferência
+  ilustracao_conferencia.py  # f9: conferência visual numa chamada com Read
+  ilustracao_etapa.py        # f9: a etapa inteira, com cache em cortes/<n>/ilustracao/
   processo.py      # executor injetável, ErroRender, exigir()
   broll.py         # plano D
   cenas.py         # plano E
@@ -139,6 +144,9 @@ episodios/<id>/
                      # atual, e a medição roda de novo.
       miniaturas/    # p<plano>-<pessoa>.jpg: quadro do meio do plano, recortado em volta do
                      # rosto (editor, "quem aparece"). Apaga quando início/fim muda (trecho novo).
+      ilustracao/    # só f9 (§11): ilustracao.json (início/fim do corte + uma entrada por
+                     # deixa), candidatas D<k>-c<j>.jpg e folha-<i>.jpg. Apaga quando
+                     # início/fim muda, como miniaturas/.
       projeto/       # projeto HyperFrames
       short-v<k>.mp4 # versões; a anterior é mantida
 ```
@@ -287,7 +295,8 @@ verdade, render ponta a ponta) é marcado `lento` e fica fora do check padrão (
 ## 10. Riscos
 
 - **Direitos:** cortes de podcast e B-roll do YouTube são de terceiros (spec principal §14);
-  f4 marca risco alto de Content ID por visual.
+  f4 marca risco alto de Content ID por visual. As imagens do f9 vêm da busca de imagens do
+  DuckDuckGo: fotos de loja e de terceiros, com `fonte_url` e `licenca: desconhecida` (§11).
 - **Transcrição automática erra nomes e números** — o editor (plano C) corrige; até lá, o
   render usa a transcrição como veio.
 - **GPU dividida:** o modelo só ocupa a placa durante a transcrição, mas o ComfyUI rodando
@@ -295,3 +304,64 @@ verdade, render ponta a ponta) é marcado `lento` e fica fora do check padrão (
 - **Render de 1–4 min por Short:** N=5 → 10–20 min por episódio, em segundo plano.
 - **Detecção de rosto em CPU** pelo venv do ComfyUI: dependência externa, verificada na subida.
 - **Qualidade do f3 automático** é a maior incerteza — por isso o teste cego antes de seguir.
+
+## 11. f9 Ilustrado
+
+Pedido do Davi em 2026-10-02: quando a pessoa fala de uma coisa concreta, a imagem dela aparece
+enquanto ela fala ("Vans" mostra o tênis; "camisa do Corinthians", a camisa). Plano
+`2026-10-02-ilustrado.md`. Base: o f7 (tela cheia no rosto, corte seco na troca de câmera,
+legenda embaixo); a imagem entra num **cartão** branco arredondado na metade de cima
+(`render/formatos/ilustrado.tpl`: 920×920 com 860×860 úteis, `top: 220px`, `object-fit: contain`).
+
+Etapa do corte, só no f9, antes do `index.html`:
+
+1. **Deixas:** `claude -p` com schema lê a fala numerada do corte (já sem pausas e com as edições)
+   e devolve `{inicio_palavra, fim_palavra, coisa, busca}`, até 12, só coisas que dá para
+   fotografar (produto, marca com objeto, lugar, veículo, comida, animal, roupa); nada abstrato;
+   cada coisa uma vez só, sem busca genérica para uma coisa específica já citada ("a camiseta"
+   depois de "camisa do Corinthians" trouxe a camisa da seleção no render real de 2026-10-02).
+   As regras de tempo vão no prompt **e** no código: nada no primeiro 1 s (gancho com o rosto),
+   no máximo uma deixa a cada 3 s, duração esticada a 1,2 s e cortada em 3,0 s. Índice de palavra
+   inválido é resposta errada (erro), não deixa descartada em silêncio.
+2. **Busca e download:** busca de imagens do DuckDuckGo (biblioteca `ddgs`, sem chave), até 4
+   candidatas por deixa, descartando as menores que 400 px quando o tamanho vem informado.
+   Download pelo ffmpeg, que normaliza para JPEG de até 1080 px. Limites, porque a URL vem da
+   web: só `http`/`https` (na URL e no `-protocol_whitelist`), só demuxers de imagem
+   (`-format_whitelist`; nada de hls, concat ou vídeo), `-max_pixels` contra bomba de
+   descompressão e **prazo de 30 s por candidata**, matando a árvore. Falha numa candidata não
+   para as outras e vai para `falhas` da deixa. Busca sem resultado e busca fora do ar são
+   coisas diferentes: a segunda vira "a busca de imagens falhou" e não é guardada em cache.
+3. **Conferência:** as candidatas viram **folhas** (uma linha por deixa, uma coluna por
+   candidata, rótulo `D<k>-<j>` numa faixa acima da foto), **até 6 deixas por folha** para a
+   foto continuar legível depois que o modelo reduz a imagem. **Uma chamada só** por corte confere
+   todas as folhas (~3,7 mil tokens fixos por `claude -p`; uma por deixa custaria 5–8× mais
+   cota) e devolve, por deixa, o número da foto que mostra a coisa ou `null`. Foto ou deixa
+   inexistente na resposta é erro; deixa que sumiu da resposta fica sem imagem, com motivo.
+   **Read preso à pasta das folhas:** o `claude -p` roda com cwd na pasta, `--tools Read`,
+   `--permission-mode dontAsk` (nega tudo que pediria permissão, inclusive Read fora do cwd) e
+   `--disallowedTools` para as outras ferramentas; qualquer `permission_denials` na resposta
+   vira `ErroLLM`. Texto dentro das fotos é dado, nunca instrução (sistema da conferência).
+4. **Montagem:** cada deixa com imagem vira um cartão que entra e sai só por opacidade (0,15 s),
+   sem flash e sem zoom — o cartão é conteúdo e não pode piscar. A deixa sem imagem fica
+   registrada como **"sem imagem"**, com o motivo, visível no editor; **nunca** entra uma imagem
+   qualquer (mesma regra do B-roll, §6). Se nenhuma deixa ganhou imagem, o corte para em erro
+   ("nenhuma coisa concreta ilustrável neste corte — use outro formato") em vez de sair um f9
+   que não ilustra nada.
+
+Cache em `cortes/<n>/ilustracao/ilustracao.json` (§4.3), válido enquanto início e fim do corte
+não mudam; cada entrada guarda `coisa`, `busca`, tempos, `imagem`, `fonte_url` (página de
+origem), `licenca: desconhecida`, `motivo` e `falhas`. Trocar o formato ou editar a legenda não
+refaz a busca.
+
+**Decisões (tomadas sem o Davi, que estava dormindo; ele pode rever):**
+- **Fonte: busca na web (DuckDuckGo), não geração de imagem.** Testado em 2026-10-02: "tênis
+  Vans Old Skool", "camisa do Corinthians" e "carro Fiat Uno" trouxeram o produto exato. A
+  Wikimedia (gratuita e licenciada) errou produto; a geração (FlowPool) gasta crédito e erra
+  marca. **Risco de direitos:** são fotos de terceiros, como o B-roll do YouTube (§10); por isso
+  `fonte_url` e `licenca: desconhecida` por imagem.
+- **Dependência nova `ddgs`:** a única busca de imagem sem chave testada; não há chave de Pexels,
+  Bing ou Serp no ambiente.
+- **Conferência numa chamada por corte**, com folhas de até 6 deixas (acima).
+- **Cartão sem flash e sem zoom** (acima).
+- **Editor só leitura:** no f9 mostra as deixas com a miniatura escolhida (ou "sem imagem" e o
+  motivo). Trocar ou tirar uma ilustração fica para depois.
