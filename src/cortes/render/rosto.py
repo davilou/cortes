@@ -122,7 +122,11 @@ def largura_quadro(r: Rosto) -> int:
 
 
 def escala_metade(r: Rosto) -> float:
-    return ALTURA_QUADRO_METADE / r.altura
+    """Normalmente a fonte 16:9 do protótipo manda, a uma altura de quadro de 1080 (margem de
+    enquadramento). Uma fonte mais estreita que isso (ex.: já vertical) deixava o quadro mais
+    magro que a janela e sobrava borda preta nas laterais — por isso o `max` também cobre a
+    largura da janela (revisão formatos novos, item 2)."""
+    return max(ALTURA_QUADRO_METADE / r.altura, JANELA_METADE[0] / r.largura)
 
 
 def quadro_metade(r: Rosto) -> tuple[int, int]:

@@ -83,6 +83,19 @@ def test_trilha_da_metade_de_cima_em_1080p_e_720p(fator: float, escala: float) -
                                                                  [1.9, -840.0, -120.0, 1]]
 
 
+def test_escala_metade_cobre_a_largura_da_janela_em_fonte_vertical() -> None:
+    """Fonte mais estreita que a janela (ex.: câmera já em 9:16) com a escala antiga (só pela
+    altura) dava um quadro mais magro que `JANELA_METADE` — sobrava borda preta nas laterais
+    (revisão formatos novos, item 2). Com a escala cobrindo também a largura, não sobra."""
+    r = Rosto(1080, 1920, (Amostra(0.0, (F(540, 960),)),), ())
+    e = escala_metade(r)
+    qw, qh = quadro_metade(r)
+    assert qw >= JANELA_METADE[0] and qh >= JANELA_METADE[1]
+    [[_, x, y, _]] = trilha_fixa(r, {}, JANELA_METADE, ALVO_METADE, e)
+    jw, jh = JANELA_METADE
+    assert jw - qw <= x <= 0 and jh - qh <= y <= 0
+
+
 def test_escolha_inexistente_e_erro() -> None:
     with pytest.raises(ErroRender, match="pessoa 5"):
         trilha_fixa(R, {1: 5})
