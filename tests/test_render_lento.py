@@ -58,11 +58,10 @@ def test_render_real_do_comediante(tmp_path: Path) -> None:
         print(f"  plano {p.k} [{p.ini:.2f}-{p.fim:.2f}]: {len(p.pessoas)} pessoa(s) ({pessoas_str})")
     print(f"duração do mp4: {dur:.2f}s")
 
-    destino = Path(os.environ.get(
-        "CORTES_LENTO_DESTINO",
-        str(Path.home() / "AppData" / "Local" / "Temp" / "claude"
-            / "C--Users-User-Documents-Vibe-Code-Cortes"
-            / "165e2e17-e97e-488c-8e1b-81559876ad87" / "scratchpad" / "lento-c")))
+    # Para assistir o resultado: CORTES_LENTO_DESTINO=<pasta> copia o MP4 e as miniaturas para lá.
+    if "CORTES_LENTO_DESTINO" not in os.environ:
+        return
+    destino = Path(os.environ["CORTES_LENTO_DESTINO"])
     destino.mkdir(parents=True, exist_ok=True)
     shutil.copy2(mp4, destino / "short-v1.mp4")
     if (d / "miniaturas").exists():
