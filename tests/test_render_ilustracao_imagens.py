@@ -33,20 +33,30 @@ class DdgsFalso:
 
 
 def _r(img: str, w: Any = 1200, h: Any = 1200) -> dict[str, Any]:
-    return {"image": img, "url": f"pagina-de-{img}", "width": w, "height": h, "title": "t"}
+    """Nome curto vira URL http; URL com esquema fica como está."""
+    url = img if ":" in img else f"http://img/{img}"
+    return {"image": url, "url": f"pagina-de-{img}", "width": w, "height": h, "title": "t"}
 
 
 def test_busca_descarta_imagem_pequena_e_aceita_tamanho_vazio() -> None:
     ddgs = DdgsFalso([_r("a", 300, 900), _r("b", "", ""), _r("c", 800, 399), _r("d", "1000", "800")])
     assert buscar("tênis Vans", 4, ddgs) == [
-        Candidata("b", "pagina-de-b", None, None), Candidata("d", "pagina-de-d", 1000, 800)]
+        Candidata("http://img/b", "pagina-de-b", None, None),
+        Candidata("http://img/d", "pagina-de-d", 1000, 800)]
     query, kwargs = ddgs.pedidos[0]
     assert query == "tênis Vans" and kwargs["region"] == "br-pt" and kwargs["safesearch"] == "moderate"
 
 
 def test_busca_corta_em_n_e_sem_url_repetida() -> None:
     ddgs = DdgsFalso([_r("a"), _r("a"), _r("b"), _r("c"), _r("d")])
-    assert [c.url for c in buscar("x", 2, ddgs)] == ["a", "b"]
+    assert [c.url for c in buscar("x", 2, ddgs)] == ["http://img/a", "http://img/b"]
+
+
+def test_busca_so_aceita_http_e_https() -> None:
+    urls = ["file:///C:/segredo.jpg", "ftp://x/a.jpg", "data:image/png;base64,AAAA", "c:/a.jpg",
+            "concat:http://x/a.jpg", "HTTPS://x/b.jpg", "http://x/c.jpg"]
+    assert [c.url for c in buscar("x", 9, DdgsFalso([_r(u) for u in urls]))] == [
+        "HTTPS://x/b.jpg", "http://x/c.jpg"]
 
 
 def test_falha_da_busca_vira_erro_com_a_busca() -> None:
@@ -60,6 +70,14 @@ def test_args_baixar_normalizam_com_ffmpeg_e_user_agent() -> None:
     assert args.index("-user_agent") < args.index("-i")
     assert "Mozilla" in args[args.index("-user_agent") + 1]
     assert args[args.index("-vf") + 1] == "scale=1080:1080:force_original_aspect_ratio=decrease"
+    i = args.index("-i")
+    assert args.index("-protocol_whitelist") < i
+    assert args[args.index("-protocol_whitelist") + 1] == "http,https,tls,tcp"
+    assert args.index("-format_whitelist") < i
+    demuxers = set(args[args.index("-format_whitelist") + 1].split(","))
+    assert {"image2", "jpeg_pipe", "png_pipe", "webp_pipe"} <= demuxers
+    assert not {"hls", "concat", "mov"} & demuxers
+    assert args.index("-max_pixels") < i
     assert args[-1] == "d.parcial.jpg"
 
 

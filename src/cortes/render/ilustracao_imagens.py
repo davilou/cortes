@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 from ddgs.exceptions import DDGSException
 
@@ -23,6 +24,12 @@ FONTE = Path("C:/Windows/Fonts/arial.ttf")
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
               "Chrome/129.0 Safari/537.36")   # loja que recusa o agente do ffmpeg aceita o de navegador
 TIMEOUT_REDE_US = 15_000_000   # 15 s sem resposta do servidor da imagem: desiste dessa candidata
+ESQUEMAS = frozenset({"http", "https"})   # a URL vem da web: nada de file:, data:, concat: etc.
+PROTOCOLOS = "http,https,tls,tcp"        # o que o ffmpeg pode abrir (redirecionamento incluído)
+# demuxers de imagem: detecção por extensão (image2) e por conteúdo (*_pipe). Sem hls/concat/mov, que
+# abririam outras URLs ou vídeo. Conferido com jpg, png e webp reais em 2026-10-02; avif (mov) fica fora.
+DEMUXERS = "image2,jpeg_pipe,png_pipe,webp_pipe,gif_pipe,bmp_pipe,tiff_pipe"
+MAX_PIXELS = 50_000_000   # ~7000×7000: acima disso é bomba de descompressão, não foto de produto
 
 
 class BuscaImagens(Protocol):
@@ -63,7 +70,7 @@ def _pequena(c: Candidata) -> bool:
 
 
 def buscar(busca: str, n: int, ddgs: BuscaImagens) -> list[Candidata]:
-    """Até `n` candidatas sem URL repetida, descartando as menores que TAM_MIN_PX quando o tamanho
+    """Até `n` candidatas http(s) sem URL repetida, descartando as menores que TAM_MIN_PX quando o tamanho
     vem informado. Falha da busca (rede, limite de uso, nenhum resultado) é ErroRender com a busca."""
     try:
         brutos = ddgs.images(busca, max_results=n * FOLGA_BUSCA, region=REGIAO, safesearch="moderate")
@@ -72,7 +79,7 @@ def buscar(busca: str, n: int, ddgs: BuscaImagens) -> list[Candidata]:
     cands: list[Candidata] = []
     for r in brutos:
         url = str(r.get("image") or "")
-        if not url or any(c.url == url for c in cands):
+        if urlparse(url).scheme.lower() not in ESQUEMAS or any(c.url == url for c in cands):
             continue
         c = Candidata(url, str(r.get("url") or ""), _medida(r.get("width")), _medida(r.get("height")))
         if not _pequena(c):
@@ -82,7 +89,8 @@ def buscar(busca: str, n: int, ddgs: BuscaImagens) -> list[Candidata]:
 
 def args_baixar(url: str, destino: Path) -> list[str]:
     return ["ffmpeg", "-v", "error", "-y", "-user_agent", USER_AGENT, "-rw_timeout", str(TIMEOUT_REDE_US),
-            "-i", url, "-frames:v", "1",
+            "-protocol_whitelist", PROTOCOLOS, "-format_whitelist", DEMUXERS,
+            "-max_pixels", str(MAX_PIXELS), "-i", url, "-frames:v", "1",
             "-vf", "scale=1080:1080:force_original_aspect_ratio=decrease", "-q:v", "3", str(destino)]
 
 
