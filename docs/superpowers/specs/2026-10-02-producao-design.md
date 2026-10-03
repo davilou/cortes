@@ -56,6 +56,7 @@ src/cortes/producao/
 src/cortes/render/
   recorte.py       # trecho.mp4 (ffmpeg), cortes de pausa
   rosto.py         # enquadramento fixo por plano (puro) + chamada ao detector
+  conversa.py      # f7: alternância entre as pessoas do plano aberto e ritmo de trocas (puro, §12)
   legenda.py       # grupos de legenda (puro), aplicação das edições
   montagem.py      # plano de corte → index.html a partir do template (puro)
   hyperframes.py   # projeto, render, log (executor injetável)
@@ -237,8 +238,10 @@ rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 - **Ajustes:** título; formato (gera versão nova); **quem aparece** — linha do tempo dos planos
   de câmera (`render/rosto.py` `planos`) com as miniaturas dos rostos de cada plano
   (`render/miniatura.py`, quadro do meio do plano recortado num quadrado em volta do rosto),
-  clique escolhe quem fica na tela (padrão: a pessoa mais confiável — mais detecções, depois
-  maior confiança). Agrupar os rostos de um plano em pessoas usa a posição x (câmera parada:
+  clique escolhe quem fica na tela (padrão: a pessoa mais confiável — mais detecções; entre as de
+  detecções parecidas, ≥ 0,7 × a maior, o maior rosto, para um rosto na TV do estúdio não ganhar
+  das pessoas da mesa). No f7 a escolha manual também desliga a alternância do plano (§12), e
+  "alternar" desfaz a escolha; o editor mostra o ritmo de trocas do f7. Agrupar os rostos de um plano em pessoas usa a posição x (câmera parada:
   cada pessoa fica no seu lugar), medindo o vão contra o PRIMEIRO rosto de cada grupo, não o
   último — single-linkage deixava uma cadeia de detecções intermediárias emendar duas pessoas
   que nunca ficaram próximas entre si. Rosto ilegível (poucas detecções, trilha não confiável)
@@ -491,3 +494,51 @@ nativo resolveu o gargalo.
 rosto volta entre um clipe e outro. A foto domina porque metade dos vídeos não baixou no prazo e a
 conferência recusou vídeo com texto grande ou com a coisa num quadro só. Um "negócio que evita
 torção" (peça de uma bota) virou foto de bota de motociclista: deixa vaga demais para buscar.
+
+## 12. f7 Conversa: alternância em plano aberto
+
+Feito em 2026-10-03 (plano `2026-10-03-melhora-f7.md`). Pesquisa R2 (`pesquisa/03-corpus-financas-r2.md`):
+o sinal mais forte dos cortes top de finanças é **mostrar a outra pessoa da conversa** (53% × 37%,
+10×1 canais) e **mais trocas de plano** (mediana top 0,62 por 10 s × 0,52). Antes, o f7 só trocava
+na troca de câmera do episódio; num plano aberto com 2+ pessoas ficava o plano inteiro na padrão.
+
+**Regras** (`render/conversa.py`, puro e testado; o `conversa.tpl` usa `{{TRILHA_CONVERSA}}`, os
+outros formatos seguem com `trilha_fixa`):
+
+- **Onde:** plano com ≥ 3,5 s, sem escolha manual no editor e com **parceira** — a pessoa mais
+  detectada entre as que ficam a ≥ 20% da largura da padrão, com rosto ≥ 0,6 × o raio dela e
+  confiança média ≥ 0,75. Mais perto é a mesma pessoa partida em dois grupos ou cabe na mesma
+  janela; rosto menor ou menos confiável era boneco na estante ou rosto cortado na borda.
+- **Como:** começa na padrão e vai e volta com a parceira, em corte seco (sem flash e sem zoom,
+  Davi, 2026-10-02), sempre no **início de um grupo de legenda** — nunca no meio de palavra. Cada
+  trecho na mesma pessoa ≥ 1,8 s.
+- **Quantas:** o total de trocas (câmera real + alternâncias) mira 0,7 por 10 s, dentro de 0,6–0,8,
+  e nunca passa de 0,8; Short curto em que a faixa não cabe fica no maior total ≤ 0,8. Trocas
+  reais já no alvo: não alterna.
+- **Onde exatamente:** os planos recebem alternâncias uma a uma pelo maior pedaço sem troca; no
+  plano, cada uma vai ao início de grupo mais perto do ponto ideal (pedaços iguais), e a até 1,5 s
+  dele a melhor emenda ganha: fim de frase (`. ? ! …`), depois vírgula, depois grupo fechado só por
+  tamanho.
+- **Quem fala:** sem diarização, não sabemos. Alternar mostra a reação de quem ouve — é o sinal da
+  R2 —, não "seguir quem fala".
+- **Padrão:** a mais detectada; entre as de detecções parecidas (≥ 0,7 × a maior), o maior rosto
+  (`rosto._padrao`, vale para todos os formatos) — o rosto na TV do estúdio ganhava das pessoas da
+  mesa por 7 detecções e o f7 abria na TV.
+- **Editor:** a escolha manual de pessoa fixa o plano (sem alternância); "alternar" (pedido
+  `rosto: [k, -1]`) desfaz a escolha. O estado ganha `ritmo` (f7, com recorte do início/fim atual):
+  "ritmo: X trocas/10 s (alvo 0,6–0,8) · N de câmera + M alternando"; cada plano diz se alterna.
+
+**Render real de 2026-10-03** (`wxCto9WSZcI`; detecção de rosto real, HyperFrames):
+
+| Corte | Duração | Ritmo antes | Ritmo depois |
+|---|---|---|---|
+| "Gastava 400 em papel de cigarro" (um plano aberto de 49 s, mesa com 3 pessoas) | 49,3 s | 0,00 | 0,61 (3 alternâncias) |
+| "Banco mente quando você negocia" (plano de 58 s com 2 pessoas) | 68,9 s | 0,15 | 0,73 (1 real + 4) |
+
+Na folha de quadros (0,4 s antes e depois de cada alternância) todo corte mostra a outra pessoa de
+verdade e cai em emenda de frase ou vírgula ("tô falando de mim. | Fui fiador…", "aqui com
+desconto. | O senhor está com…"). Defeitos achados e corrigidos com teste: alternância para um
+boneco na estante num plano solo (parceira exige rosto e confiança), padrão no rosto da TV (maior
+rosto entre detecções parecidas) e corte em "lá em | cima" (vírgula ganha de grupo fechado por
+tamanho). "Se eu quebrar, vou pra Fazenda" (`c5xqNNWFT9w`, 82 s) já tinha 0,73 só com trocas
+reais: não alternou, como manda o teto.
