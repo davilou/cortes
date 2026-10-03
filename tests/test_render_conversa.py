@@ -114,6 +114,17 @@ def test_prefere_fim_de_frase() -> None:
     assert [a.t for a in alts] == [9.0, 20.0]       # 9,0 (frase) ganha de 10,0 (o ideal exato)
 
 
+def test_virgula_ganha_de_grupo_fechado_por_tamanho() -> None:
+    """Render real (wxCto9WSZcI, "Banco mente…"): sem fim de frase perto do ideal, o corte caiu em
+    "com o score lá em | cima" — grupo fechado por ter 5 palavras. Vírgula perto do ideal ganha."""
+    gs = [G(float(i), "fala", "e") for i in range(30)]
+    gs[10] = G(10.0, "fala", "cima,")               # o grupo das 11,0 s começa depois de vírgula
+    gs[8] = G(8.0, "fala", "fim.")                  # fim de frase ainda ganha da vírgula
+    assert [a.t for a in alternancias([DOIS], {}, gs, 30.0, LARG)] == [9.0, 20.0]
+    gs[8] = G(8.0, "fala", "e")
+    assert [a.t for a in alternancias([DOIS], {}, gs, 30.0, LARG)] == [11.0, 20.0]
+
+
 def test_sem_parceira_nao_alterna() -> None:
     perto = Plano(0, 0.0, 30.0, (P(754, 200), P(823, 90)), 0)
     assert alternancias([perto], {}, grupos_a_cada(1.0, 30.0), 30.0, LARG) == []

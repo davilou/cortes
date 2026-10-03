@@ -28,8 +28,9 @@ DISTINTA = 0.2          # parceira a pelo menos isso × a largura da padrão; ma
 RAIO_MIN = 0.6          # parceira com rosto ≥ isso × o raio da padrão: menor é boneco, foto ou
 # rosto cortado na borda (render real, wxCto9WSZcI: boneco na estante com r 55 × 223)
 CONF_MIN = 0.75         # confiança média mínima da parceira (o boneco: 0,69; rostos reais: ≥ 0,79)
-JANELA_FRASE_S = 1.5    # perto assim do ponto ideal, um início de frase ganha do ponto exato
+JANELA_FRASE_S = 1.5    # perto assim do ponto ideal, fim de frase (ou vírgula) ganha do ponto exato
 _FECHA_FRASE = re.compile(r"[.?!…]$")
+_VIRGULA = re.compile(r"[,;:]$")
 
 
 @dataclass(frozen=True)
@@ -99,15 +100,21 @@ def _distribuir(elegiveis: list[Plano], n: int, dur: float) -> dict[int, int]:
     return m
 
 
-def _inicios(grupos: Sequence[Grupo]) -> list[tuple[float, bool]]:
-    """Início de cada grupo (menos o primeiro) e se ele abre frase (o anterior fecha em . ? ! …)."""
-    return [(g.ini, bool(_FECHA_FRASE.search(ant.palavras[-1])))
-            for ant, g in zip(grupos, grupos[1:], strict=False)]
+def _nivel(ultima: str) -> int:
+    """Quão boa é a emenda depois desta palavra: 0 fim de frase, 1 vírgula, 2 grupo fechado só por
+    tamanho (render real: "com o score lá em | cima" cortava a expressão no meio)."""
+    return 0 if _FECHA_FRASE.search(ultima) else 1 if _VIRGULA.search(ultima) else 2
 
 
-def _no_plano(p: Plano, m: int, inicios: list[tuple[float, bool]], dur: float) -> list[float]:
+def _inicios(grupos: Sequence[Grupo]) -> list[tuple[float, int]]:
+    """Início de cada grupo (menos o primeiro) e o nível da emenda com o grupo anterior."""
+    return [(g.ini, _nivel(ant.palavras[-1])) for ant, g in zip(grupos, grupos[1:], strict=False)]
+
+
+def _no_plano(p: Plano, m: int, inicios: list[tuple[float, int]], dur: float) -> list[float]:
     """Até m instantes no plano, cada um o início de grupo mais perto do ponto ideal (pedaços
-    iguais), com início de frase preferido a até JANELA_FRASE_S; ≥ TRECHO_MIN_S entre vizinhos."""
+    iguais); a até JANELA_FRASE_S dele, a melhor emenda (`_nivel`) ganha; ≥ TRECHO_MIN_S entre
+    vizinhos."""
     fim = min(p.fim, dur)
     passo = (fim - p.ini) / (m + 1)
     res: list[float] = []
@@ -117,7 +124,7 @@ def _no_plano(p: Plano, m: int, inicios: list[tuple[float, bool]], dur: float) -
                    if t - ant >= TRECHO_MIN_S - 1e-9 and fim - t >= TRECHO_MIN_S - 1e-9]
         if not validos:
             break
-        res.append(min(validos, key=lambda c: (abs(c[0] - ideal) > JANELA_FRASE_S or not c[1],
+        res.append(min(validos, key=lambda c: (c[1] if abs(c[0] - ideal) <= JANELA_FRASE_S else 3,
                                                 abs(c[0] - ideal), c[0]))[0])
     return res
 
