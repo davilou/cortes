@@ -218,15 +218,22 @@ def trilha_fixa(r: Rosto, escolhas: dict[int, int], janela: tuple[int, int] = JA
         alvos[i] = alvos[i] or alvos[i - 1]
     for i in range(len(alvos) - 2, -1, -1):
         alvos[i] = alvos[i] or alvos[i + 1]
-    e = escala_cheio(r) if escala is None else escala
-    jw, jh = janela
-    qw, qh = r.largura * e, r.altura * e
     res: list[list[float]] = []
     for p, a in zip(pls, alvos, strict=True):
         assert a is not None
-        res.append([p.ini, round(min(0.0, max(jw - qw, alvo[0] - a.x * e)), 1),
-                    round(min(0.0, max(jh - qh, alvo[1] - a.y * e)), 1), 1])
+        res.append([p.ini, *posicao(r, a, janela, alvo, escala), 1])
     return res
+
+
+def posicao(r: Rosto, a: Pessoa, janela: tuple[int, int] = JANELA, alvo: tuple[int, int] = ALVO,
+            escala: float | None = None) -> tuple[float, float]:
+    """Deslocamento (x, y) do quadro, ≤ 0, que leva a pessoa `a` ao `alvo` da `janela` sem mostrar
+    borda. Sem `escala`, vale a da tela cheia."""
+    e = escala_cheio(r) if escala is None else escala
+    jw, jh = janela
+    qw, qh = r.largura * e, r.altura * e
+    return (round(min(0.0, max(jw - qw, alvo[0] - a.x * e)), 1),
+            round(min(0.0, max(jh - qh, alvo[1] - a.y * e)), 1))
 
 
 def medir_rosto(
