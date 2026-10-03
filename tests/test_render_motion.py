@@ -197,7 +197,7 @@ def test_fim_uma_depois_da_ultima_palavra_e_a_ultima() -> None:
     # render real: o LLM aponta fim_palavra = nº de palavras na cena que vai até o fim da fala
     n = len(PALAVRAS)
     r = cenas_do_corte(PALAVRAS, DUR, _chamar(_cena("rota", n - 6, n, origem="Rio", destino="Saquarema")), EP)
-    assert [c.componente for c in r.cenas] == ["rota"] and r.cenas[0].fim == PALAVRAS[-1].fim
+    assert [c.componente for c in r.cenas] == ["rota"] and r.cenas[0].fim == DUR
     with pytest.raises(ErroLLM, match="inválidas"):
         cenas_do_corte(PALAVRAS, DUR, _chamar(_cena("rota", n - 6, n + 1, origem="Rio", destino="X")), EP)
     with pytest.raises(ErroLLM, match="inválidas"):
@@ -206,3 +206,19 @@ def test_fim_uma_depois_da_ultima_palavra_e_a_ultima() -> None:
 
 def test_prompt_diz_o_intervalo_das_palavras() -> None:
     assert f"as palavras vão de [0] a [{len(PALAVRAS) - 1}]" in prompt_cenas(PALAVRAS, EP)
+
+
+def test_lista_mais_longa_que_o_maximo_entra_mais_tarde_e_acaba_depois_do_ultimo_item() -> None:
+    # render real: a lista entrou em "Pra comprar", 4 s depois acabou e "Localização" ficou 0,4 s
+    r = cenas_do_corte(PALAVRAS, DUR, _chamar(_cena(
+        "lista", _i("Pra"), _i("localiza"), titulo="Pra comprar imóvel",
+        itens=["Oportunidade", "Localização"])), EP)
+    (c,) = r.cenas
+    assert (c.inicio, c.fim) == (24.4, DUR)   # 4 s que terminam 0,6 s depois da última palavra (no fim)
+    assert c.batidas[0] == PALAVRAS[_i("oportunidade")].inicio
+
+
+def test_valor_mais_longo_que_o_maximo_entra_no_numero() -> None:
+    r = cenas_do_corte(PALAVRAS, DUR, _chamar(_cena(
+        "contador", _i("400"), _i("assim?"), rotulo="PAGOU", valor=400, prefixo="R$", sufixo="mil")), EP)
+    assert r.cenas[0].inicio == PALAVRAS[_i("400")].inicio

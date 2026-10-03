@@ -30,6 +30,8 @@ from cortes.render.processo import ErroRender
 from cortes.tipos import Palavra
 
 CAPA_FIM_S = 2.2    # a capa fica de 0 a 2,2 s (protótipo), dentro da janela do gancho (0–2,5 s)
+POR_BATIDAS = ("lista", "rota")   # o conteúdo entra item a item, na fala
+LEITURA_S = 0.6     # a última batida fica pelo menos isto depois da palavra que a diz
 
 
 @dataclass(frozen=True)
@@ -63,8 +65,15 @@ def _tempos(item: dict[str, Any], palavras: list[Palavra], dur: float) -> tuple[
                       f"(o corte tem {len(palavras)} palavras, 0 a {len(palavras) - 1})")
     if item["componente"] == "capa":
         return 0.0, round(min(CAPA_FIM_S, dur), 2)
-    ini = palavras[i].inicio
-    fim = min(max(palavras[j].fim, ini + DUR_MIN_S), ini + DUR_MAX_S, dur)
+    ini, fala_fim = palavras[i].inicio, palavras[j].fim
+    if item["componente"] in POR_BATIDAS:
+        # o que importa é o último item / o destino: fica LEITURA_S depois da palavra e, se não
+        # cabe no máximo, a cena entra mais tarde, numa palavra (render real: "Localização" ficava
+        # 0,4 s na tela)
+        fala_fim += LEITURA_S
+        alvo = min(fala_fim, dur) - DUR_MAX_S
+        ini = next((w.inicio for w in palavras[i:j + 1] if w.inicio >= alvo - 1e-6), palavras[j].inicio)
+    fim = min(max(fala_fim, ini + DUR_MIN_S), ini + DUR_MAX_S, dur)
     return round(ini, 2), round(fim, 2)
 
 
