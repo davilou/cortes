@@ -30,7 +30,7 @@ function htmlEntrada() {
     <label>Link do episódio<input class="link" name="link" required placeholder="https://www.youtube.com/watch?v=…"></label>
     <label>Nicho<select name="nicho">${nichos}</select></label>
     <label>Formato padrão<select name="formato">${opcoesFormato(null)}</select></label>
-    <button class="botao primario">Gerar Shorts</button></form>`;
+    <button class="botao primario">Achar momentos</button></form>`;
 }
 
 // Nada renderiza sozinho: o formato da entrada é só o padrão pré-marcado no seletor de cada Short.
