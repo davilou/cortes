@@ -299,8 +299,23 @@ protótipo.
   sustenta "R$ 550 mil"); zero sempre passa. Número calculado (o "+37,5%" do protótipo manual) é
   recusado — decisão do plano, mais estrita que a regra antiga "ou calculados deles".
 - **Ritmo** (`render/motion_ritmo.py`): capa só uma, em 0–2,2 s; nenhuma outra cena antes de 1 s;
-  cada cena de 1,5 a 4 s; pelo menos 1 s de rosto entre cenas; motion ≤ 70% (saem as últimas). O
-  prompt pede de 40% a 70% de cobertura.
+  cada cena de 1,5 a 4 s; cenas não se sobrepõem; pelo menos 1 s de rosto só entre dois cartões
+  **cheios** — painel div cola no vizinho (o rosto já está na janela de baixo; o manual cola chat →
+  "PERDI DINHEIRO"), e duas div coladas não piscam o cheio; motion ≤ 70% (saem as últimas, nunca
+  as já aceitas). O prompt pede de 50% a 70% de cobertura. Pesquisa 03: alvo de 0,6–0,8 trocas de
+  plano por 10 s; cada entrada e saída de painel é troca, e 4 cenas em 28 s já dão ~2,5 — o ritmo
+  não segura abaixo do alvo (teste em `test_render_motion_ritmo.py`).
+- **Segunda chamada** (`render/motion_cobertura.py`, plano `2026-10-03-melhora-f3.md`): validada a
+  primeira resposta, se a cobertura ficou < 50% ou sobrou vão de rosto > 6 s com número,
+  comparação, lista ou lugar, o LLM recebe as cenas aceitas (fixas no ritmo), as recusadas com o
+  motivo e os vãos (≥ 3,5 s depois do gancho) com as palavras, e devolve cenas só para eles. No
+  máximo 2 chamadas por corte; o cache guarda o resultado final.
+- **Prompt:** recebe título e canal do `meta.json` (sem eles, erro claro); o rótulo da capa é o
+  nome de quem fala quando o título o identifica ("COMO MAURÍCIO MEIRELLES GANHA..." → "MAURÍCIO
+  MEIRELLES"), senão o tema. Contraste, perda ou ganho ("perdi dinheiro", "rendeu mais", "X contra
+  Y") é `comparacao`, com um lado não numérico ("mais") se a fala não deu o número. Nomes próprios
+  e palavras deformados pela transcrição saem com a grafia certa nos textos ("saco arema" →
+  "Saquarema"), sem inventar; números continuam só os ditos.
 - **Sincronia** (`render/motion_sincronia.py`): a cena entra na palavra que o LLM apontou; dentro
   dela, cada "batida" (item da lista, destino da rota, selo, carimbo, fim da barra dos marcos)
   entra na palavra que a diz — o número escrito nela ou a palavra mais longa —, e a que a fala não
@@ -327,6 +342,25 @@ hardlinks (~3 min por corte, LLM + rosto + render):
 - Gosto, para o Davi: o rótulo da capa sai como tema ("Investimento imobiliário"), não o nome de
   quem fala (o prompt não recebe o nome); a escolha das cenas ainda é conservadora. Davi decide se
   segue.
+
+**Melhora (2026-10-03, plano `2026-10-03-melhora-f3.md`), mesmo teste lento:**
+- "400 mil reais em 10 anos": 6 cenas, **64%** de motion (antes 4 cenas, 40%; manual ~61%), 3,7
+  trocas/10 s (antes 2,6; manual ~3,3). Capa "MAURÍCIO MEIRELLES" / "TIVE UM APARTAMENTO NO RIO";
+  valor cheio 400→550 mil; chat; **comparação "PERDI DINHEIRO"** (R$ 550 mil × "mais") colada no
+  chat; lista Oportunidade/Localização; **rota Rio de Janeiro → Saquarema** ("saco arema"). Uma
+  chamada só bastou. Fica perto do manual do começo ao fim.
+- "Uber à noite pagou a dívida": a cobertura varia de rodada para rodada (37% com 4 cenas, 52% com 5
+  e capa "O DEPOIMENTO QUE MAIS RECEBO"; antes 30%): a fala de 1 a 11 s é conversa sobre
+  depoimentos, sem nada mostrável, e a segunda chamada cobre o resto (lista "Uber à noite / Após o
+  trabalho / Das 6h à meia-noite", 1.200→1.500, 4,5 mil em 3 meses, "PAGOU A DÍVIDA").
+- Defeitos do render real corrigidos com teste: `fim_palavra` = nº de palavras (fim exclusivo)
+  derrubava o corte inteiro — vira a última palavra, e o prompt diz o intervalo; capa com número
+  dito depois de 2,2 s era recusada — a capa vale com o que o corte inteiro diz; cena esticada
+  derrubava a seguinte — a que invade acaba antes (se ainda dura 1,5 s); lista que passava de 4 s
+  deixava o último item 0,4 s — lista e rota acabam 0,6 s depois da última palavra e, longas,
+  entram mais tarde; batida sem a palavra mais longa na fala entrava junto com a anterior — tenta
+  as outras palavras e nunca entra junto; a capa copiava o título do episódio — o título vem do
+  trecho.
 
 ## 8. Erros
 

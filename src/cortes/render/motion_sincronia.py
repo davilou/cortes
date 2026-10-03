@@ -4,7 +4,7 @@ A cena entra quando a fala chega nela (o LLM aponta a palavra). Dentro da cena, 
 item da lista, o destino da rota, o selo — entra na palavra que a diz: a âncora é o número escrito
 na batida ou, sem número, a palavra mais longa dela, procurada na fala da própria cena. Batida que
 a fala não diz com essas letras (ex.: "Saquarema" transcrito "saco arema") entra no passo regular,
-uma depois da outra: o tempo é estimado, o texto não muda.
+depois da anterior, nunca junto: o tempo é estimado, o texto não muda.
 """
 import re
 import unicodedata
@@ -22,11 +22,19 @@ def _norm(t: str) -> str:
     return re.sub(r"[^a-z0-9]", "", sem_acento.lower())
 
 
-def ancora(texto: str) -> str:
-    """O número da batida, se tiver; senão a palavra mais longa."""
+def ancoras(texto: str) -> list[str]:
+    """Onde procurar a batida na fala, em ordem: o número, se tiver; senão as palavras de 4 letras
+    ou mais, da mais longa para a mais curta ("MEIA-NOITE" transcrita "meia -noite" cai no "SEIS")."""
     tokens = [_norm(p) for p in texto.split() if _norm(p)]
     digitos = [t for t in tokens if t.isdigit()]
-    return digitos[0] if digitos else max(tokens, key=len, default="")
+    if digitos:
+        return digitos[:1]
+    longas = sorted((t for t in tokens if len(t) >= 4), key=len, reverse=True)
+    return longas or [max(tokens, key=len, default="")]
+
+
+def ancora(texto: str) -> str:
+    return ancoras(texto)[0]
 
 
 def _bate(falada: str, a: str) -> bool:
@@ -50,7 +58,9 @@ def tempos_das_batidas(p: Params, palavras: list[Palavra], ini: float, fim: floa
     res: list[float] = []
     for n, texto in enumerate(textos):
         depois = res[-1] if res else ini
-        achado = _achar(ancora(texto), palavras, ini, fim, depois)
-        t = achado if achado is not None else ini + ENTRADA_S + n * max(passo, 0.0)
+        achado = next((t for a in ancoras(texto) if (t := _achar(a, palavras, ini, fim, depois)) is not None),
+                      None)
+        regular = ini + ENTRADA_S + n * max(passo, 0.0)
+        t = achado if achado is not None else max(regular, depois + passo if res else regular)
         res.append(round(min(max(t, depois, ini), limite), 2))
     return tuple(res)

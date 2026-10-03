@@ -17,6 +17,7 @@ from cortes.llm import ErroLLM
 from cortes.render.ilustracao_cache import Chave, chave_de
 from cortes.render.motion import Cena, Resultado, cenas_do_corte
 from cortes.render.motion_params import ErroParams, ler_params, params_json
+from cortes.render.motion_prompt import Contexto
 from cortes.render.motion_ritmo import Descartada
 from cortes.render.processo import ErroRender
 from cortes.tipos import Palavra
@@ -84,7 +85,7 @@ def _sem_cena(r: Resultado) -> ErroRender:
 
 
 def preparar_cenas(d_corte: Path, ini: float, fim: float, palavras: list[Palavra], dur: float,
-                   chamar: ChamarLLM) -> list[Cena]:
+                   chamar: ChamarLLM, contexto: Contexto) -> list[Cena]:
     """As cenas do corte, do cache quando início, fim e texto não mudaram. `palavras` no tempo do
     trecho sem pausas, sem máscara; `dur` é a duração desse trecho."""
     chave = chave_de(ini, fim, palavras)
@@ -93,10 +94,22 @@ def preparar_cenas(d_corte: Path, ini: float, fim: float, palavras: list[Palavra
         r = lido.resultado
     else:
         try:
-            r = cenas_do_corte(palavras, dur, chamar)
+            r = cenas_do_corte(palavras, dur, chamar, contexto)
         except ErroLLM as e:
             raise ErroRender(f"Motion: {e}") from e
         gravar_cenas(d_corte, chave, r)
     if not r.cenas:
         raise _sem_cena(r)
     return r.cenas
+
+
+def contexto_do_meta(pasta_ep: Path) -> Contexto:
+    """Título e canal do episódio (`meta.json`, gravado no download) para a capa do f3."""
+    arq = pasta_ep / "meta.json"
+    if not arq.exists():
+        raise ErroRender(f"{arq} não existe: o f3 precisa do título e do canal do episódio")
+    meta = ler_json(arq)
+    campos = {k: meta.get(k) if isinstance(meta, dict) else None for k in ("titulo", "canal")}
+    if not all(isinstance(v, str) and v.strip() for v in campos.values()):
+        raise ErroRender(f"{arq}: 'titulo' e 'canal' deveriam ser texto, vieram {campos}")
+    return Contexto(str(campos["titulo"]), str(campos["canal"]))

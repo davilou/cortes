@@ -30,7 +30,7 @@ from cortes.render.legenda import Grupo, grupos, palavras_do_corte
 from cortes.render.montagem import caminho_template, montar_html, usa_rosto, valores
 from cortes.render.motion import Cena
 from cortes.render.motion_cache import PASTA as PASTA_MOTION
-from cortes.render.motion_cache import preparar_cenas
+from cortes.render.motion_cache import contexto_do_meta, preparar_cenas
 from cortes.render.processo import ErroRender, Rodar, rodar_processo
 from cortes.render.recorte import (
     LerAudio,
@@ -173,7 +173,8 @@ def _cenas(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> li
         return []
     ini, fim = janela(c)
     palavras = _palavras_trecho(pasta_ep, c, segs, com_mascara=False)
-    return preparar_cenas(pasta_corte(pasta_ep, c.indice), ini, fim, palavras, duracao(segs), dep.chamar_llm)
+    return preparar_cenas(pasta_corte(pasta_ep, c.indice), ini, fim, palavras, duracao(segs), dep.chamar_llm,
+                          contexto_do_meta(pasta_ep))
 
 
 def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:

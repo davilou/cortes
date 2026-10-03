@@ -73,3 +73,9 @@ def test_contagem_nao_deixa_o_gsap_ler_o_texto_como_numero() -> None:
     """Sem o espaço de largura zero, o GSAP escrevia "1.500" como "1.5" (teste cego, plano E)."""
     tpl = caminho_template(REPO, "f3").read_text(encoding="utf-8")
     assert 'const SEM_NUMERO = "\u200B";' in tpl and "textContent: SEM_NUMERO + fmt(" in tpl
+
+
+def test_duas_div_coladas_nao_piscam_o_cheio_entre_elas() -> None:
+    cenas = [Cena(1, "chat", 3.0, 5.0, Chat("APP", "p"), ()), Cena(2, "lista", 5.0, 8.0, CENAS[5].params, ()),
+             Cena(3, "comparacao", 8.0, 9.6, CENAS[4].params, (8.1,))]
+    assert json.loads(estados(cenas)) == [[0, "cheio"], [3.0, "div"], [8.0, "cheio"]]

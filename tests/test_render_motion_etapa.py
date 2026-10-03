@@ -23,6 +23,8 @@ def _episodio(tmp: Path) -> Path:
     palavras = [{"texto": t, "inicio": round(10.1 + 0.45 * i, 2), "fim": round(10.5 + 0.45 * i, 2)}
                 for i, t in enumerate(FALA)]
     (pasta / "palavras.json").write_text(json.dumps(palavras), encoding="utf-8")
+    meta = {"titulo": "COMO FULANO DE TAL INVESTE | Cast 1", "canal": "Cast", "id": "abcdefghijk"}
+    (pasta / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     return pasta
 
 
@@ -52,17 +54,17 @@ def test_f3_monta_as_cenas_e_reaproveita_o_cache(tmp_path: Path) -> None:
     lido = ler_cenas(pasta / "cortes" / "0")
     assert lido is not None and lido.resultado.cenas[0].params == Contador("PAGOU", 400.0, "R$", "mil")
     _montar(pasta, tmp_path, llm)
-    assert len(llm.prompts) == 1
+    assert len(llm.prompts) == 2   # cobertura baixa: a segunda chamada; o cache não chama mais
 
 
 def test_corrigir_a_legenda_ou_mudar_o_trecho_chama_o_llm_de_novo(tmp_path: Path) -> None:
     pasta, llm = _episodio(tmp_path), LLM()
     _montar(pasta, tmp_path, llm)
     _montar(pasta, tmp_path, llm, replace(C3, edicoes=Edicoes({1: "Comprei,"}, (), {})))
-    assert len(llm.prompts) == 2
+    assert len(llm.prompts) == 4
     (pasta / "cortes" / "0" / "motion" / "lixo.txt").write_text("x", encoding="utf-8")
     _montar(pasta, tmp_path, llm, replace(C3, inicio=10.2))
-    assert len(llm.prompts) == 3 and not (pasta / "cortes" / "0" / "motion" / "lixo.txt").exists()
+    assert len(llm.prompts) == 6 and not (pasta / "cortes" / "0" / "motion" / "lixo.txt").exists()
 
 
 def test_sem_cena_valida_e_erro_claro_e_fica_no_cache(tmp_path: Path) -> None:
@@ -71,7 +73,7 @@ def test_sem_cena_valida_e_erro_claro_e_fica_no_cache(tmp_path: Path) -> None:
         _montar(pasta, tmp_path, llm)
     with pytest.raises(ErroRender, match=NENHUMA):
         _montar(pasta, tmp_path, llm)
-    assert len(llm.prompts) == 1
+    assert len(llm.prompts) == 2
 
 
 def test_erro_do_llm_vira_erro_do_render(tmp_path: Path) -> None:
@@ -93,4 +95,21 @@ def test_cache_adulterado_e_erro_claro(tmp_path: Path) -> None:
 def test_outros_formatos_nao_chamam_o_llm(tmp_path: Path) -> None:
     llm = LLM()
     _montar(_episodio(tmp_path), tmp_path, llm, replace(C3, formato="f7"))
+    assert llm.prompts == []
+
+
+def test_o_prompt_leva_o_titulo_e_o_canal_do_episodio(tmp_path: Path) -> None:
+    llm = LLM()
+    _montar(_episodio(tmp_path), tmp_path, llm)
+    assert 'Episódio: "COMO FULANO DE TAL INVESTE | Cast 1" (canal: Cast)' in llm.prompts[0]
+
+
+def test_sem_meta_json_ou_sem_titulo_e_erro_claro(tmp_path: Path) -> None:
+    pasta, llm = _episodio(tmp_path), LLM()
+    (pasta / "meta.json").write_text(json.dumps({"titulo": "T"}), encoding="utf-8")
+    with pytest.raises(ErroRender, match="'titulo' e 'canal' deveriam ser texto"):
+        _montar(pasta, tmp_path, llm)
+    (pasta / "meta.json").unlink()
+    with pytest.raises(ErroRender, match="meta.json não existe"):
+        _montar(pasta, tmp_path, llm)
     assert llm.prompts == []
