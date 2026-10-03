@@ -36,7 +36,6 @@ def montar_html(tpl: str, valores: dict[str, str]) -> str:
     return html
 
 
-def valores(dur: float, rosto: Rosto, grupos: list[Grupo], cortes: list[float],
-            escolhas: dict[int, int]) -> dict[str, str]:
+def valores(dur: float, rosto: Rosto, grupos: list[Grupo], escolhas: dict[int, int]) -> dict[str, str]:
     return {"DUR": str(round(dur, 2)), "QW": str(largura_quadro(rosto)), "LEGENDAS": legenda_html(grupos),
-            "TRILHA_CHEIO": json.dumps(trilha_fixa(rosto, escolhas)), "CORTES": json.dumps(cortes)}
+            "TRILHA_CHEIO": json.dumps(trilha_fixa(rosto, escolhas))}

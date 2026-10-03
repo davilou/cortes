@@ -108,15 +108,6 @@ def palavras_sem_pausa(ws: list[Palavra], segs: list[Segmento]) -> list[Palavra]
     return [Palavra(p.texto, remapear(p.inicio, segs), remapear(p.fim, segs)) for p in ws]
 
 
-def tempos_de_corte(segs: list[Segmento]) -> list[float]:
-    """Instantes, no vídeo novo, em que uma pausa foi removida (onde o template alterna o zoom)."""
-    acum, ts = 0.0, []
-    for a, b in segs[:-1]:
-        acum += b - a
-        ts.append(round(acum, 3))
-    return ts
-
-
 def duracao(segs: list[Segmento]) -> float:
     return round(sum(b - a for a, b in segs), 3)
 

@@ -29,6 +29,6 @@ def test_formato_sem_template_e_erro() -> None:
 @pytest.mark.parametrize("formato", FORMATOS)
 def test_templates_reais_montam_sem_sobra(formato: str) -> None:
     tpl = caminho_template(REPO, formato).read_text(encoding="utf-8")
-    html = montar_html(tpl, valores(12.5, R, [Grupo(0.0, 1.0, ("Oi",))], [4.2], {}))
+    html = montar_html(tpl, valores(12.5, R, [Grupo(0.0, 1.0, ("Oi",))], {}))
     assert 'data-duration="12.5"' in html and "3413px" in html and "<span>Oi</span>" in html
-    assert "[4.2].forEach" in html
+    assert 'id="flash"' not in html and "scale: k % 2" not in html   # corte seco, sem efeito (2026-10-02)

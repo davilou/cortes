@@ -13,7 +13,6 @@ from cortes.render.recorte import (
     recortar,
     remapear,
     segmentos_sem_pausa,
-    tempos_de_corte,
 )
 from cortes.tipos import Palavra
 
@@ -67,7 +66,7 @@ def test_audio_todo_silencioso_e_erro() -> None:
 def test_remapear_leva_tempo_da_pausa_para_a_emenda() -> None:
     segs = [(0.0, 1.12), (1.88, 3.0)]
     assert [remapear(t, segs) for t in (0.5, 1.5, 2.0, 5.0)] == [0.5, 1.12, 1.24, 2.24]
-    assert tempos_de_corte(segs) == [1.12] and duracao(segs) == 2.24
+    assert duracao(segs) == 2.24
 
 
 def test_palavras_sem_pausa() -> None:

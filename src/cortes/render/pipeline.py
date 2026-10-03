@@ -24,7 +24,6 @@ from cortes.render.recorte import (
     palavras_sem_pausa,
     recortar,
     segmentos_sem_pausa,
-    tempos_de_corte,
 )
 from cortes.render.rosto import ler_rosto, medir_rosto
 from cortes.tipos import Palavra
@@ -93,7 +92,7 @@ def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento]) -> str:
     dur = duracao(segs)
     rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json")
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
-    return montar_html(tpl, valores(dur, rosto, grupos(ws, dur), tempos_de_corte(segs), c.edicoes.rostos))
+    return montar_html(tpl, valores(dur, rosto, grupos(ws, dur), c.edicoes.rostos))
 
 
 def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:

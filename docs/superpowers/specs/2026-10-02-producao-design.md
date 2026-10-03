@@ -36,7 +36,7 @@ automática; nicho humor. O `cortes detectar` do terminal segue com o openai-whi
 | Plano | Entrega | Risco |
 |---|---|---|
 | **A. Produção** | Link → vídeo + transcrição local → detector, com progresso por etapa; candidatos com nota, rubrica, justificativa e player do trecho | baixo |
-| **B. Render f1 + f7** | N melhores renderizados sozinhos; grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4; pausas cortadas sempre; sem trilha (Davi, 2026-10-02) | baixo — o código existe nos protótipos |
+| **B. Render f1 + f7** | N melhores renderizados sozinhos; grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4; pausas cortadas sempre; sem trilha; transições em corte seco, sem flash nem zoom nas emendas (Davi, 2026-10-02) | baixo — o código existe nos protótipos |
 | **C. Editor** | Início/fim por palavra, texto da legenda, título, troca de formato, quem aparece por plano, versões | médio (multirrosto) |
 | **D. f4 B-roll** | Deixas pelo Claude → busca no YouTube → conferência visual → 3 opções por deixa no editor | médio |
 | **E. f3 Motion** | Biblioteca de componentes + cenas em JSON pelo Claude; teste cego contra o f3 manual | alto |

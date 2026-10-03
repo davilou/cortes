@@ -39,10 +39,6 @@
       document.querySelectorAll(".leg span").forEach((el) => {
         tl.fromTo(el, { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.12, ease: "power2.out" }, parseFloat(el.parentElement.dataset.start));
       });
-      // pausas removidas: zoom alterna 100%/108% em cada emenda para o pulo da imagem parecer intencional
-      {{CORTES}}.forEach((t, k) => {
-        tl.set("#cam", { scale: k % 2 === 0 ? 1.08 : 1, transformOrigin: "540px 700px" }, t);
-      });
       window.__timelines["main"] = tl;
     </script>
   </body>
