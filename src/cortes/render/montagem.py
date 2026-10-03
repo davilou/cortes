@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from cortes.producao.estado import ErroProducao
+from cortes.render.conversa import trilha_conversa
 from cortes.render.ilustracao_cache import Ilustracao, Midia, nome_asset
 from cortes.render.legenda import Grupo, legenda_html
 from cortes.render.motion import Cena
@@ -35,7 +36,8 @@ F9_SAIU = "o formato f9 virou o f4 B-roll; renderize de novo em f4"
 _POR_PALAVRA = ("f6",)
 _PLACEHOLDER = re.compile(r"\{\{[A-Z_]+\}\}")
 CLIPE_MIN_S = 0.3   # clipe que sobra menos que isso antes do fim do Short só pisca: não entra
-_PLACEHOLDERS_ROSTO = {"QW", "TRILHA_CHEIO", "QM_W", "QM_H", "TRILHA_METADE", "QD_W", "QD_H", "TRILHA_DIV"}
+_PLACEHOLDERS_ROSTO = {"QW", "TRILHA_CHEIO", "TRILHA_CONVERSA", "QM_W", "QM_H", "TRILHA_METADE", "QD_W",
+                       "QD_H", "TRILHA_DIV"}
 
 
 def validar_formato(formato: str) -> None:
@@ -104,13 +106,17 @@ def broll_html(ilustracoes: Sequence[Ilustracao], dur: float) -> str:
     return "\n".join(clipes)
 
 
-def _camera(usa: set[str], rosto: Rosto, escolhas: dict[int, int]) -> dict[str, str]:
-    """Quadro e trilha fixa de cada janela que o template usa: cheia, metade (f5) e div (f3)."""
+def _camera(usa: set[str], rosto: Rosto, escolhas: dict[int, int], grupos: list[Grupo],
+            dur: float) -> dict[str, str]:
+    """Quadro e trilha de cada janela que o template usa: cheia (fixa, ou alternando entre as
+    pessoas no f7 — render/conversa.py), metade (f5) e div (f3)."""
     out: dict[str, str] = {}
     if "QW" in usa:
         out["QW"] = str(largura_quadro(rosto))
     if "TRILHA_CHEIO" in usa:
         out["TRILHA_CHEIO"] = json.dumps(trilha_fixa(rosto, escolhas))
+    if "TRILHA_CONVERSA" in usa:
+        out["TRILHA_CONVERSA"] = json.dumps(trilha_conversa(rosto, escolhas, grupos, dur))
     if "QM_W" in usa or "QM_H" in usa:
         qm_w, qm_h = quadro_metade(rosto)
         out["QM_W"], out["QM_H"] = str(qm_w), str(qm_h)
@@ -153,5 +159,5 @@ def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], esco
     if usa & _PLACEHOLDERS_ROSTO:
         if rosto is None:
             raise ErroRender(f"formato '{formato}' usa rosto no template mas nenhum foi medido")
-        out |= _camera(usa, rosto, escolhas)
+        out |= _camera(usa, rosto, escolhas, grupos, dur)
     return out

@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=1080, height=1920" />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <style>
-      /* Formato 7 — conversa com reações: tela cheia que corta seco entre quem fala e quem reage
-         (troca de câmera real do episódio; a câmera virtual recomeça em cada corte). R2: 10×1. */
+      /* Formato 7 — conversa com reações: tela cheia que corta seco entre quem fala e quem reage.
+         Corta na troca de câmera real do episódio e, em plano aberto com 2 pessoas, alterna entre
+         elas no início de um grupo de legenda até o ritmo-alvo (src/cortes/render/conversa.py). R2: 10×1. */
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0e1411; }
       #root { position: relative; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: "Montserrat", sans-serif; }
@@ -29,7 +30,7 @@
     </div>
     <script>
       const tl = gsap.timeline({ paused: true });
-      const TR = {{TRILHA_CHEIO}};
+      const TR = {{TRILHA_CONVERSA}};
       tl.set("#q-cheio", { x: TR[0][1], y: TR[0][2] }, 0);
       for (let k = 1; k < TR.length; k++) {
         if (TR[k][3]) {

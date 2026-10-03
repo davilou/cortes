@@ -1,9 +1,11 @@
+import json
 import re
 from pathlib import Path
 
 import pytest
 
 from cortes.producao.estado import ErroProducao
+from cortes.render.conversa import trilha_conversa
 from cortes.render.ilustracao import Deixa
 from cortes.render.ilustracao_cache import Fonte, Ilustracao, Midia
 from cortes.render.legenda import Grupo
@@ -17,7 +19,7 @@ from cortes.render.montagem import (
     valores,
 )
 from cortes.render.processo import ErroRender
-from cortes.render.rosto import Amostra, Face, Rosto
+from cortes.render.rosto import Amostra, Face, Rosto, trilha_fixa
 
 REPO = Path(__file__).resolve().parents[1]
 R = Rosto(1920, 1080, (Amostra(0.0, (Face(960, 540, 80, 0.9),)),), ())
@@ -144,3 +146,17 @@ def test_broll_vazio_fora_do_f4() -> None:
 def test_clipe_que_passa_do_fim_do_short_e_cortado_e_o_que_sobra_pouco_sai() -> None:
     assert 'data-start="2.0" data-duration="1.0"' in broll_html([_ilus(1, "x")], 3.0)
     assert broll_html([_ilus(1, "x")], 2.2) == ""
+
+
+def test_f7_alterna_entre_as_pessoas_e_os_outros_nao() -> None:
+    """f7: TRILHA_CONVERSA corta seco para a parceira no plano aberto (render/conversa.py); o f1,
+    com a mesma câmera, segue fixo na pessoa padrão."""
+    dois = Rosto(1920, 1080, tuple(Amostra(i * 0.25, (Face(500, 540, 80, 0.9), Face(500, 540, 80, 0.9),
+                                                     Face(1500, 540, 80, 0.9))) for i in range(120)), ())
+    gs = [Grupo(float(i), 1.0, ("fala",), (float(i),)) for i in range(30)]
+    tr = trilha_conversa(dois, {}, gs, 30.0)
+    assert len(tr) == 3
+    f7 = caminho_template(REPO, "f7").read_text(encoding="utf-8")
+    assert f"const TR = {json.dumps(tr)};" in montar_html(f7, valores(f7, 30.0, dois, gs, {}, "f7", "T"))
+    f1 = caminho_template(REPO, "f1").read_text(encoding="utf-8")
+    assert json.dumps(trilha_fixa(dois, {})) in montar_html(f1, valores(f1, 30.0, dois, gs, {}, "f1", "T"))
