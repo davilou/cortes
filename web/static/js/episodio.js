@@ -21,11 +21,22 @@ function tempo(s) {
 const NOMES_CORTE = { na_fila: "na fila do render", renderizando: "renderizando…", pronto: "Short pronto", erro: "erro no render" };
 const corteDe = (D, indice) => D.cortes.find(k => k.indice === indice);
 
-// Quem não tem corte ganha "Renderizar"; quem tem mostra o status do render (a decisão da
-// curadoria continua na última coluna — são coisas diferentes, ver desvio 1 do plano B).
-function htmlAcaoRender(c) {
+// Seletor de formato + botão que pede o render nesse formato: "Renderizar" (candidato sem corte,
+// com o formato padrão do episódio marcado), "tentar de novo" e "Renderizar de novo" (o do corte).
+function htmlRender(indice, rotulo, formato) {
+  return `<span class="render-escolha">
+    <select data-formato-de="${indice}" aria-label="Formato do Short">${opcoesFormato(formato)}</select>
+    <button class="botao mini" type="button" data-renderizar="${indice}">${esc(rotulo)}</button></span>`;
+}
+
+const htmlCancelar = indice =>
+  `<button class="botao mini" type="button" data-cancelar="${indice}">Cancelar</button>`;
+
+// Quem não tem corte ganha o seletor e "Renderizar"; quem tem mostra o status do render (a decisão
+// da curadoria continua na última coluna — são coisas diferentes, ver desvio 1 do plano B).
+function htmlAcaoRender(D, c) {
   return c.corte ? `<span class="chip">${esc(NOMES_CORTE[c.corte])}</span>`
-    : `<button class="botao mini" type="button" data-renderizar="${c.indice}">Renderizar</button>`;
+    : htmlRender(c.indice, "Renderizar", D.formato);
 }
 
 function htmlCandidatos(D) {
@@ -35,7 +46,7 @@ function htmlCandidatos(D) {
     ${D.candidatos.map(c => `<div class="cand ${c.indice === candSel ? "sel" : ""}" data-cand="${c.indice}" tabindex="0" role="button" aria-pressed="${c.indice === candSel}">
       <span class="n ${c.nota_final >= 80 ? "up" : ""}">${nota10(c.nota_final)}</span>
       <span class="num">${tempo(c.inicio)}</span><span class="num">${tempo(c.fim - c.inicio)}</span>
-      <div><div class="t">${esc(c.titulo)}</div><div class="j">${esc(c.justificativa)}</div><div class="cand-render">${htmlAcaoRender(c)}</div></div>
+      <div><div class="t">${esc(c.titulo)}</div><div class="j">${esc(c.justificativa)}</div><div class="cand-render">${htmlAcaoRender(D, c)}</div></div>
       <span class="decisao ${esc(c.decisao ?? "")}"${c.decisao ? ` title="${esc(c.decisao)}" aria-label="${esc(c.decisao)}"` : ""}>${c.decisao ? esc(c.decisao) : ""}</span></div>`).join("")}</div>`;
 }
 
@@ -52,8 +63,9 @@ function faixaDe(D, c) {
     inicio: c.inicio, fim: c.fim, preroll: true, fimDoArquivo: false, nome: "trecho" };
 }
 
-// Player + o que acompanha o Short: baixar, copiar título, versão/formato, e a causa do erro
-// com "tentar de novo" (um corte em erro pode ainda ter o MP4 da versão anterior). "Editar" só
+// Player + o que acompanha o Short: baixar, copiar título, versão/formato, "Renderizar de novo"
+// (versão nova no formato escolhido), "Cancelar" enquanto está na fila, e a causa do erro com
+// "tentar de novo" (um corte em erro pode ainda ter o MP4 da versão anterior). "Editar" só
 // para quem já tem corte fora do render (plano C, decisão 4) — junto do Short, ou do erro se
 // ainda não há Short.
 function htmlMidia(D, c) {
@@ -62,13 +74,16 @@ function htmlMidia(D, c) {
     ? `<a class="botao mini" href="#editor/${encodeURIComponent(D.id)}/${c.indice}">Editar</a>` : "";
   const erro = k?.status === "erro"
     ? `<p class="erro-txt corte-erro" title="${esc(k.erro)}">${esc(k.erro)}</p>
-       <div class="short-acoes"><button class="botao mini" type="button" data-renderizar="${c.indice}">tentar de novo</button>
+       <div class="short-acoes">${htmlRender(c.indice, "tentar de novo", k.formato)}
        ${k.video ? "" : linkEditar}</div>` : "";
   const acoes = k?.video
     ? `<div class="short-acoes"><a class="botao mini" href="${esc(k.video)}?baixar=true" download>Baixar MP4</a>
         <button class="botao mini" type="button" data-copiar>Copiar título</button>${linkEditar}
         <span class="num">v${k.versao} · ${esc(k.formato)}</span></div>` : "";
-  return `${htmlPlayer(faixaDe(D, c))}${acoes}${erro}`;
+  const denovo = k?.status === "pronto"
+    ? `<div class="short-acoes">${htmlRender(c.indice, "Renderizar de novo", k.formato)}</div>` : "";
+  const cancelar = k?.status === "na_fila" ? `<div class="short-acoes">${htmlCancelar(c.indice)}</div>` : "";
+  return `${htmlPlayer(faixaDe(D, c))}${acoes}${denovo}${cancelar}${erro}`;
 }
 
 function htmlPainel(D, c) {
@@ -111,13 +126,14 @@ async function decidir(D, c, decisao, motivo, botoes) {
   }
 }
 
-// "Renderizar" (tabela) e "tentar de novo" (painel) caem aqui. atualizarProducao() religa o
-// polling — a fila tem trabalho de novo, e é o polling que move o cartão de "na fila" a "pronto".
-async function pedirRender(D, indice, botao) {
+// "Renderizar" (tabela), "tentar de novo" e "Renderizar de novo" (painel) mandam o formato do
+// seletor ao lado; "Cancelar" (painel e grade) usa a ação "cancelar". atualizarProducao() religa
+// o polling — é ele que move o cartão de "na fila" a "pronto".
+async function acaoCorte(D, indice, botao, acao, corpo) {
   const meu = desenhar.n;   // lido ANTES do await, como em decidir()
   botao.disabled = true;
   try {
-    await post(`/api/episodios/${encodeURIComponent(D.id)}/cortes/${indice}/renderizar`, {});
+    await post(`/api/episodios/${encodeURIComponent(D.id)}/cortes/${indice}/${acao}`, corpo);
     atualizarProducao();
     if (meu !== desenhar.n || D.id !== epSel) return;
     await blocoEpisodio(D.id, desenhar.n);
@@ -170,6 +186,22 @@ function ligarSelecao(alvo, id) {
   });
 }
 
+// Os controles vivem dentro da linha/cartão clicável (role=button): stopPropagation impede que o
+// clique no seletor ou no botão também reselecione o candidato e redesenhe o detalhe.
+function ligarAcoesCorte(D, alvo) {
+  $$("[data-formato-de]", alvo).forEach(s => { s.onclick = ev => ev.stopPropagation(); });
+  $$("[data-renderizar]", alvo).forEach(b => {
+    b.onclick = ev => {
+      ev.stopPropagation();
+      const formato = $("[data-formato-de]", b.closest(".render-escolha")).value;
+      acaoCorte(D, Number(b.dataset.renderizar), b, "renderizar", { formato });
+    };
+  });
+  $$("[data-cancelar]", alvo).forEach(b => {
+    b.onclick = ev => { ev.stopPropagation(); acaoCorte(D, Number(b.dataset.cancelar), b, "cancelar", {}); };
+  });
+}
+
 async function blocoEpisodio(id, meu) {
   let D;
   try {
@@ -197,9 +229,7 @@ async function blocoEpisodio(id, meu) {
     <span class="num">${D.candidatos.length} momentos · nota = rubrica do detector (0–10)</span></div>${htmlCandidatos(D)}</div>
     ${htmlPainel(D, c)}</div>`;
   ligarSelecao(alvo, id);   // liga a tabela E os cartões da grade (mesmo data-cand)
-  $$("[data-renderizar]", alvo).forEach(b => {
-    b.onclick = ev => { ev.stopPropagation(); pedirRender(D, Number(b.dataset.renderizar), b); };
-  });
+  ligarAcoesCorte(D, alvo);
   ligarPainel(D, c);
   // Todo redesenho local (seleção de candidato, decisão) troca o HTML inteiro do detalhe — sem
   // isso o foco cairia pro <body> a cada clique/Enter, quebrando a navegação por teclado.

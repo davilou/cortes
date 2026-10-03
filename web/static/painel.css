@@ -209,7 +209,7 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
 
 /* tela Episódios (Produção) */
 .entrada { margin-top: 22px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px;
-  display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 10px; align-items: end; }
+  display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: end; }
 .entrada label { display: grid; gap: 5px; font-size: 11px; color: var(--faint); font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; }
 .entrada input, .entrada select { background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px;
   font: 14px var(--sans); color: var(--text); text-transform: none; letter-spacing: 0; }
@@ -307,6 +307,12 @@ nav .grupo { font: 500 10px var(--mono); color: var(--faint); text-transform: up
 .short-info .decisao.aprovado { color: var(--ok); }
 .short-info .decisao.rejeitado { color: var(--warn); }
 .cand-render { margin-top: 6px; display: flex; min-width: 0; }
+/* seletor de formato + Renderizar: quebra a linha em vez de estourar a coluna estreita (375px) */
+.render-escolha { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  min-width: 0; max-width: 100%; }
+.render-escolha select { min-width: 0; max-width: 100%; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 7px; padding: 5px 8px; font-size: 12px; }
+.short-info [data-cancelar] { justify-self: start; }
 
 .painel { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow: auto;
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; }
@@ -363,8 +369,8 @@ a.botao { color: var(--text); text-decoration: none; display: inline-block; }
 /* Shorts entre 901px e 1180px: conta/idade/assist. saem para a etiqueta (e o botão Ligar que
    mora nela) nunca ficar espremida contra a borda da tabela. */
 @media (max-width: 1180px) {
-  /* link numa linha só; nicho, formato, quantos e o botão dividem a linha de baixo */
-  .entrada { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+  /* link numa linha só; nicho, formato padrão e o botão dividem a linha de baixo */
+  .entrada { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
   .entrada > label:first-child { grid-column: 1 / -1; }
   .entrada select { min-width: 0; width: 100%; }
   .linha-s { grid-template-columns: 36px minmax(0, 1fr) 86px 70px minmax(130px, 220px); gap: 10px; padding: 10px 14px; }

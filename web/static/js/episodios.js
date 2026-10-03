@@ -26,24 +26,28 @@ function devoContinuarPolling() {
 
 function htmlEntrada() {
   const nichos = (E?.nichos ?? []).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
-  const formatos = P.formatos.map(f => `<option value="${esc(f)}">${esc(f)} · ${esc(nomeFormato(f))}</option>`).join("");
   return `<form class="entrada" id="entrada">
     <label>Link do episódio<input class="link" name="link" required placeholder="https://www.youtube.com/watch?v=…"></label>
     <label>Nicho<select name="nicho">${nichos}</select></label>
-    <label>Formato<select name="formato">${formatos}</select></label>
-    <label>Shorts<select name="n_shorts"><option value="3">3 melhores</option><option value="5" selected>5 melhores</option><option value="10">10 melhores</option></select></label>
+    <label>Formato padrão<select name="formato">${opcoesFormato(null)}</select></label>
     <button class="botao primario">Gerar Shorts</button></form>`;
 }
 
+// Nada renderiza sozinho: o formato da entrada é só o padrão pré-marcado no seletor de cada Short.
+function opcoesFormato(marcado) {
+  return P.formatos.map(f => `<option value="${esc(f)}"${f === marcado ? " selected" : ""}>`
+    + `${esc(f)} · ${esc(nomeFormato(f))}</option>`).join("");
+}
+
 function pedidoNovoEpisodio(form) {
-  const d = Object.fromEntries(new FormData(form));
-  return { ...d, n_shorts: Number(d.n_shorts) };
+  return Object.fromEntries(new FormData(form));
 }
 
 function htmlEtapas(ep) {
   return `<div class="etapas">${Object.entries(ep.etapas).map(([nome, et]) => {
     const cls = { ok: "ok", rodando: "roda", erro: "erro" }[et.situacao] ?? "";
-    // render mostra o progresso (k/N) assim que existe corte — é a etapa que leva minutos.
+    // render mostra o progresso (k/N) assim que existe corte — é a etapa que leva minutos. Sem
+    // corte pedido (total 0) fica só "render", nunca "render 0/0".
     const rotulo = et.situacao === "erro" ? "erro"
       : nome === "render" && ep.render?.total ? `render ${ep.render.prontos}/${ep.render.total}` : NOMES_ETAPA[nome];
     return `<div class="etapa ${cls}" title="${esc(et.erro ?? et.situacao)}"><i></i>${esc(rotulo)}</div>`;
