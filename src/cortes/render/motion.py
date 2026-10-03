@@ -50,11 +50,14 @@ class Resultado:
 
 def prompt_cenas(palavras: list[Palavra], contexto: Contexto) -> str:
     return (f"{regras()}\n\n{contexto_do_episodio(contexto)}\n\n"
-            f"Fala do Short (palavras numeradas):\n{fala_numerada(palavras)}")
+            f"Fala do Short (palavras numeradas; as palavras vão de [0] a [{len(palavras) - 1}]):\n"
+            f"{fala_numerada(palavras)}")
 
 
 def _tempos(item: dict[str, Any], palavras: list[Palavra], dur: float) -> tuple[float, float]:
     i, j = item["inicio_palavra"], item["fim_palavra"]
+    if i < j == len(palavras):   # fim exclusivo na cena que vai até o fim (render real): a última
+        j -= 1
     if not (0 <= i <= j < len(palavras)):
         raise ErroLLM(f"cena '{item['componente']}' com palavras {i} a {j} inválidas "
                       f"(o corte tem {len(palavras)} palavras, 0 a {len(palavras) - 1})")

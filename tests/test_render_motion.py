@@ -191,3 +191,18 @@ def test_capa_pode_citar_numero_dito_depois_no_corte() -> None:
 
 def test_prompt_rota_aceita_origem_dita_antes() -> None:
     assert "A origem pode ser um lugar dito antes na fala" in prompt_cenas(PALAVRAS, EP)
+
+
+def test_fim_uma_depois_da_ultima_palavra_e_a_ultima() -> None:
+    # render real: o LLM aponta fim_palavra = nº de palavras na cena que vai até o fim da fala
+    n = len(PALAVRAS)
+    r = cenas_do_corte(PALAVRAS, DUR, _chamar(_cena("rota", n - 6, n, origem="Rio", destino="Saquarema")), EP)
+    assert [c.componente for c in r.cenas] == ["rota"] and r.cenas[0].fim == PALAVRAS[-1].fim
+    with pytest.raises(ErroLLM, match="inválidas"):
+        cenas_do_corte(PALAVRAS, DUR, _chamar(_cena("rota", n - 6, n + 1, origem="Rio", destino="X")), EP)
+    with pytest.raises(ErroLLM, match="inválidas"):
+        cenas_do_corte(PALAVRAS, DUR, _chamar(_cena("rota", n, n, origem="Rio", destino="X")), EP)
+
+
+def test_prompt_diz_o_intervalo_das_palavras() -> None:
+    assert f"as palavras vão de [0] a [{len(PALAVRAS) - 1}]" in prompt_cenas(PALAVRAS, EP)
