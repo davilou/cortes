@@ -20,6 +20,7 @@ import pytest
 
 from cortes.cli import MODELO_ROSTO, PY_VISAO
 from cortes.render.corte import novo_corte
+from cortes.render.ilustracao import ritmo_broll
 from cortes.render.ilustracao_cache import ler_ilustracoes, nome_asset
 from cortes.render.pipeline import DepRender, renderizar_corte
 
@@ -100,9 +101,14 @@ def test_render_real_broll(tmp_path: Path, titulo: str) -> None:
     html = (d / "projeto" / "index.html").read_text(encoding="utf-8")
     assert html.count('class="clip broll"') == len(com)
 
-    print(f"\n{titulo}: {len(ilus)} deixa(s), {len(com)} com visual; mp4 {dur:.2f}s")
+    cobertura, trocas = ritmo_broll([i.deixa for i in com], dur)
+    n_video = sum(i.midia == "video" for i in com)
+    print(f"\n{titulo}: {len(ilus)} deixa(s), {n_video} vídeo, {len(com) - n_video} foto, "
+          f"{len(ilus) - len(com)} sem visual; mp4 {dur:.2f}s; cobertura {cobertura:.0%}, "
+          f"{trocas:.2f} trocas/10 s")
     for i in ilus:
-        img = f"{i.midia} {i.arquivo.name}" if i.arquivo else "SEM VISUAL"
+        fonte = i.fonte.url if i.fonte else ""
+        img = f"{i.midia} {i.arquivo.name} {fonte}" if i.arquivo else "SEM VISUAL"
         print(f"  D{i.k} [{i.deixa.inicio:.2f}-{i.deixa.fim:.2f}] {i.deixa.coisa!r} [{i.deixa.tipo}] "
               f"(busca: {i.deixa.busca}) -> {img}: {i.motivo}")
     partes = ", ".join(f"{k} {v:.0f}s" for k, v in sorted(gasto.items()))

@@ -1,4 +1,4 @@
-"""Vídeo do B-roll (f4): busca e trecho do YouTube, quadros e foto em tela cheia — com falsos, sem rede."""
+"""Vídeo do B-roll (f4): busca e download do YouTube — com falsos, sem rede."""
 from pathlib import Path
 
 import pytest
@@ -8,17 +8,13 @@ from cortes.render.broll_video import (
     DUR_MAX_VIDEO_S,
     DUR_MIN_VIDEO_S,
     VideoCandidato,
+    apagar_bruto,
     args_busca,
-    args_cheio,
-    args_foto_cheia,
     args_video,
-    baixar_trecho,
+    baixar_bruto,
     buscar_videos,
-    extrair_quadros,
     fonte,
-    foto_cheia,
     ler_busca,
-    quadros_args,
 )
 from cortes.render.ilustracao_imagens import ErroBusca
 from cortes.render.processo import ErroRender
@@ -138,37 +134,36 @@ def test_id_invalido_e_recusado(vid: str) -> None:
         args_video(VideoCandidato(vid, 100.0, "c", "t"), Path("x.%(ext)s"))
 
 
-def test_args_tela_cheia_cortam_3s_a_partir_de_25_por_cento_em_cover_sem_audio() -> None:
-    args = args_cheio(Path("b.mp4"), Path("d.mp4"), VANS)
-    vf = args[args.index("-vf") + 1]
-    assert "scale=1080:1920:force_original_aspect_ratio=increase" in vf and "crop=1080:1920" in vf
-    assert "-an" in args and args[args.index("-t") + 1] == "3.000"
-    assert args[args.index("-ss") + 1] == "25.000" and args.index("-ss") < args.index("-i")
-
-
-def test_baixar_trecho_gera_o_mp4_e_apaga_o_bruto(tmp_path: Path) -> None:
+def test_baixar_bruto_deixa_o_video_inteiro_para_a_conferencia(tmp_path: Path) -> None:
     rodar = Rodar()
-    destino = tmp_path / "D1-v1.mp4"
-    baixar_trecho(VANS, destino, rodar)
-    assert destino.exists() and sorted(p.name for p in tmp_path.iterdir()) == ["D1-v1.mp4"]
-    assert "yt_dlp" in rodar.chamadas[0] and rodar.chamadas[1][0] == "ffmpeg"
+    bruto = baixar_bruto(VANS, tmp_path, "D1-v1.bruto", rodar)
+    assert bruto == tmp_path / "D1-v1.bruto.mp4" and bruto.exists()
+    assert len(rodar.chamadas) == 1 and "yt_dlp" in rodar.chamadas[0]
+    apagar_bruto(tmp_path, "D1-v1.bruto")
+    assert list(tmp_path.iterdir()) == []
 
 
 # a mensagem do downloader nativo (YoutubeDL.process_info: "unable to download video data: <HTTPError>")
 @pytest.mark.parametrize("saida", ["ERROR: [youtube] abc: HTTP Error 429: Too Many Requests",
                                    "ERROR: unable to download video data: HTTP Error 429: Too Many Requests",
                                    "ERROR: unable to download video data: HTTP Error 403: Forbidden"])
-def test_trecho_com_429_ou_403_e_errobusca_sem_tentar_de_novo(tmp_path: Path, saida: str) -> None:
+def test_video_com_429_ou_403_e_errobusca_sem_tentar_de_novo(tmp_path: Path, saida: str) -> None:
     rodar = Rodar((1, saida))
     with pytest.raises(ErroBusca, match="limitou ou bloqueou"):
-        baixar_trecho(VANS, tmp_path / "D1-v1.mp4", rodar)
+        baixar_bruto(VANS, tmp_path, "D1-v1.bruto", rodar)
     assert len(rodar.chamadas) == 1 and list(tmp_path.iterdir()) == []
 
 
 def test_video_maior_que_o_teto_e_erro_claro(tmp_path: Path) -> None:
     saida = "[download] File is larger than max-filesize (200000000 bytes > 125829120 bytes). Aborting."
     with pytest.raises(ErroRender, match="passa de 120M") as ex:
-        baixar_trecho(VANS, tmp_path / "D1-v1.mp4", Rodar((0, saida), cria=False))
+        baixar_bruto(VANS, tmp_path, "D1-v1.bruto", Rodar((0, saida), cria=False))
+    assert not isinstance(ex.value, ErroBusca)
+
+
+def test_video_indisponivel_e_errorender_comum(tmp_path: Path) -> None:
+    with pytest.raises(ErroRender, match="Video unavailable") as ex:
+        baixar_bruto(VANS, tmp_path, "D1-v1.bruto", Rodar((1, "ERROR: Video unavailable")))
     assert not isinstance(ex.value, ErroBusca)
 
 
@@ -185,65 +180,21 @@ def _trava_unlink(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_bruto_preso_nao_mascara_o_erro_original(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def deixa_part(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        (tmp_path / "D1-v1.bruto.mp4.part").write_bytes(b"meio")
+        return 1, "ERROR: Video unavailable"
+
     _trava_unlink(monkeypatch)
-    with pytest.raises(ErroRender, match="Invalid data") as ex:
-        baixar_trecho(VANS, tmp_path / "D1-v1.mp4", Rodar((0, ""), (1, "Invalid data")))
-    assert any("D1-v1.bruto.mp4" in n for n in getattr(ex.value, "__notes__", []))
+    with pytest.raises(ErroRender, match="Video unavailable") as ex:
+        baixar_bruto(VANS, tmp_path, "D1-v1.bruto", deixa_part)
+    assert any("D1-v1.bruto.mp4.part" in n for n in getattr(ex.value, "__notes__", []))
 
 
-def test_bruto_preso_sem_erro_original_e_errorender_com_o_caminho(tmp_path: Path,
-                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+def test_bruto_preso_e_errorender_com_o_caminho(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "D1-v1.bruto.mp4").write_bytes(b"bruto")
     _trava_unlink(monkeypatch)
     with pytest.raises(ErroRender, match=r"não consegui apagar .*D1-v1\.bruto\.mp4"):
-        baixar_trecho(VANS, tmp_path / "D1-v1.mp4", Rodar())
-
-
-def test_trecho_indisponivel_e_errorender_comum(tmp_path: Path) -> None:
-    rodar = Rodar((1, "ERROR: Video unavailable"))
-    with pytest.raises(ErroRender, match="Video unavailable") as ex:
-        baixar_trecho(VANS, tmp_path / "D1-v1.mp4", rodar)
-    assert not isinstance(ex.value, ErroBusca)
-
-
-def test_ffmpeg_que_falha_nao_deixa_mp4_nem_bruto(tmp_path: Path) -> None:
-    rodar = Rodar((0, ""), (1, "Invalid data"))
-    with pytest.raises(ErroRender, match="tela cheia"):
-        baixar_trecho(VANS, tmp_path / "D1-v1.mp4", rodar)
-    assert list(tmp_path.iterdir()) == []
-
-
-def test_quadros_inicio_meio_e_fim_num_ffmpeg_so(tmp_path: Path) -> None:
-    ds = (Path("q1.jpg"), Path("q2.jpg"), Path("q3.jpg"))
-    args = quadros_args(Path("t.mp4"), ds)
-    assert [args[i + 1] for i, a in enumerate(args) if a == "-ss"] == ["0.10", "1.50", "2.80"]
-    assert [args[i + 1] for i, a in enumerate(args) if a == "-map"] == ["0:v", "1:v", "2:v"]
-    assert args[-1] == "q3.jpg"
-
-
-def test_extrair_quadros_grava_os_tres(tmp_path: Path) -> None:
-    qs = extrair_quadros(tmp_path / "t.mp4", tmp_path / "D1-v1", Rodar())
-    assert [q.name for q in qs] == ["D1-v1-q1.jpg", "D1-v1-q2.jpg", "D1-v1-q3.jpg"]
-
-
-def test_quadro_que_nao_saiu_e_erro(tmp_path: Path) -> None:
-    with pytest.raises(ErroRender, match="não gerou D1-v1-q1.jpg"):
-        extrair_quadros(tmp_path / "t.mp4", tmp_path / "D1-v1", Rodar(cria=False))
-
-
-def test_foto_cheia_contain_sobre_ela_mesma_desfocada() -> None:
-    args = args_foto_cheia(Path("f.jpg"), Path("d.jpg"))
-    grafo = args[args.index("-filter_complex") + 1]
-    assert "force_original_aspect_ratio=increase,crop=1080:1920,boxblur" in grafo
-    assert "force_original_aspect_ratio=decrease[frente]" in grafo and "overlay=(W-w)/2:(H-h)/2" in grafo
-    assert args[-1] == "d.jpg" and args.count("f.jpg") == 2
-
-
-def test_foto_cheia_grava_por_parcial(tmp_path: Path) -> None:
-    foto_cheia(tmp_path / "f.jpg", tmp_path / "broll-1.jpg", Rodar())
-    assert [p.name for p in tmp_path.iterdir()] == ["broll-1.jpg"]
-    with pytest.raises(ErroRender, match="tela cheia"):
-        foto_cheia(tmp_path / "f.jpg", tmp_path / "broll-2.jpg", Rodar((1, "erro")))
-    assert not (tmp_path / "broll-2.jpg").exists()
+        apagar_bruto(tmp_path, "D1-v1.bruto")
 
 
 def test_fonte_do_clipe_com_licenca_e_risco() -> None:

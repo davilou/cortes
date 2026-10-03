@@ -4,13 +4,15 @@ A conferência (`claude -p`) e a folha podem falhar depois dos downloads. Sem es
 tentativa buscaria e baixaria tudo de novo — minutos de YouTube e mais chance de bloqueio. Ele vale
 para a mesma chave do corte e para a mesma deixa; candidato cujo arquivo sumiu invalida a deixa,
 que é buscada de novo. Depois que a conferência responde, o arquivo é apagado: as deixas
-transitórias que voltarem a ser buscadas não podem reaproveitar a busca que falhou.
+transitórias que voltarem a ser buscadas não podem reaproveitar a busca que falhou. Cada vídeo
+guarda o arquivo baixado inteiro e os momentos (início e quadros), porque o trecho só é cortado
+depois da conferência (plano 2026-10-03-melhora-f4).
 """
 from pathlib import Path
 from typing import Any
 
 from cortes.episodio import ler_json, salvar_json
-from cortes.render.broll_candidatos import Achadas, VideoBaixado
+from cortes.render.broll_candidatos import Achadas, Momento, VideoBaixado
 from cortes.render.broll_video import VideoCandidato
 from cortes.render.ilustracao import Deixa
 from cortes.render.ilustracao_cache import FORMATO, Chave, _arquivo, _chave, _chave_json, _deixa, _deixa_json
@@ -22,8 +24,9 @@ ARQUIVO = "candidatos.json"
 
 def _video_json(v: VideoBaixado) -> dict[str, Any]:
     c = v.candidato
-    return {"id": c.id, "dur": c.dur, "canal": c.canal, "titulo": c.titulo, "trecho": v.trecho.name,
-            "quadros": [q.name for q in v.quadros]}
+    return {"id": c.id, "dur": c.dur, "canal": c.canal, "titulo": c.titulo, "nome": v.nome,
+            "bruto": v.bruto.name,
+            "momentos": [{"inicio": m.inicio, "quadros": [q.name for q in m.quadros]} for m in v.momentos]}
 
 
 def _foto_json(c: Candidata, p: Path) -> dict[str, Any]:
@@ -61,10 +64,16 @@ def _medida(v: Any) -> int | None:
     return v
 
 
-def _video(pasta: Path, b: dict[str, Any]) -> VideoBaixado:
+def _momento(pasta: Path, b: dict[str, Any]) -> Momento:
     q1, q2, q3 = (_caminho(pasta, q) for q in b["quadros"])
+    return Momento(float(b["inicio"]), (q1, q2, q3))
+
+
+def _video(pasta: Path, b: dict[str, Any]) -> VideoBaixado:
+    """`nome` vira caminho do trecho (`<nome>.mp4`): passa pela mesma checagem de nome de arquivo."""
     c = VideoCandidato(_texto(b["id"]), float(b["dur"]), _texto(b["canal"]), _texto(b["titulo"]))
-    return VideoBaixado(c, _caminho(pasta, b["trecho"]), (q1, q2, q3))
+    return VideoBaixado(c, _caminho(pasta, b["nome"]).name, _caminho(pasta, b["bruto"]),
+                        tuple(_momento(pasta, m) for m in b["momentos"]))
 
 
 def _de_json(pasta: Path, b: dict[str, Any]) -> Achadas:
@@ -76,8 +85,8 @@ def _de_json(pasta: Path, b: dict[str, Any]) -> Achadas:
 
 
 def _inteira(a: Achadas) -> bool:
-    arquivos = [v.trecho for v in a.videos] + [q for v in a.videos for q in v.quadros] + \
-               [p for _, p in a.fotos]
+    quadros = [q for v in a.videos for m in v.momentos for q in m.quadros]
+    arquivos = [v.bruto for v in a.videos] + quadros + [p for _, p in a.fotos]
     return all(p.exists() for p in arquivos)
 
 

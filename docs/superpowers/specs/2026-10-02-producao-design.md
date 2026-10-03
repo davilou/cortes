@@ -40,7 +40,7 @@ para depois.
 | **A. Produção** | Link → vídeo + transcrição local → detector, com progresso por etapa; candidatos com nota, rubrica, justificativa e player do trecho | baixo |
 | **B. Render f1 + f7** | Renderizar sob pedido (sem automático), com formato por Short e Cancelar; f6 Hormozi, f8 Desfoque e f5 Gameplay somam-se a f1/f7 (Davi, 2026-10-02); grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4; pausas cortadas sempre; sem trilha; transições em corte seco, sem flash nem zoom nas emendas em nenhum formato | baixo — o código existe nos protótipos |
 | **C. Editor** | Início/fim por palavra, texto da legenda, título, troca de formato, quem aparece por plano, versões | médio (multirrosto) |
-| **D. f4 B-roll** | Automático (§11): deixas pelo Claude → vídeo do YouTube (foto de reserva na deixa literal) → conferência visual → clipe de 1,5–3 s em tela cheia, corte seco; substitui o f9 Ilustrado | médio — vídeo e foto de terceiros; YouTube lento e sujeito a bloqueio |
+| **D. f4 B-roll** | Automático (§11): deixas pelo Claude → vídeo do YouTube (foto de reserva na deixa literal) → conferência visual → clipe de 1,5–4 s em tela cheia, corte seco; substitui o f9 Ilustrado | médio — vídeo e foto de terceiros; YouTube lento e sujeito a bloqueio |
 | **E. f3 Motion** | Feito (§7): 7 componentes + cenas em JSON pelo Claude, regra dos números e ritmo no código; teste cego contra o f3 manual | alto |
 
 ## 4. Arquitetura
@@ -63,7 +63,8 @@ src/cortes/render/
   corte.py         # corte.json: modelo, transições, planejar, próximo
   pipeline.py      # um corte: trecho → rosto → (B-roll, f4 | cenas, f3) → html → mp4
   ilustracao.py    # f4: deixas pelo Claude (schema com tipo + ritmo no código)
-  broll_video.py   # f4: busca e trecho de 3 s do YouTube, quadros, foto em tela cheia
+  broll_video.py   # f4: busca e download do vídeo do YouTube
+  broll_quadros.py # f4: momentos do vídeo, trecho escolhido, quadros, foto em tela cheia
   ilustracao_imagens.py      # f4: busca ddgs e download da foto de reserva
   broll_candidatos.py        # f4: vídeos e fotos de uma deixa, em série, YouTube fora no bloqueio
   broll_folha.py             # f4: folha mista V/F de conferência
@@ -374,7 +375,7 @@ verdade, render ponta a ponta) é marcado `lento` e fica fora do check padrão (
 ## 11. f4 B-roll automático
 
 Decisões do Davi em 2026-10-03 (plano `2026-10-03-broll-automatico.md`): quando a pessoa fala de
-uma coisa concreta ou de um acontecimento, o Short corta seco para um clipe de 1,5 a 3 s que mostra
+uma coisa concreta ou de um acontecimento, o Short corta seco para um clipe de 1,5 a 4 s que mostra
 aquilo **em tela cheia** e volta para ela. A fonte principal é **vídeo do YouTube**. Sem vídeo que
 passe na conferência, entra **foto** do DuckDuckGo, mas só na deixa de coisa (`literal`), nunca no
 acontecimento. É o f4 B-roll do plano D (§6), agora automático, e **substitui o f9 Ilustrado**
@@ -387,24 +388,44 @@ Etapa do corte, só no f4, antes do `index.html`:
    - `tipo: "literal"` é a coisa citada (Vans, camisa do Corinthians); `"acontecimento"` é a cena
      que a fala evoca ("a pandemia" → rua vazia; "fui de jatinho" → jato decolando). A busca do
      acontecimento pode ser em inglês quando render mais vídeo.
+   - **Acontecimento** (2026-10-03, melhora): quando a fala narra um fato, o prompt pede uma deixa
+     de acontecimento; a busca descreve o que a câmera filmaria, em termos visuais concretos
+     ("fazer comercial" → "filming a commercial behind the scenes"), sem tutorial/review/"how to",
+     que trazem gente explicando em vez da cena. O prompt pede uma deixa a cada 6 a 10 s de fala.
    - Nada abstrato, nem peça ou característica de produto descrita de forma vaga ("negócio que
      evita torção", "sola ultra resistente"): só a coisa inteira e nomeável. Cada coisa entra uma vez só, sem busca genérica para uma coisa específica já
      citada ("a camiseta" depois de "camisa do Corinthians" trouxe a camisa da seleção no render
      de 2026-10-02).
    - **Ritmo no prompt e no código** (`ilustracao.deixas_do_corte`): nada no primeiro 1 s (gancho
-     com o rosto); cada clipe de 1,5 a 3,0 s; pelo menos 1,5 s de rosto entre um clipe e o próximo;
+     com o rosto); cada clipe de 1,5 a 4,0 s; pelo menos 1,5 s de rosto entre um clipe e o próximo;
      somados, no máximo 60% do Short (R2, pista). Passou de 60%: saem as últimas, as do meio não
      são encurtadas. Índice de palavra ou tipo inválido é resposta errada (erro), não deixa
      descartada em silêncio.
+   - **Clipe esticado** (2026-10-03, melhora): depois de espaçadas, as deixas vão até 4 s, sem
+     chegar a menos de 1,5 s da próxima, sem passar do fim da fala nem dos 60% somados. A conta do
+     render anterior: com o fim na última palavra que cita a coisa, os clipes ficavam em ~1,5 s e o
+     B-roll cobria **16–17%** do Short, com **2,1 trocas/10 s**. A R2 pede ~40–60% de visual
+     (pista) e 0,6–0,8 trocas/10 s (sinal forte, "mais" é o lado bom); as trocas já passavam do
+     alvo, então a cobertura sobe alongando o clipe, não multiplicando clipes. Os dois alvos não
+     cabem juntos com clipe curto (40% de 38 s com clipes de 3 s = 10 trocas = 2,6/10 s).
+     `ilustracao.ritmo_broll` mede cobertura e trocas/10 s (cada entrada e cada saída de clipe).
 2. **Candidatos por deixa** (`broll_candidatos.py`), sempre **em série**, nunca em paralelo no
    YouTube:
    - **2 vídeos:** `yt-dlp ytsearch15:` filtrado para 15 s a 3 min, os 2 primeiros. De cada um
      baixa o **vídeo inteiro** pelo downloader nativo do yt-dlp (sem `--download-sections`), até
-     1080p, só vídeo, com `--max-filesize 120M` e prazo de 45 s; o ffmpeg tira localmente 3 s a
-     partir de 25% da duração (passa da vinheta) em 1080×1920 em **cover** com corte central (o
-     16:9 preenche a tela), gravando por `.parcial`. O vídeo baixado é apagado sempre; se o Windows
-     não deixa apagar, isso vira nota no erro original ou, sem erro, `ErroRender` com o caminho.
-     Id validado (`^[A-Za-z0-9_-]{11}$`), argumentos em lista, sem shell.
+     1080p, só vídeo, com `--max-filesize 120M` e prazo de 45 s.
+   - **4 momentos por vídeo** (2026-10-03, melhora; `broll_quadros.py`): antes o trecho era cortado
+     às cegas a 25% da duração, e no render real o meio dos 3 s da Macboot era paisagem. Agora o
+     vídeo baixado (`D<k>-v<j>.bruto.<ext>`) **fica** até a conferência, e dele saem, num ffmpeg
+     só, 3 quadros (início, meio, fim; cover 9:16, como aparecem na tela) de cada um de 4 momentos
+     de 4 s, a 15/35/55/75% da duração (o último limitado a acabar 0,3 s antes do fim). Depois da
+     conferência o ffmpeg corta os 4 s do momento escolhido em 1080×1920 em **cover** com corte
+     central, gravando por `.parcial`, mais os 3 quadros dele (o do meio é a miniatura do editor);
+     a fonte do clipe leva `&t=<s>` do momento. Então **todos** os vídeos baixados da rodada são
+     apagados; se o Windows não deixa apagar, é `ErroRender` com o caminho (na falha do download,
+     nota no erro original). Os vídeos ficam no disco entre o download e a conferência (~40 MB
+     cada no render real).
+   - Id validado (`^[A-Za-z0-9_-]{11}$`), argumentos em lista, sem shell.
    - **2 fotos**, só na deixa literal: busca ddgs, download pelo ffmpeg com os limites do f9
      (só `http`/`https`, só demuxers de imagem, `-max_pixels`, prazo de 30 s por foto). A foto
      escolhida vira um 1080×1920 com a imagem inteira (contain) sobre ela mesma desfocada e
@@ -419,16 +440,22 @@ Etapa do corte, só no f4, antes do `index.html`:
      (`Unable to download`, `urlopen error`, `timed out`, ...) viram falha transitória; outro código
      diferente de 0 (módulo ausente, extractor quebrado) derruba o corte com a mensagem do yt-dlp.
    - **Candidatos guardados antes da conferência** (`ilustracao/candidatos.json`, mesma chave e
-     mesma deixa, arquivos ainda no disco): erro na folha ou na conferência (ErroLLM) não faz buscar
-     e baixar de novo na próxima rodada. Apagado quando a conferência responde.
-3. **Conferência:** os candidatos viram **folhas mistas** — uma linha por deixa, tiles `D<k>-V<j>`
-   (3 quadros do trecho: início, meio e fim) e `D<k>-F<j>` (a foto), rótulo numa faixa acima de
-   cada tile — com **até 4 deixas por folha** (com 2 vídeos + 2 fotos a linha fica larga; 6
-   deixas deixavam o quadro ilegível depois que o modelo reduz a imagem). **Uma chamada só** por
-   corte confere todas as folhas e devolve, por deixa, `V<j>`, `F<j>` ou `null`. O prompt manda
-   **preferir vídeo** quando ele mostra a coisa, recusar vídeo em que a coisa aparece num quadro só
-   ou que é alguém falando para a câmera, e foto só na literal. Read preso à pasta das folhas como
-   no f9 (`--tools Read`, `--permission-mode dontAsk`, `permission_denials` vira `ErroLLM`).
+     mesma deixa, arquivos ainda no disco — o vídeo baixado e os quadros de cada momento): erro na
+     folha ou na conferência (ErroLLM) não faz buscar e baixar de novo na próxima rodada. Apagado
+     quando a conferência responde. Cache em formato 5 (o 4, de trechos de 3 s, é refeito).
+3. **Conferência:** os candidatos viram **folhas mistas** — um bloco por deixa, com uma linha por
+   vídeo (os 4 momentos lado a lado, tiles `D<k>-V<j>m<p>` de 3 quadros de 120 px) e uma linha de
+   fotos (`D<k>-F<j>`, 300 px), rótulo numa faixa acima de cada tile — com **2 deixas por folha**
+   (a linha de 4 momentos tem ~1,5 mil px; o modelo reduz a folha a ~1568 px no lado maior).
+   **Uma chamada só** por corte confere todas as folhas e devolve, por deixa, `V<j>m<p>`, `F<j>` ou
+   `null`. Critério (reescrito em 2026-10-03: recusava gente pondo o boné e aprovava a paisagem):
+   **aceitar** o momento em que a coisa ou a cena é reconhecível nos 3 quadros, mesmo com gente
+   usando, vestindo ou segurando; com marca ou time dito, tem de ser dele, mas o logo não precisa
+   aparecer em todo quadro; **recusar só** o que não mostra (ou mostra outra marca/time), o que
+   some em algum quadro (paisagem, outra cena, vinheta), quem fala para a câmera e o texto grande
+   ou tarja que domina a tela; **preferir vídeo** a foto, e entre momentos que passam o que mostra
+   a coisa maior. Read preso à pasta das folhas como no f9 (`--tools Read`, `--permission-mode
+   dontAsk`, `permission_denials` vira `ErroLLM`).
 4. **Montagem** (`render/formatos/broll.tpl`, base do f7): cada deixa com visual vira um
    `<video class="clip broll">` (ou `<div class="clip broll"><img>`) em tela cheia, que aparece e
    some **seco** — sem Ken Burns, sem flash, sem zoom, sem opacidade gradual. A legenda continua
@@ -459,6 +486,32 @@ silenciosa. Pedir f9 no app (episódio novo, renderizar, edição) dá a mesma m
 quadro do vídeo ou a foto) e o motivo, e tem o botão "Refazer B-roll". O link da fonte mostra o
 canal do vídeo e só sai com `http`/`https`. Trocar ou tirar um clipe à
 mão fica para depois.
+
+**Render real da melhora (2026-10-03, terceira rodada, plano `2026-10-03-melhora-f4.md`)**, mesmos
+2 cortes, comparados com a segunda rodada:
+
+| corte | deixas | vídeo / foto / sem visual | cobertura | trocas/10 s | tempo |
+|---|---|---|---|---|---|
+| Bota (38,5 s) antes | 4 | 3 / 1 / 0 | 17% | 2,08 | — |
+| Bota depois | 4 | **4 / 0 / 0** | **37%** | 2,08 | 528 s |
+| Camisa (28,4 s) antes | 4 | 1 / 2 / 1 | 16% | 2,11 | — |
+| Camisa depois | 4 | **2 / 2 / 0** | **48%** | 2,81 | 328 s |
+
+- Momentos certos nos quadros do MP4: Macboot no pé (sem a paisagem), pé no pedal de marcha, Vans
+  sendo calçado, All Star de perto (antes só a caixa), escudo do Corinthians, e "fazer comercial"
+  ganhou vídeo de bastidor de gravação (antes, sem visual). Dos 6 vídeos, 3 começam entre 2 e 10 s
+  e 3 depois de 58 s (`&t=` da fonte) — o All Star do m4 é o tênis fora da caixa, que o corte a
+  25% não pegava.
+- As 2 fotos da camisa (São Paulo, New Era) não são da conferência: um **HTTP 403** no download do
+  2º vídeo de "fazer comercial" tirou o YouTube da rodada, como previsto (§8); a rodada não foi
+  repetida para não arriscar bloqueio.
+- Defeito achado e corrigido: o ffmpeg único com 12 entradas de 1080p e 12 saídas JPEG falhou em
+  2 de 8 vídeos (`ff_frame_thread_encoder_init failed`), derrubando o candidato; agora é um ffmpeg
+  por momento, `-threads 1` no mjpeg e `format=yuvj420p` (sem render real depois da correção,
+  pelo 403).
+- Ainda imperfeito: o momento escolhido da Macboot tem uma paisagem no 1º quadro da folha (o MP4
+  já mostra a bota a 0,2 s do clipe); a marcha foi ilustrada com tênis branco, não bota.
+- A conferência passou a ler 2 folhas por corte (era 1): 41 s e 73 s.
 
 **Tempo do vídeo (medido em 2026-10-03, segunda rodada):** o vídeo inteiro pelo downloader
 nativo resolveu o gargalo.

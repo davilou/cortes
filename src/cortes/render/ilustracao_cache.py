@@ -10,8 +10,8 @@ Dois arquivos, com a mesma chave (início, fim e um hash do texto das palavras q
   "Nada a mostrar" (sem deixa, ou a conferência recusou tudo) fica guardado em `vazio`, com o
   motivo: o próximo render dá o mesmo erro sem gastar LLM nem busca.
 
-Corrigir uma palavra da legenda muda o hash e invalida tudo. Cache de antes do `formato` 4 (o
-cartão de foto do f9) conta como ausente e é refeito.
+Corrigir uma palavra da legenda muda o hash e invalida tudo. Cache de outro `formato` (o 4,
+de trechos de 3 s; o cartão de foto do f9) conta como ausente e é refeito.
 """
 import hashlib
 import json
@@ -28,7 +28,7 @@ from cortes.tipos import Palavra
 PASTA = "ilustracao"
 ARQUIVO = "ilustracao.json"
 ARQUIVO_DEIXAS = "deixas.json"
-FORMATO = 4   # 4: vídeo ou foto em tela cheia (f4); o cartão de foto do f9 é refeito
+FORMATO = 5   # 5: clipes de até 4 s, esticados, e momentos do vídeo; 4: trechos de 3 s; f9: refeito
 Midia = Literal["video", "foto"]
 LICENCA_FOTO = "desconhecida"   # foto de terceiros achada na busca (spec §10)
 

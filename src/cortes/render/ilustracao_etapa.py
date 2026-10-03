@@ -15,10 +15,17 @@ from pathlib import Path
 from cortes.detector import ChamarLLM
 from cortes.llm import ErroLLM
 from cortes.render.assets import apagar_clipes
-from cortes.render.broll_candidatos import Achadas, DepCandidatos, YouTube, achar
+from cortes.render.broll_candidatos import (
+    Achadas,
+    DepCandidatos,
+    YouTube,
+    achar,
+    apagar_brutos,
+    trecho_escolhido,
+)
 from cortes.render.broll_candidatos_cache import apagar_achadas, gravar_achadas, ler_achadas
 from cortes.render.broll_folha import LinhaFolha, dividir_folhas, gerar_folha
-from cortes.render.broll_video import foto_cheia
+from cortes.render.broll_quadros import foto_cheia
 from cortes.render.ilustracao import Deixa, deixas_do_corte
 from cortes.render.ilustracao_cache import (
     PASTA,
@@ -71,18 +78,29 @@ def _foto(k: int, deixa: Deixa, a: Achadas, e: Escolha, j: int, dep: DepIlustrac
                       False)
 
 
+def _video(k: int, deixa: Deixa, a: Achadas, e: Escolha, rotulo: str, dep: DepIlustracao) -> Ilustracao:
+    """O momento escolhido (`V<j>m<p>`) cortado em tela cheia do vídeo baixado; se o ffmpeg falha,
+    a deixa fica sem visual com o motivo (não é transitório). A fonte aponta para o momento."""
+    j, p = (int(n) for n in rotulo[1:].split("m"))
+    v = a.videos[j - 1]
+    try:
+        trecho = trecho_escolhido(v, p, dep.rodar_video)
+    except ErroRender as erro:
+        return Ilustracao(k, deixa, None, None, None, f"sem visual: o vídeo {rotulo} foi escolhido, "
+                          f"mas o trecho não saiu: {erro}", tuple(a.falhas), False)
+    url = f"{v.candidato.url}&t={int(v.momentos[p - 1].inicio)}s"
+    return Ilustracao(k, deixa, "video", trecho, Fonte(url, v.candidato.canal, v.candidato.titulo),
+                      e.motivo, tuple(a.falhas), False)
+
+
 def _ilustracao(k: int, deixa: Deixa, a: Achadas, e: Escolha | None, dep: DepIlustracao) -> Ilustracao:
-    """A escolha vira o arquivo do clipe: o trecho já baixado, ou a foto montada em tela cheia."""
-    falhas = tuple(a.falhas)
+    """A escolha vira o arquivo do clipe: o momento do vídeo cortado, ou a foto em tela cheia."""
     if e is None or e.candidato is None:   # sem candidato (não foi à conferência) ou todos recusados
         motivo = a.motivo if e is None else e.motivo
-        return Ilustracao(k, deixa, None, None, None, motivo, falhas, a.transitorio)
-    j = int(e.candidato[1:])
+        return Ilustracao(k, deixa, None, None, None, motivo, tuple(a.falhas), a.transitorio)
     if e.candidato[0] == "F":
-        return _foto(k, deixa, a, e, j, dep)
-    v = a.videos[j - 1]
-    fonte = Fonte(v.candidato.url, v.candidato.canal, v.candidato.titulo)
-    return Ilustracao(k, deixa, "video", v.trecho, fonte, e.motivo, falhas, False)
+        return _foto(k, deixa, a, e, int(e.candidato[1:]), dep)
+    return _video(k, deixa, a, e, e.candidato, dep)
 
 
 def _achar(pasta: Path, chave: Chave, numeradas: list[tuple[int, Deixa]],
@@ -100,11 +118,13 @@ def _achar(pasta: Path, chave: Chave, numeradas: list[tuple[int, Deixa]],
 
 def _escolher(pasta: Path, chave: Chave, numeradas: list[tuple[int, Deixa]],
               dep: DepIlustracao) -> list[Ilustracao]:
-    """Busca, baixa e confere as deixas dadas (k, deixa) — numa conferência só."""
+    """Busca, baixa e confere as deixas dadas (k, deixa) — numa conferência só. Os vídeos baixados
+    ficam até a conferência responder e o momento escolhido ser cortado; aí são todos apagados."""
     achadas = _achar(pasta, chave, numeradas, dep)
     linhas = [achadas[k].linha(k, deixa) for k, deixa in numeradas]
     escolhas = _conferir(pasta, linhas, dep) if any(ln.rotulos() for ln in linhas) else {}
     ilus = [_ilustracao(k, deixa, achadas[k], escolhas.get(k), dep) for k, deixa in numeradas]
+    apagar_brutos(achadas.values())
     apagar_achadas(pasta)
     return ilus
 

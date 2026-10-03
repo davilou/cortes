@@ -44,6 +44,7 @@ class Ilustra:
         self.buscas: list[str] = []
         self.buscas_yt: list[str] = []
         self.trechos: list[str] = []
+        self.ffmpeg: list[list[str]] = []
         self.pasta_read: Path | None = None
         self.downloads: list[str] = []
         self.prompts_llm: list[str] = []
@@ -99,6 +100,7 @@ class Ilustra:
                     return 1, saida
             Path(args[args.index("-o") + 1].replace("%(ext)s", "mp4")).write_bytes(b"bruto")
             return 0, ""
+        self.ffmpeg.append(args)
         for i, a in enumerate(args):
             if a.endswith((".mp4", ".jpg")) and args[i - 1] != "-i":
                 Path(a).write_bytes(b"x")
@@ -141,7 +143,7 @@ def _lido(pasta: Path):  # type: ignore[no-untyped-def]
 
 def test_f4_escolhe_o_video_e_reaproveita_o_cache(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
-    il = Ilustra([VANS], [_e(1, "V2", "é o tênis")])
+    il = Ilustra([VANS], [_e(1, "V2m3", "é o tênis")])
     renderizar_corte(pasta, C4, tmp_path, il.dep(f))
     renderizar_corte(pasta, concluir(C4), tmp_path, il.dep(f))
     # recorte, rosto, folha, MP4 — e no segundo render só o MP4; YouTube e fotos têm executor próprio
@@ -152,7 +154,14 @@ def test_f4_escolhe_o_video_e_reaproveita_o_cache(tmp_path: Path) -> None:
     assert (il.llm, il.conferencias) == (1, 1) and il.pasta_read == _d(pasta) / "ilustracao"
     [i] = _lido(pasta).ilustracoes
     assert i.midia == "video" and i.arquivo == _d(pasta) / "ilustracao" / "D1-v2.mp4"
-    assert i.fonte is not None and i.fonte.url.endswith(vid(busca, 2)) and i.fonte.canal == "Canal 2"
+    # o 3º momento do vídeo de 90 s começa a 55%: 49,5 s; a fonte aponta para ele
+    assert i.fonte is not None and i.fonte.canal == "Canal 2"
+    assert i.fonte.url.endswith(f"{vid(busca, 2)}&t=49s")
+    [corte] = [a for a in il.ffmpeg if any(x.endswith("D1-v2.parcial.mp4") for x in a)]
+    assert corte[corte.index("-ss") + 1] == "49.500"
+    assert corte[corte.index("-i") + 1].endswith("D1-v2.bruto.mp4")
+    assert not list((_d(pasta) / "ilustracao").glob("*.bruto.*"))   # os vídeos baixados foram apagados
+    assert (_d(pasta) / "ilustracao" / "D1-v2-q2.jpg").exists()      # a miniatura do editor
     assert (_d(pasta) / "projeto" / "assets" / "broll-1.mp4").exists()
     html = (_d(pasta) / "projeto" / "index.html").read_text(encoding="utf-8")
     assert '<video class="clip broll" id="broll-1"' in html and 'src="assets/broll-1.mp4"' in html
@@ -161,13 +170,14 @@ def test_f4_escolhe_o_video_e_reaproveita_o_cache(tmp_path: Path) -> None:
 
 def test_folha_e_conferencia_marcam_video_e_foto(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
-    il = Ilustra([VANS, TEMPO], [_e(1, "V1"), _e(2, "V1")])
+    il = Ilustra([VANS, TEMPO], [_e(1, "V1m1"), _e(2, "V1m1")])
     montar_projeto(pasta, C4, tmp_path, il.dep(f))
     [prompt] = il.prompts_conferencia
-    assert "- D1 (literal, coisa citada)" in prompt and "vídeos D1-V1 a D1-V2; fotos D1-F1 a D1-F2" in prompt
+    assert "- D1 (literal, coisa citada)" in prompt and "vídeo D1-V2, momentos m1 a m4; fotos D1-F1" in prompt
     assert "- D2 (acontecimento, só vídeo)" in prompt and "D2-F" not in prompt
     assert il.buscas == [VANS["busca"]]   # acontecimento não busca foto
     assert (_d(pasta) / "ilustracao" / "D1-v1-q2.jpg").exists()
+    assert (_d(pasta) / "ilustracao" / "D1-v2-m4-q3.jpg").exists()   # os quadros dos momentos ficam
 
 
 def test_foto_escolhida_vira_tela_cheia(tmp_path: Path) -> None:
@@ -195,7 +205,7 @@ def test_429_na_busca_para_o_youtube_na_rodada_e_a_foto_cobre_a_literal(tmp_path
 
 def test_429_no_trecho_nao_tenta_o_proximo_video_e_e_transitorio(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
-    il = Ilustra([TEMPO], [_e(1, "V1")])
+    il = Ilustra([TEMPO], [_e(1, "V1m1")])
     il.falha_trecho = {vid(TEMPO["busca"], 1): BLOQUEIO}
     with pytest.raises(ErroRender, match=re.escape(TEMPORARIA) + ".*limitou ou bloqueou"):
         montar_projeto(pasta, C4, tmp_path, il.dep(f))
@@ -207,7 +217,7 @@ def test_429_no_trecho_nao_tenta_o_proximo_video_e_e_transitorio(tmp_path: Path)
 
 def test_acontecimento_sem_video_fica_sem_visual_com_o_motivo(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
-    il = Ilustra([VANS, TEMPO], [_e(1, "V1")])
+    il = Ilustra([VANS, TEMPO], [_e(1, "V1m1")])
     il.sem_video = {TEMPO["busca"]}
     montar_projeto(pasta, C4, tmp_path, il.dep(f))
     vans, tempo = _lido(pasta).ilustracoes
@@ -218,7 +228,7 @@ def test_acontecimento_sem_video_fica_sem_visual_com_o_motivo(tmp_path: Path) ->
 
 def test_trecho_novo_apaga_o_broll_e_refaz(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
-    il = Ilustra([VANS], [_e(1, "V1")])
+    il = Ilustra([VANS], [_e(1, "V1m1")])
     montar_projeto(pasta, C4, tmp_path, il.dep(f))
     assets = _d(pasta) / "projeto" / "assets"
     (assets / "broll-7.mp4").write_bytes(b"velho")
@@ -284,7 +294,7 @@ def test_ytdlp_quebrado_na_busca_derruba_o_corte_com_a_mensagem(tmp_path: Path) 
 
 def test_foto_que_nao_monta_em_tela_cheia_fica_sem_visual_com_o_motivo(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
-    il = Ilustra([VANS, TEMPO], [_e(1, "F1"), _e(2, "V1")])
+    il = Ilustra([VANS, TEMPO], [_e(1, "F1"), _e(2, "V1m1")])
     video = il.video
 
     def cheia_quebra(args: list[str], cwd: Path | None) -> tuple[int, str]:
@@ -300,7 +310,7 @@ def test_foto_que_nao_monta_em_tela_cheia_fica_sem_visual_com_o_motivo(tmp_path:
 
 def test_erro_do_llm_na_conferencia_nao_refaz_os_downloads(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
-    il = Ilustra([VANS, TEMPO], [_e(1, "F1"), _e(2, "V2")])
+    il = Ilustra([VANS, TEMPO], [_e(1, "F1"), _e(2, "V2m1")])
     conferir = il.chamar_com_read
 
     def falha_uma_vez(*args: Any) -> dict[str, Any]:
@@ -317,5 +327,23 @@ def test_erro_do_llm_na_conferencia_nao_refaz_os_downloads(tmp_path: Path) -> No
     assert (il.buscas_yt, il.trechos, il.buscas, il.downloads) == baixados and il.llm == 1
     vans, tempo = _lido(pasta).ilustracoes
     assert vans.midia == "foto" and tempo.midia == "video" and tempo.fonte is not None
-    assert tempo.fonte.url.endswith(vid(TEMPO["busca"], 2)) and tempo.fonte.canal == "Canal 2"
+    assert tempo.fonte.url.endswith(f"{vid(TEMPO['busca'], 2)}&t=13s") and tempo.fonte.canal == "Canal 2"
+    assert not list((_d(pasta) / "ilustracao").glob("*.bruto.*"))
     assert not (_d(pasta) / "ilustracao" / "candidatos.json").exists()
+
+
+def test_trecho_do_momento_que_nao_sai_fica_sem_visual_e_apaga_os_videos(tmp_path: Path) -> None:
+    pasta, f = ep4(tmp_path), Falso()
+    il = Ilustra([VANS, TEMPO], [_e(1, "F1"), _e(2, "V1m2")])
+    video = il.video
+
+    def corte_quebra(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        if any(a.endswith("D2-v1.parcial.mp4") for a in args):
+            return 1, "Invalid data found when processing input"
+        return video(args, cwd)
+
+    montar_projeto(pasta, C4, tmp_path, replace(il.dep(f), rodar_video=corte_quebra))
+    vans, tempo = _lido(pasta).ilustracoes
+    assert vans.midia == "foto" and tempo.midia is None and not tempo.transitorio
+    assert "V1m2" in tempo.motivo and "Invalid data" in tempo.motivo
+    assert not list((_d(pasta) / "ilustracao").glob("*.bruto.*"))

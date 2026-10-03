@@ -7,7 +7,7 @@
     <style>
       /* Formato 4 — B-roll real, automático (plano 2026-10-03-broll-automatico): a base do f7 (tela
          cheia no rosto, corte seco na troca de câmera, legenda embaixo) e, quando a pessoa cita uma
-         coisa ou um acontecimento, um clipe de 1,5–3 s em tela cheia. O clipe aparece e some seco
+         coisa ou um acontecimento, um clipe de 1,5–4 s em tela cheia. O clipe aparece e some seco
          (o runtime liga e desliga o .clip na janela dele): sem Ken Burns, sem flash, sem zoom, sem
          fade (Davi, 2026-10-03). A legenda fica por cima do clipe. */
       * { margin: 0; padding: 0; box-sizing: border-box; }

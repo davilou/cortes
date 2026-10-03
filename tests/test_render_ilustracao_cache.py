@@ -15,7 +15,7 @@ from cortes.render.processo import ErroRender
 from tests.test_render_ilustracao_etapa import C4, CAMISA, TEMPO, VANS, Ilustra, _d, _e, _lido, ep4
 from tests.test_render_pipeline import Falso
 
-OK = [_e(1, "V1", "é o tênis"), _e(2, "V1", "é a camisa")]
+OK = [_e(1, "V1m1", "é o tênis"), _e(2, "V1m1", "é a camisa")]
 BUSCA_VANS, BUSCA_CAMISA, BUSCA_TEMPO = VANS["busca"], CAMISA["busca"], TEMPO["busca"]
 
 
@@ -29,7 +29,7 @@ def test_deixas_ficam_num_arquivo_proprio_com_a_chave(tmp_path: Path) -> None:
 
 def test_escolha_guarda_midia_fonte_licenca_e_risco(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
-    montar_projeto(pasta, C4, tmp_path, Ilustra([VANS, CAMISA], [_e(1, "V1"), _e(2, "F1")]).dep(f))
+    montar_projeto(pasta, C4, tmp_path, Ilustra([VANS, CAMISA], [_e(1, "V1m1"), _e(2, "F1")]).dep(f))
     bruto = json.loads((_d(pasta) / "ilustracao" / "ilustracao.json").read_text(encoding="utf-8"))
     video, foto = bruto["ilustracoes"]
     assert (video["midia"], video["arquivo"], video["canal"]) == ("video", "D1-v1.mp4", "Canal 1")
@@ -40,7 +40,7 @@ def test_escolha_guarda_midia_fonte_licenca_e_risco(tmp_path: Path) -> None:
 
 def test_youtube_que_falhou_e_refeito_sem_llm_e_so_ele_vai_a_conferencia(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
-    il = Ilustra([VANS, TEMPO], [_e(1, "F1"), _e(2, "V1")])
+    il = Ilustra([VANS, TEMPO], [_e(1, "F1"), _e(2, "V1m1")])
     il.falha_yt = {BUSCA_VANS}   # a foto cobre o Vans; o acontecimento nem tenta o YouTube
     montar_projeto(pasta, C4, tmp_path, il.dep(f))
     vans, tempo = _lido(pasta).ilustracoes

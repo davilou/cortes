@@ -3,9 +3,11 @@ acontecimentos que dá para mostrar num clipe em tela cheia (plano 2026-10-03-br
 
 As regras de ritmo vão no prompt e são aplicadas de novo aqui no código: o LLM pode errar a conta,
 e um clipe cobrindo o gancho, trocando sem deixar o rosto voltar ou tapando a maior parte do Short
-estraga o corte (spec §6, R2 pista).
+estraga o corte (spec §6, R2 pista). Depois de espaçadas, as deixas são esticadas até DUR_MAX_S
+(plano 2026-10-03-melhora-f4): com o fim na última palavra que cita a coisa, o clipe ficava em
+~1,5 s e o B-roll cobria só 16–17% do Short, longe dos ~40–60% da R2.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal, get_args
 
 from cortes.detector import ChamarLLM, chamar_llm_real
@@ -17,7 +19,7 @@ TipoDeixa = Literal["literal", "acontecimento"]
 TIPOS: tuple[str, ...] = get_args(TipoDeixa)
 GANCHO_S = 1.0          # nada de B-roll no primeiro 1 s: é o gancho, com o rosto
 DUR_MIN_S = 1.5         # menos que isso o clipe pisca e some antes de ser visto
-DUR_MAX_S = 3.0         # mais que isso o clipe tapa o rosto tempo demais
+DUR_MAX_S = 4.0         # mais que isso o clipe tapa o rosto tempo demais (o f3 usa o mesmo teto)
 ROSTO_MIN_S = 1.5       # rosto entre o fim de um clipe e o início do próximo
 FRACAO_MAX = 0.6        # B-roll somado ≤ 60% da duração do Short (spec §6, R2 pista)
 MAX_DEIXAS = 12
@@ -53,7 +55,9 @@ _REGRAS = f"""Regras:
   - "literal": uma coisa concreta citada, que dá para filmar ou fotografar: produto, marca com \
 objeto (ex.: tênis Vans), lugar, veículo, comida, animal, roupa ou objeto.
   - "acontecimento": uma cena que a fala evoca e que um vídeo mostra (ex.: "a pandemia" → rua \
-vazia; "fui de jatinho" → jato particular decolando).
+vazia; "fui de jatinho" → jato particular decolando; "fiz um comercial" → bastidor de gravação).
+- Quando a fala narra um fato (algo que aconteceu, que a pessoa ou alguém fez), marque um \
+acontecimento com a cena desse fato, mesmo sem coisa concreta citada.
 - Nada abstrato: "dinheiro" no sentido genérico, "sucesso", "ideia", "vida", sentimentos.
 - Nada de peça ou característica de um produto descrita de forma vaga (ex.: "negócio que evita \
 torção", "sola ultra resistente", "o tecido que não amassa"): a busca disso traz outra coisa. \
@@ -64,10 +68,16 @@ Marque só a coisa inteira, que dá para nomear (a bota, o tênis, a camisa), se
 com marca e modelo quando forem ditos (ex.: "tênis Vans Old Skool", "camisa do Corinthians"). Use \
 o termo que mais acharia vídeo daquilo: em português no literal; no acontecimento, em inglês \
 quando render mais vídeo (ex.: "empty city street lockdown", "private jet takeoff").
+- Na busca do acontecimento, descreva o que a câmera filmaria, em termos visuais concretos (quem, \
+fazendo o quê, onde), não o tema (ex.: "fazer comercial" → "filming a commercial behind the \
+scenes", não "commercial"). Evite o que traz gente explicando em vez da cena: tutorial, review, \
+"how to", "dicas".
 - O clipe mostra a coisa de que a pessoa fala, não outra parecida. Cada coisa entra uma vez só: \
 não marque de novo uma coisa já marcada, nem uma palavra genérica que volta a ela (ex.: "a \
 camiseta" depois de "camisa do Corinthians" é a mesma camisa; uma busca "camisa de futebol" \
 traria a de outro time). Busca genérica só quando a fala é genérica de verdade.
+- Procure uma deixa a cada 6 a 10 s de fala, quando houver o que mostrar: o clipe cobre também \
+a fala seguinte.
 - Ritmo: nada no primeiro {GANCHO_S:.0f} s, que é o gancho com o rosto; cada clipe dura de \
 {DUR_MIN_S:.1f} a {DUR_MAX_S:.0f} s; pelo menos {ROSTO_MIN_S:.1f} s de rosto entre um clipe e o \
 próximo; somados, no máximo {FRACAO_MAX:.0%} do Short.
@@ -144,6 +154,32 @@ def _limitar(deixas: list[Deixa], dur: float) -> list[Deixa]:
     return ficam
 
 
+def _esticar(deixas: list[Deixa], fim_fala: float, dur: float) -> list[Deixa]:
+    """Cada deixa vai até DUR_MAX_S, sem chegar a menos de ROSTO_MIN_S da próxima, sem passar do fim
+    da fala e sem a soma passar de FRACAO_MAX do Short (a folga vai para as primeiras)."""
+    folga = FRACAO_MAX * dur - sum(d.fim - d.inicio for d in deixas)
+    esticadas: list[Deixa] = []
+    for i, d in enumerate(deixas):
+        teto = min(d.inicio + DUR_MAX_S, fim_fala)
+        if i + 1 < len(deixas):
+            teto = min(teto, deixas[i + 1].inicio - ROSTO_MIN_S)
+        ganho = max(0.0, min(teto - d.fim, folga))
+        folga -= ganho
+        esticadas.append(replace(d, fim=round(d.fim + ganho, 3)))
+    return esticadas
+
+
+def ritmo_broll(clipes: list[Deixa], dur: float) -> tuple[float, float]:
+    """Puro. (fração do Short coberta pelos clipes, trocas de plano por 10 s): cada clipe entra e
+    sai do rosto; o que vai até o fim do Short só entra. Base da comparação com a R2 (alvo ~40–60%
+    de visual e 0,6–0,8 trocas/10 s)."""
+    if not clipes:
+        return 0.0, 0.0
+    coberto = sum(min(c.fim, dur) - c.inicio for c in clipes)
+    trocas = sum(1 if c.fim >= dur - 1e-6 else 2 for c in clipes)
+    return coberto / dur, trocas / dur * 10
+
+
 def deixas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM = chamar_llm_real,
                     modelo: str = "sonnet") -> list[Deixa]:
     """`palavras` já no tempo do trecho sem pausas (as mesmas da legenda); `dur` é a duração desse
@@ -157,4 +193,4 @@ def deixas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM = cha
     for item in bruto["deixas"]:
         ini, fim = _tempos(item, palavras)
         deixas.append(Deixa(ini, fim, item["coisa"].strip(), item["busca"].strip(), _tipo(item)))
-    return _limitar(_espacar(deixas), dur)
+    return _esticar(_limitar(_espacar(deixas), dur), palavras[-1].fim, dur)
