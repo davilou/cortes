@@ -5,14 +5,18 @@ import pytest
 
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import (
+    ALVO_METADE,
+    JANELA_METADE,
     Amostra,
     Face,
     Rosto,
+    escala_metade,
     largura_quadro,
     ler_rosto,
     medir_rosto,
     pessoas,
     planos,
+    quadro_metade,
     trilha_fixa,
 )
 
@@ -60,6 +64,23 @@ def test_trilha_fixa_padrao_e_escolha() -> None:
     assert trilha_fixa(R, {}) == [[0.0, -1184.4, 0.0, 1], [1.9, -2333.3, 0.0, 1]]
     assert trilha_fixa(R, {1: 0}) == [[0.0, -1184.4, 0.0, 1], [1.9, -188.9, 0.0, 1]]
     assert largura_quadro(R) == 3413
+
+
+def _reduzido(r: Rosto, f: float) -> Rosto:
+    return Rosto(round(r.largura * f), round(r.altura * f),
+                 tuple(Amostra(a.t, tuple(Face(x.x * f, x.y * f, x.r * f, x.conf) for x in a.rostos))
+                       for a in r.amostras), r.cortes)
+
+
+@pytest.mark.parametrize("fator, escala", [(1.0, 1.0), (2 / 3, 1.5)])
+def test_trilha_da_metade_de_cima_em_1080p_e_720p(fator: float, escala: float) -> None:
+    """f5 (gameplay): quem fala na metade de cima, janela 1080×960, rosto em (540, 380) e a fonte
+    a 1080 de altura (escala 1,0 em 1080p, como o protótipo; 1,5 em 720p)."""
+    r = _reduzido(R, fator)
+    e = escala_metade(r)
+    assert e == pytest.approx(escala) and quadro_metade(r) == (1920, 1080)
+    assert trilha_fixa(r, {}, JANELA_METADE, ALVO_METADE, e) == [[0.0, -430.0, -120.0, 1],
+                                                                 [1.9, -840.0, -120.0, 1]]
 
 
 def test_escolha_inexistente_e_erro() -> None:

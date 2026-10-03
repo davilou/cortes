@@ -32,14 +32,14 @@ formatos:
     obs: R2 sem efeito em finanças
     descricao: "Quem fala em cima e um vídeo de gameplay 'satisfatório' embaixo — versão com pausas cortadas e trilha."
     evidencia: "Sem efeito em finanças na R2 (10% em todos os grupos); talvez sirva a humor."
-    no_app: "fora"
+    no_app: "plano B"
     demo: "testes/d2-gameplay-ficou-rico/d2-gameplay-ficou-rico.mp4"
   f6:
     nome: Estilo Hormozi
     obs: contraprova R1+R2
     descricao: "Legenda grande palavra a palavra com destaque colorido — versão com pausas cortadas e trilha."
     evidencia: "Destaque colorido aparece mais quanto pior o grupo (35·48·65%) — contraprova."
-    no_app: "fora"
+    no_app: "plano B"
     demo: "testes/d2-hormozi-netflix/d2-hormozi-netflix.mp4"
   f7:
     nome: Conversa com reações
@@ -53,5 +53,5 @@ formatos:
     obs: anti-controle
     descricao: "O vídeo 16:9 inteiro no meio, com o mesmo vídeo desfocado ao fundo."
     evidencia: "Anti-controle: zero virais na R1 e na R2."
-    no_app: "fora"
+    no_app: "plano B"
     demo: "testes/f8-desfoque-20-vezes/f8-desfoque-20-vezes.mp4"

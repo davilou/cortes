@@ -127,16 +127,22 @@ def args_recorte(video: Path, destino: Path, ini: float, segs: list[Segmento]) -
             "-preset", "fast", "-c:a", "aac", "-b:a", "192k", str(destino)]
 
 
-def recortar(video: Path, destino: Path, ini: float, segs: list[Segmento], rodar: Rodar) -> None:
+def gerar_por_parcial(destino: Path, args: Callable[[Path], list[str]], rodar: Rodar, passo: str) -> None:
+    """Grava em `<nome>.parcial.mp4` e só renomeia no fim: falha no meio nunca deixa um MP4 pela
+    metade no lugar final. Sair 0 sem gerar o arquivo (ou gerar vazio) também é erro."""
     parcial = destino.with_name(destino.stem + ".parcial.mp4")
     try:
-        exigir(rodar, args_recorte(video, parcial, ini, segs), None, "recorte do trecho")
+        exigir(rodar, args(parcial), None, passo)
         if not parcial.exists() or parcial.stat().st_size == 0:
-            raise ErroRender(f"recorte do trecho terminou sem gerar {parcial.name}")
+            raise ErroRender(f"{passo} terminou sem gerar {parcial.name}")
     except ErroRender:
         parcial.unlink(missing_ok=True)
         raise
     parcial.replace(destino)
+
+
+def recortar(video: Path, destino: Path, ini: float, segs: list[Segmento], rodar: Rodar) -> None:
+    gerar_por_parcial(destino, lambda p: args_recorte(video, p, ini, segs), rodar, "recorte do trecho")
 
 
 TIMEOUT_WAV_S = 120

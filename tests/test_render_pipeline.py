@@ -4,9 +4,11 @@ from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from cortes.render.corte import Edicoes, concluir, novo_corte
 from cortes.render.pipeline import DepRender, janela, montar_projeto, renderizar_corte
+from cortes.render.processo import ErroRender
 
 REPO = Path(__file__).resolve().parents[1]
 ROSTO = {"formato": 2, "largura": 1920, "altura": 1080, "cortes": [],
@@ -113,3 +115,34 @@ def test_novo_trecho_apaga_miniaturas_velhas(tmp_path: Path) -> None:
     (mini / "p0-0.jpg").write_bytes(b"x")
     montar_projeto(pasta, replace(C, inicio=11.0), tmp_path, f.dep())
     assert not mini.exists()
+
+
+def test_f8_gera_o_fundo_uma_vez_e_reaproveita(tmp_path: Path) -> None:
+    pasta, f = episodio(tmp_path), Falso()
+    c = replace(C, formato="f8")
+    renderizar_corte(pasta, c, tmp_path, f.dep())
+    renderizar_corte(pasta, concluir(c), tmp_path, f.dep())
+    assert f.chamadas == ["ffmpeg", "py-visao", "ffmpeg", "npx", "npx"]
+    assets = pasta / "cortes" / "0" / "projeto" / "assets"
+    assert (assets / "fundo.mp4").exists()
+    html = (pasta / "cortes" / "0" / "projeto" / "index.html").read_text(encoding="utf-8")
+    assert '<div id="titulo">T</div>' in html
+
+
+def test_f5_gera_o_gameplay_uma_vez_e_refaz_com_trecho_novo(tmp_path: Path) -> None:
+    pasta, f = episodio(tmp_path), Falso()
+    (tmp_path / "biblioteca" / "gameplay").mkdir(parents=True)
+    (tmp_path / "biblioteca" / "gameplay" / "orbital.mp4").write_bytes(b"x")
+    c = replace(C, formato="f5")
+    renderizar_corte(pasta, c, tmp_path, f.dep())
+    renderizar_corte(pasta, concluir(c), tmp_path, f.dep())
+    assert f.chamadas == ["ffmpeg", "py-visao", "ffmpeg", "npx", "npx"]
+    renderizar_corte(pasta, replace(concluir(c), inicio=11.0), tmp_path, f.dep())
+    assert f.chamadas[5:] == ["ffmpeg", "py-visao", "ffmpeg", "npx"]
+
+
+def test_f5_sem_gameplay_na_biblioteca_e_erro(tmp_path: Path) -> None:
+    pasta, f = episodio(tmp_path), Falso()
+    with pytest.raises(ErroRender, match="sem gameplay"):
+        renderizar_corte(pasta, replace(C, formato="f5"), tmp_path, f.dep())
+    assert "npx" not in f.chamadas

@@ -1,7 +1,8 @@
 """Render de um corte, do trecho ao MP4 (spec produção §4.1).
 
 Trecho e rosto são caros e só dependem de início/fim: ficam gravados com `recorte.json` como
-marcador, que é escrito por último. Se início/fim mudarem (editor, plano C), os dois são refeitos.
+marcador, que é escrito por último. Se início/fim mudarem (editor, plano C), os dois são refeitos,
+e os assets do formato (fundo do f8, gameplay do f5; render/assets.py) são apagados e refeitos.
 `montar_projeto` (trecho + rosto + index.html com as edições) é o que a prévia do editor mostra;
 `renderizar_corte` chama `montar_projeto` e depois gera o MP4.
 """
@@ -10,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cortes.episodio import ler_json, salvar_json
+from cortes.render.assets import apagar_assets, preparar_assets
 from cortes.render.corte import Corte, pasta_corte
 from cortes.render.edicao import palavras_editadas
 from cortes.render.hyperframes import criar_projeto, renderizar
@@ -79,6 +81,7 @@ def preparar_trecho(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> lis
     mini = d / "miniaturas"   # quadros do trecho anterior: o trecho mudou, elas não valem mais
     if mini.exists():
         shutil.rmtree(mini)
+    apagar_assets(trecho.parent)   # fundo e gameplay saem do trecho (e da duração) anterior
     recortar(pasta_ep / "video.mp4", trecho, ini, segs, dep.rodar)
     medir_rosto(trecho, d / "rosto.json", raiz / SCRIPT_ROSTO, dep.py_visao, dep.modelo_rosto, dep.rodar)
     salvar_json(marca, {"inicio": ini, "fim": fim, "segmentos": segs})
@@ -92,14 +95,16 @@ def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento]) -> str:
     dur = duracao(segs)
     rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json")
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
-    return montar_html(tpl, valores(dur, rosto, grupos(ws, dur), c.edicoes.rostos))
+    return montar_html(tpl, valores(dur, rosto, grupos(ws, dur), c.edicoes.rostos, c.formato, c.titulo))
 
 
 def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
     """Trecho + rosto (com cache) e o index.html com as edições — o que a prévia do editor mostra
     e o render grava em MP4. Rápido quando início/fim não mudaram (só regera o HTML)."""
     segs = preparar_trecho(pasta_ep, c, raiz, dep)
-    criar_projeto(pasta_corte(pasta_ep, c.indice) / "projeto", _html(pasta_ep, c, raiz, segs))
+    proj = pasta_corte(pasta_ep, c.indice) / "projeto"
+    preparar_assets(proj / "assets", c.formato, c.indice, duracao(segs), raiz, dep.rodar)
+    criar_projeto(proj, _html(pasta_ep, c, raiz, segs))
 
 
 def renderizar_corte(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:

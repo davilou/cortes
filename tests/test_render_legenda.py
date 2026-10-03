@@ -1,3 +1,5 @@
+import pytest
+
 from cortes.render.legenda import Grupo, grupos, legenda_html, palavras_do_corte
 from cortes.tipos import Palavra
 
@@ -13,7 +15,8 @@ def test_palavras_do_corte_ficam_relativas_ao_inicio() -> None:
 
 def test_grupo_fecha_na_pontuacao_com_duas_palavras() -> None:
     gs = grupos([P("Eu", 0.0), P("perdi.", 0.6), P("Tudo", 1.2), P("mesmo", 1.8)], 3.0)
-    assert gs == [Grupo(0.0, 1.2, ("Eu", "perdi.")), Grupo(1.2, 1.8, ("Tudo", "mesmo"))]
+    assert gs == [Grupo(0.0, 1.2, ("Eu", "perdi."), (0.0, 0.6)),
+                  Grupo(1.2, 1.8, ("Tudo", "mesmo"), (1.2, 1.8))]
 
 
 def test_grupo_fecha_em_cinco_palavras_e_dura_no_maximo_2_6s() -> None:
@@ -64,5 +67,19 @@ def test_ultimo_grupo_com_duracao_zero_funde_no_anterior() -> None:
 
 
 def test_html_escapa_o_texto() -> None:
-    html = legenda_html([Grupo(0.0, 1.0, ("<b>", "&"))])
+    html = legenda_html([Grupo(0.0, 1.0, ("<b>", "&"), (0.0, 0.5))])
     assert "&lt;b&gt; &amp;" in html and 'data-start="0.0" data-duration="1.0"' in html
+
+
+def test_html_palavra_a_palavra_leva_o_inicio_de_cada_uma() -> None:
+    """f6 (Hormozi): cada palavra num <i data-t> com o início relativo ao trecho, como o protótipo
+    (testes/comum/corte.py:legenda_html(por_palavra=True)); o template acende a palavra falada."""
+    gs = grupos([P("Eu", 0.0), P("<perdi>.", 0.614), P("Tudo", 1.2)], 3.0)
+    html = legenda_html(gs, por_palavra=True)
+    assert '<span><i data-t="0.0">Eu</i> <i data-t="0.61">&lt;perdi&gt;.</i></span>' in html
+    assert '<span><i data-t="1.2">Tudo</i></span>' in html
+
+
+def test_grupo_com_tempos_a_menos_e_erro() -> None:
+    with pytest.raises(ValueError, match="tempos"):
+        Grupo(0.0, 1.0, ("a", "b"), (0.0,))

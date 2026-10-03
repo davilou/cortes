@@ -22,6 +22,11 @@ class Grupo:
     ini: float
     dur: float
     palavras: tuple[str, ...]
+    tempos: tuple[float, ...]   # início de cada palavra, relativo ao trecho (legenda palavra a palavra, f6)
+
+    def __post_init__(self) -> None:
+        if len(self.tempos) != len(self.palavras):
+            raise ValueError(f"grupo com {len(self.palavras)} palavras e {len(self.tempos)} tempos")
 
 
 def palavras_do_corte(palavras: list[Palavra], ini: float, fim: float) -> list[Palavra]:
@@ -84,12 +89,22 @@ def grupos(ws: list[Palavra], dur: float) -> list[Grupo]:
     for k, g in enumerate(gs):
         a = g[0].inicio
         b = gs[k + 1][0].inicio if k + 1 < len(gs) else dur
-        res.append(Grupo(round(a, 2), round(min(b, a + DUR_MAX_S) - a, 2), tuple(p.texto for p in g)))
+        res.append(Grupo(round(a, 2), round(min(b, a + DUR_MAX_S) - a, 2), tuple(p.texto for p in g),
+                         tuple(round(p.inicio, 2) for p in g)))
     return res
 
 
-def legenda_html(gs: list[Grupo]) -> str:
+def _corpo(g: Grupo, por_palavra: bool) -> str:
+    if por_palavra:
+        return " ".join(f'<i data-t="{t}">{html.escape(p)}</i>'
+                        for p, t in zip(g.palavras, g.tempos, strict=True))
+    return html.escape(" ".join(g.palavras))
+
+
+def legenda_html(gs: list[Grupo], por_palavra: bool = False) -> str:
+    """Com `por_palavra` (f6, Hormozi), cada palavra vira `<i data-t>` com o seu início, para o
+    template acender a palavra falada (protótipo: testes/comum/corte.py:legenda_html)."""
     return "\n".join(
         f'      <div class="clip leg" id="leg-{i}" data-start="{g.ini}" data-duration="{g.dur}" '
-        f'data-track-index="20"><span>{html.escape(" ".join(g.palavras))}</span></div>'
+        f'data-track-index="20"><span>{_corpo(g, por_palavra)}</span></div>'
         for i, g in enumerate(gs))

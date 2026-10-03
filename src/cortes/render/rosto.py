@@ -18,6 +18,11 @@ from cortes.render.processo import ErroRender, Rodar, exigir
 FORMATO_ROSTO = 2          # rosto.json com até 3 rostos por amostra (render/visao/rosto.py)
 JANELA = (1080, 1920)
 ALVO = (540, 700)          # onde o rosto fica na tela 9:16 (protótipo: CAM_CHEIO da rodada 1)
+# f5 (gameplay): quem fala na metade de cima. Protótipo: corte.trilha(d, 1.0, (1080, 960), (540, 380)),
+# com a fonte a 1080 de altura (escala 1,0 em 1080p) para sobrar margem de enquadramento na janela.
+JANELA_METADE = (1080, 960)
+ALVO_METADE = (540, 380)
+ALTURA_QUADRO_METADE = 1080
 PASSO_S = 0.25             # passo da amostragem em render/visao/rosto.py
 SEPARA = 0.08              # rostos a mais que isso (fração da largura) no eixo x são pessoas diferentes
 RUIDO = 0.2                # pessoa com menos que isso × as detecções da maior é ruído do detector
@@ -108,12 +113,21 @@ def ler_rosto(arquivo: Path) -> Rosto:
         raise ErroRender(f"{arquivo}: rosto inválido ({ex})") from ex
 
 
-def escala(r: Rosto) -> float:
+def escala_cheio(r: Rosto) -> float:
     return JANELA[1] / r.altura
 
 
 def largura_quadro(r: Rosto) -> int:
-    return round(r.largura * escala(r))
+    return round(r.largura * escala_cheio(r))
+
+
+def escala_metade(r: Rosto) -> float:
+    return ALTURA_QUADRO_METADE / r.altura
+
+
+def quadro_metade(r: Rosto) -> tuple[int, int]:
+    e = escala_metade(r)
+    return round(r.largura * e), round(r.altura * e)
 
 
 def pessoas(faces: list[Face], largura: int) -> tuple[Pessoa, ...]:
@@ -166,10 +180,12 @@ def _escolhida(p: Plano, escolhas: dict[int, int]) -> Pessoa | None:
     return p.pessoas[j]
 
 
-def trilha_fixa(r: Rosto, escolhas: dict[int, int]) -> list[list[float]]:
+def trilha_fixa(r: Rosto, escolhas: dict[int, int], janela: tuple[int, int] = JANELA,
+                alvo: tuple[int, int] = ALVO, escala: float | None = None) -> list[list[float]]:
     """[t, x, y, 1] no início de cada plano: deslocamento do quadro (≤ 0) que leva a pessoa do plano
-    ao ALVO sem mostrar borda. Plano sem rosto herda a posição do anterior (o primeiro, a do próximo
-    com rosto); nenhum plano com rosto é erro. O 1 final pede corte seco ao template."""
+    ao `alvo` da `janela` sem mostrar borda. Sem `escala`, vale a da tela cheia (fonte a 1920 de
+    altura). Plano sem rosto herda a posição do anterior (o primeiro, a do próximo com rosto);
+    nenhum plano com rosto é erro. O 1 final pede corte seco ao template."""
     pls = planos(r)
     invalidos = set(escolhas) - {p.k for p in pls if p.pessoas}
     if invalidos:
@@ -182,14 +198,14 @@ def trilha_fixa(r: Rosto, escolhas: dict[int, int]) -> list[list[float]]:
         alvos[i] = alvos[i] or alvos[i - 1]
     for i in range(len(alvos) - 2, -1, -1):
         alvos[i] = alvos[i] or alvos[i + 1]
-    e = escala(r)
-    jw, jh = JANELA
+    e = escala_cheio(r) if escala is None else escala
+    jw, jh = janela
     qw, qh = r.largura * e, r.altura * e
     res: list[list[float]] = []
     for p, a in zip(pls, alvos, strict=True):
         assert a is not None
-        res.append([p.ini, round(min(0.0, max(jw - qw, ALVO[0] - a.x * e)), 1),
-                    round(min(0.0, max(jh - qh, ALVO[1] - a.y * e)), 1), 1])
+        res.append([p.ini, round(min(0.0, max(jw - qw, alvo[0] - a.x * e)), 1),
+                    round(min(0.0, max(jh - qh, alvo[1] - a.y * e)), 1), 1])
     return res
 
 
