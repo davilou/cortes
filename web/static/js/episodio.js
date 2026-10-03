@@ -27,18 +27,25 @@ const corteDe = (D, indice) => D.cortes.find(k => k.indice === indice);
 const formatosEscolhidos = {};
 const escolhaDe = (id, indice) => formatosEscolhidos[id]?.[indice];
 
+// Nome do Short para leitor de tela: vários seletores e "Cancelar" convivem na tela, e "Formato do
+// Short" sozinho não diz qual. Número na ordem da tabela (índice + 1) e o título do candidato.
+function nomeShort(D, indice) {
+  return `Short ${indice + 1} — ${D.candidatos.find(x => x.indice === indice).titulo}`;
+}
+
 // Seletor de formato + botão que pede o render nesse formato: "Renderizar" (candidato sem corte,
 // com o formato padrão do episódio marcado), "tentar de novo" e "Renderizar de novo" (o do corte).
 // A escolha ainda não pedida (formatosEscolhidos) vence o formato padrão.
 function htmlRender(D, indice, rotulo, formato) {
   const marcado = escolhaDe(D.id, indice) ?? formato;
+  const rotuloSeletor = `Formato do ${nomeShort(D, indice)}`;
   return `<span class="render-escolha">
-    <select data-formato-de="${indice}" aria-label="Formato do Short">${opcoesFormato(marcado)}</select>
+    <select data-formato-de="${indice}" aria-label="${esc(rotuloSeletor)}">${opcoesFormato(marcado)}</select>
     <button class="botao mini" type="button" data-renderizar="${indice}">${esc(rotulo)}</button></span>`;
 }
 
-const htmlCancelar = indice =>
-  `<button class="botao mini" type="button" data-cancelar="${indice}">Cancelar</button>`;
+const htmlCancelar = (D, indice) => `<button class="botao mini" type="button" data-cancelar="${indice}"
+  aria-label="${esc(`Cancelar o ${nomeShort(D, indice)}`)}">Cancelar</button>`;
 
 // Quem não tem corte ganha o seletor e "Renderizar"; quem tem mostra o status do render (a decisão
 // da curadoria continua na última coluna — são coisas diferentes, ver desvio 1 do plano B).
@@ -91,7 +98,8 @@ function htmlMidia(D, c) {
         <span class="num">v${k.versao} · ${esc(k.formato_pronto)}</span></div>` : "";
   const denovo = k?.status === "pronto"
     ? `<div class="short-acoes">${htmlRender(D, c.indice, "Renderizar de novo", k.formato)}</div>` : "";
-  const cancelar = k?.status === "na_fila" ? `<div class="short-acoes">${htmlCancelar(c.indice)}</div>` : "";
+  const cancelar = k?.status === "na_fila"
+    ? `<div class="short-acoes">${htmlCancelar(D, c.indice)}</div>` : "";
   return `${htmlPlayer(faixaDe(D, c))}${acoes}${denovo}${cancelar}${erro}`;
 }
 

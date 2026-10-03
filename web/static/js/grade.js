@@ -23,7 +23,7 @@ function htmlCartao(D, k) {
       <span class="status ${esc(k.status)}"${k.erro ? ` title="${esc(k.erro)}"` : ""}>${esc(NOMES_STATUS[k.status])}</span>
       <div class="t" title="${esc(k.titulo)}">${esc(k.titulo)}</div>
       ${c.decisao ? `<span class="decisao ${esc(c.decisao)}">${esc(c.decisao)}</span>` : ""}
-      ${k.status === "na_fila" ? htmlCancelar(k.indice) : ""}
+      ${k.status === "na_fila" ? htmlCancelar(D, k.indice) : ""}
     </div></div>`;
 }
 
