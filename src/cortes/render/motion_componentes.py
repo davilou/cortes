@@ -154,10 +154,15 @@ def cenas_html(cenas: list[Cena]) -> str:
 
 
 def estados(cenas: list[Cena]) -> str:
-    """[t, "div"|"cheio"]: a câmera troca para a janela de baixo durante a cena div, em corte seco."""
+    """[t, "div"|"cheio"]: a câmera troca para a janela de baixo durante a cena div, em corte seco;
+    duas div coladas ficam em div sem passar pelo cheio."""
     res: list[list[object]] = [[0, "cheio"]]
     for c in cenas:
-        if ESTADO[c.componente] == "div":
+        if ESTADO[c.componente] != "div":
+            continue
+        if res[-1] == [round(c.inicio, 2), "cheio"]:   # colada na div anterior: segue div
+            res[-1] = [round(c.fim, 2), "cheio"]
+        else:
             res += [[round(c.inicio, 2), "div"], [round(c.fim, 2), "cheio"]]
     return json.dumps(res)
 
