@@ -1,7 +1,8 @@
 "use strict";
 // Editor do Short (plano C, spec produção §5 "Editor"): três colunas — prévia 9:16 tocando o
 // próprio projeto HyperFrames no navegador (<hyperframes-player>), transcrição palavra a palavra
-// (transcricao.js) e ajustes: título, formato, quem aparece (planos.js), renderizar e versões.
+// (transcricao.js) e ajustes: título, formato, quem aparece (planos.js), as ilustrações do f9
+// (ilustracoes.js, só leitura), renderizar e versões.
 // Toda edição vai por POST .../editar, que devolve o estado novo; a prévia é refeita fora da fila
 // do render e a tela acompanha até ela ficar pronta.
 let ED = null;   // /api/episodios/{id}/cortes/{n}/editor + {id, n}
@@ -37,6 +38,7 @@ function htmlAjustes(ed) {
       <span class="num">${esc(NOMES_CORTE[c.status] ?? c.status)} · ${esc(situacao)}</span></div>
     ${c.erro ? `<p class="erro-txt" title="${esc(c.erro)}">${esc(c.erro)}</p>` : ""}
     <h3>Quem aparece</h3>${htmlPlanos(ed)}
+    ${c.formato === "f9" ? `<h3>Ilustrações</h3>${htmlIlustracoes(ed)}` : ""}
     <h3>Versões</h3>${htmlVersoes(ed)}`;
 }
 

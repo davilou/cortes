@@ -1,6 +1,7 @@
 """API do editor (plano C; spec produção §5 "Editor"): estado do editor, edições, a prévia no
-navegador (o projeto HyperFrames do corte com o runtime injetado), miniaturas dos rostos por plano
-e as versões renderizadas. `pasta_de` vem de rotas.py (valida o id do episódio)."""
+navegador (o projeto HyperFrames do corte com o runtime injetado), miniaturas dos rostos por plano,
+as ilustrações do f9 (só leitura) e as versões renderizadas. `pasta_de` vem de rotas.py (valida o
+id do episódio)."""
 import re
 import threading
 from collections.abc import Callable
@@ -18,6 +19,9 @@ from cortes.producao.previas import Previas
 from cortes.regra_inicio import comeca_no_meio
 from cortes.render.corte import ARQUIVO, Corte, gravar_corte, ler_corte, pasta_corte
 from cortes.render.edicao import Edicao, aplicar, indices_do_corte, mascarar
+from cortes.render.ilustracao_etapa import ARQUIVO as ARQUIVO_ILUSTRACAO
+from cortes.render.ilustracao_etapa import PASTA as PASTA_ILUSTRACAO
+from cortes.render.ilustracao_etapa import ler_ilustracoes
 from cortes.render.miniatura import gerar_miniatura
 from cortes.render.montagem import FORMATOS
 from cortes.render.previa import com_runtime
@@ -29,6 +33,7 @@ JANELA_S = 30.0                 # transcrição mostrada em volta do corte, para
 PALAVRAS_AVISO = 8              # quantas palavras do início a regra de início lê
 SEM_CACHE = {"Cache-Control": "no-store"}
 _VERSAO = re.compile(r"short-v(\d+)\.mp4$")
+_IMAGEM_PREVIA = re.compile(r"assets/ilus-\d+\.jpg")   # cartões do f9 (render/ilustracao_etapa.py)
 
 
 def _url(id: str, n: int) -> str:
@@ -94,6 +99,23 @@ def _planos_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str 
     return [_plano_json(id, c, v, p) for p in rp[1]], None
 
 
+def _ilustracoes_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str | None]:
+    """Só o f9. Cache da ilustração ilegível não derruba o editor: fica em `ilustracao_erro`."""
+    if c.formato != "f9":
+        return [], None
+    try:
+        lido = ler_ilustracoes(d)
+    except ErroRender as ex:
+        return [], str(ex)
+    if lido is None:
+        return [], None
+    v = int((d / PASTA_ILUSTRACAO / ARQUIVO_ILUSTRACAO).stat().st_mtime)
+    return [{"k": i.k, "inicio": i.deixa.inicio, "fim": i.deixa.fim, "coisa": i.deixa.coisa,
+             "busca": i.deixa.busca, "fonte_url": i.fonte_url, "motivo": i.motivo,
+             "imagem": f"{_url(id, c.indice)}/ilustracao/{i.k}?v={v}" if i.imagem else None}
+            for i in lido[2]], None
+
+
 def situacao_previa(previas: Previas, d: Path, id: str, c: Corte) -> dict[str, Any]:
     """Memória da thread primeiro; sem ela (painel reiniciado), o disco. Sem edição salva desde o
     último render (`alterado is False`) a prévia está sempre pronta — o render grava o index.html e
@@ -130,9 +152,11 @@ def estado_editor(pasta: Path, n: int, previas: Previas) -> dict[str, Any]:
     meta = ler_json(pasta / "meta.json") if (pasta / "meta.json").exists() else {}
     abertura = " ".join(p.texto for p in todas[i0:i0 + PALAVRAS_AVISO])
     planos_json, rosto_erro = _planos_json(id, d, c)
+    ilustracoes, ilustracao_erro = _ilustracoes_json(id, d, c)
     return {"corte": asdict(c), "episodio": {"id": id, "titulo": meta.get("titulo")},
             "palavras": _palavras_json(todas, c), "inicio_palavra": i0, "fim_palavra": i1,
             "aviso_inicio": comeca_no_meio(abertura), "planos": planos_json, "rosto_erro": rosto_erro,
+            "ilustracoes": ilustracoes, "ilustracao_erro": ilustracao_erro,
             "previa": situacao_previa(previas, d, id, c), "versoes": _versoes(id, d, n),
             "formatos": list(FORMATOS), "editavel": editavel(previas, id, c)}
 
@@ -191,6 +215,8 @@ def _rotas_leitura(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previ
             return HTMLResponse(html, headers=SEM_CACHE)
         if arquivo == "assets/trecho.mp4" and (proj / arquivo).exists():
             return FileResponse(proj / arquivo, media_type="video/mp4", headers=SEM_CACHE)
+        if _IMAGEM_PREVIA.fullmatch(arquivo) and (proj / arquivo).exists():
+            return FileResponse(proj / arquivo, media_type="image/jpeg", headers=SEM_CACHE)
         raise ErroProducao(f"arquivo da prévia indisponível: {arquivo!r}")
 
     @app.get("/api/episodios/{id}/cortes/{n}/planos/{k}/pessoas/{j}")
@@ -211,6 +237,23 @@ def _rotas_leitura(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previ
             trecho = d / "projeto" / "assets" / "trecho.mp4"
             gerar_miniatura(trecho, arq, pls[k], j, r.largura, r.altura, rodar)
         return FileResponse(arq, media_type="image/jpeg")
+
+    @app.get("/api/episodios/{id}/cortes/{n}/ilustracao/{k}")
+    def api_ilustracao(id: str, n: int, k: int) -> FileResponse:
+        return FileResponse(imagem_ilustracao(pasta_de(id), n, k, previas), media_type="image/jpeg")
+
+
+def imagem_ilustracao(pasta: Path, n: int, k: int, previas: Previas) -> Path:
+    """A imagem escolhida para a deixa k do f9. Recusada enquanto a prévia ou o render podem estar
+    refazendo a pasta `ilustracao/` (como a miniatura de rosto)."""
+    c = corte_de(pasta, n)
+    if not editavel(previas, pasta.name, c):
+        raise ErroProducao(f"corte {n} está sendo preparado; espere terminar para ver as ilustrações")
+    lido = ler_ilustracoes(pasta_corte(pasta, n))
+    img = next((i.imagem for i in lido[2] if i.k == k), None) if lido else None
+    if img is None or not img.exists():
+        raise ErroProducao(f"ilustração {k} do corte {n} não existe ou ficou sem imagem")
+    return img
 
 
 def _rotas_edicao(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previas,

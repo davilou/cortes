@@ -193,3 +193,57 @@ def test_miniatura_recusada_com_a_previa_preparando(cfg: Config) -> None:
     a.previas.pedir("abcdefghijk", 0)
     r = a.c.get(f"{EP}/cortes/0/planos/1/pessoas/1")
     assert r.status_code == 422 and "preparado" in r.json()["detail"]
+
+
+def ambiente_f9(cfg: Config) -> Ambiente:
+    a = Ambiente(cfg)
+    gravar_corte(a.d, replace(ler_corte(a.d), formato="f9"))
+    pasta = a.d / "ilustracao"
+    pasta.mkdir()
+    (pasta / "D1-c2.jpg").write_bytes(b"vans")
+    base = {"busca": "b", "licenca": None, "falhas": []}
+    ilus = [{**base, "k": 1, "inicio": 1.2, "fim": 2.6, "coisa": "Vans", "imagem": "D1-c2.jpg",
+             "fonte_url": "http://loja/vans", "motivo": "é o tênis"},
+            {**base, "k": 2, "inicio": 4.5, "fim": 5.7, "coisa": "bota", "imagem": None,
+             "fonte_url": None, "motivo": "nenhuma é a bota"}]
+    (pasta / "ilustracao.json").write_text(json.dumps({"inicio": 0.7, "fim": 7.8, "ilustracoes": ilus}),
+                                           encoding="utf-8")
+    (a.d / "projeto" / "assets" / "ilus-1.jpg").write_bytes(b"vans")
+    return a
+
+
+def test_editor_lista_as_ilustracoes_do_f9(cfg: Config) -> None:
+    a = ambiente_f9(cfg)
+    d = a.c.get(f"{EP}/cortes/0/editor").json()
+    vans, bota = d["ilustracoes"]
+    assert vans["coisa"] == "Vans" and vans["imagem"].startswith(f"{EP}/cortes/0/ilustracao/1?v=")
+    assert vans["fonte_url"] == "http://loja/vans" and d["ilustracao_erro"] is None
+    assert bota["imagem"] is None and bota["motivo"] == "nenhuma é a bota"
+    assert a.c.get(vans["imagem"]).content == b"vans"
+    r = a.c.get(f"{EP}/cortes/0/ilustracao/2")
+    assert r.status_code == 422 and "sem imagem" in r.json()["detail"]
+
+
+def test_editor_sem_ilustracoes_fora_do_f9(cfg: Config) -> None:
+    d = Ambiente(cfg).c.get(f"{EP}/cortes/0/editor").json()
+    assert d["ilustracoes"] == [] and d["ilustracao_erro"] is None
+
+
+def test_cache_da_ilustracao_invalido_nao_derruba_o_editor(cfg: Config) -> None:
+    a = ambiente_f9(cfg)
+    (a.d / "ilustracao" / "ilustracao.json").write_text("{}", encoding="utf-8")
+    d = a.c.get(f"{EP}/cortes/0/editor").json()
+    assert d["ilustracoes"] == [] and "cache da ilustração inválido" in d["ilustracao_erro"]
+
+
+def test_imagem_da_ilustracao_recusada_com_a_previa_preparando(cfg: Config) -> None:
+    a = ambiente_f9(cfg)
+    a.previas.pedir("abcdefghijk", 0)
+    r = a.c.get(f"{EP}/cortes/0/ilustracao/1")
+    assert r.status_code == 422 and "preparado" in r.json()["detail"]
+
+
+def test_previa_serve_o_cartao_do_f9(cfg: Config) -> None:
+    a = ambiente_f9(cfg)
+    assert a.c.get(f"{EP}/cortes/0/previa/assets/ilus-1.jpg").content == b"vans"
+    assert a.c.get(f"{EP}/cortes/0/previa/assets/ilus-1.png").status_code == 422
