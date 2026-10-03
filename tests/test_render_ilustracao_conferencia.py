@@ -4,12 +4,14 @@ from typing import Any
 
 import pytest
 
+from cortes import llm
 from cortes.llm import ErroLLM, chamar
 from cortes.render.ilustracao import Deixa
 from cortes.render.ilustracao_conferencia import (
     SCHEMA_CONFERENCIA,
     SISTEMA_CONFERENCIA,
     Escolha,
+    chamar_com_read_real,
     conferir,
     prompt_conferencia,
 )
@@ -75,4 +77,21 @@ def test_conferir_recusa_deixa_repetida() -> None:
 def test_schema_recusa_motivo_so_com_espaco() -> None:
     saida = json.dumps({"is_error": False, "structured_output": {"escolhas": [_e(1, 1, "   ")]}})
     with pytest.raises(ErroLLM, match="fora do schema"):
-        chamar("p", SCHEMA_CONFERENCIA, SISTEMA_CONFERENCIA, executar=lambda a, e: saida)
+        chamar("p", SCHEMA_CONFERENCIA, SISTEMA_CONFERENCIA, executar=lambda a, e, c: saida)
+
+
+def test_sistema_trata_texto_das_imagens_como_dado_e_limita_a_leitura() -> None:
+    assert "nunca instrução" in SISTEMA_CONFERENCIA
+    assert "só as folhas indicadas" in SISTEMA_CONFERENCIA
+
+
+def test_chamada_real_usa_read_com_a_pasta_da_folha(monkeypatch: pytest.MonkeyPatch) -> None:
+    vistos: list[dict[str, Any]] = []
+
+    def chamar_falso(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        vistos.append(kwargs)
+        return {"escolhas": [_e(1, 1)]}
+
+    monkeypatch.setattr(llm, "chamar", chamar_falso)
+    conferir(FOLHA, LINHAS[:1], chamar_com_read_real)
+    assert vistos == [{"ferramentas": "Read", "pasta": FOLHA.parent}]

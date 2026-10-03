@@ -15,10 +15,10 @@ SCHEMA: dict[str, Any] = {
 
 
 def executor_que_devolve(resposta: dict[str, Any]):  # type: ignore[no-untyped-def]
-    chamadas: list[tuple[list[str], str]] = []
+    chamadas: list[tuple[list[str], str, Path | None]] = []
 
-    def executar(args: list[str], entrada: str) -> str:
-        chamadas.append((args, entrada))
+    def executar(args: list[str], entrada: str, cwd: Path | None) -> str:
+        chamadas.append((args, entrada, cwd))
         return json.dumps(resposta)
 
     executar.chamadas = chamadas  # type: ignore[attr-defined]
@@ -28,8 +28,8 @@ def executor_que_devolve(resposta: dict[str, Any]):  # type: ignore[no-untyped-d
 def test_devolve_structured_output_valido() -> None:
     ex = executor_que_devolve({"is_error": False, "structured_output": {"nota": 4}})
     assert chamar("prompt", SCHEMA, "sistema", executar=ex) == {"nota": 4}
-    args, entrada = ex.chamadas[0]
-    assert entrada == "prompt"
+    args, entrada, cwd = ex.chamadas[0]
+    assert entrada == "prompt" and cwd is None
     assert args[:2] == ["claude", "-p"]
 
 
@@ -53,7 +53,7 @@ def test_fora_do_schema_levanta() -> None:
 
 def test_saida_nao_json_levanta() -> None:
     with pytest.raises(ErroLLM, match="não é JSON"):
-        chamar("p", SCHEMA, "s", executar=lambda a, e: "Error: not logged in")
+        chamar("p", SCHEMA, "s", executar=lambda a, e, c: "Error: not logged in")
 
 
 def test_executar_timeout_levanta_erro_claro(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -62,7 +62,7 @@ def test_executar_timeout_levanta_erro_claro(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(subprocess, "run", _run_que_expira)
     with pytest.raises(ErroLLM, match="não respondeu"):
-        llm._executar(["claude"], "x")
+        llm._executar(["claude"], "x", None)
 
 
 def test_comando_isola_contexto_e_nao_usa_bare() -> None:
@@ -76,21 +76,48 @@ def test_comando_isola_contexto_e_nao_usa_bare() -> None:
     assert json.loads(cmd[cmd.index("--json-schema") + 1]) == SCHEMA
 
 
-def test_comando_com_read_libera_so_a_pasta_dada(tmp_path: Path) -> None:
-    cmd = montar_comando("sis", SCHEMA, "sonnet", ferramentas="Read", pastas=[tmp_path])
+def test_comando_com_read_nao_libera_read_em_todo_caminho() -> None:
+    """Escopo pelo cwd: sem `--allowedTools Read` (liberava qualquer caminho) e sem `--add-dir`;
+    `dontAsk` nega o que pediria permissão e as outras ferramentas são negadas pelo nome."""
+    cmd = montar_comando("sis", SCHEMA, "sonnet", ferramentas="Read")
     assert cmd[cmd.index("--tools") + 1] == "Read"
-    assert cmd[cmd.index("--allowedTools") + 1] == "Read"
-    assert cmd[cmd.index("--add-dir") + 1] == str(tmp_path)
-    assert cmd.index("--add-dir") < cmd.index("--no-session-persistence")   # a lista variádica fecha
+    assert "--allowedTools" not in cmd and "--add-dir" not in cmd
+    assert cmd[cmd.index("--permission-mode") + 1] == "dontAsk"
+    negadas = cmd[cmd.index("--disallowedTools") + 1].split(",")
+    assert {"Bash", "PowerShell", "Write", "Edit", "WebFetch", "WebSearch"} <= set(negadas)
+    assert cmd.index("--disallowedTools") < cmd.index("--no-session-persistence")   # variádica fecha
 
 
-def test_comando_sem_ferramenta_nao_aceita_pasta(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="sem ferramenta"):
-        montar_comando("sis", SCHEMA, "sonnet", pastas=[tmp_path])
-
-
-def test_chamar_repassa_ferramenta_e_pasta(tmp_path: Path) -> None:
+def test_ferramenta_e_pasta_andam_juntas(tmp_path: Path) -> None:
     ex = executor_que_devolve({"is_error": False, "structured_output": {"nota": 3}})
-    chamar("p", SCHEMA, "s", executar=ex, ferramentas="Read", pastas=[tmp_path])
-    args, _ = ex.chamadas[0]
-    assert args[args.index("--add-dir") + 1] == str(tmp_path)
+    with pytest.raises(ValueError, match="juntas"):
+        chamar("p", SCHEMA, "s", executar=ex, pasta=tmp_path)
+    with pytest.raises(ValueError, match="juntas"):
+        chamar("p", SCHEMA, "s", executar=ex, ferramentas="Read")
+
+
+def test_chamar_com_ferramenta_roda_na_pasta(tmp_path: Path) -> None:
+    ex = executor_que_devolve({"is_error": False, "structured_output": {"nota": 3}})
+    chamar("p", SCHEMA, "s", executar=ex, ferramentas="Read", pasta=tmp_path)
+    _, _, cwd = ex.chamadas[0]
+    assert cwd == tmp_path
+
+
+def test_ferramenta_negada_e_erro_mesmo_com_resposta_valida() -> None:
+    negada = [{"tool_name": "Read", "tool_input": {"file_path": "C:\repo\pyproject.toml"}}]
+    ex = executor_que_devolve({"is_error": False, "structured_output": {"nota": 3},
+                               "permission_denials": negada})
+    with pytest.raises(ErroLLM, match="fora do permitido.*pyproject"):
+        chamar("p", SCHEMA, "s", executar=ex)
+
+
+def test_executar_roda_no_cwd_dado(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    visto: dict[str, Any] = {}
+
+    def _run(*args: Any, **kwargs: Any) -> Any:
+        visto.update(kwargs)
+        return subprocess.CompletedProcess(args, 0, "{}", "")
+
+    monkeypatch.setattr(subprocess, "run", _run)
+    llm._executar(["claude"], "x", tmp_path)
+    assert visto["cwd"] == tmp_path

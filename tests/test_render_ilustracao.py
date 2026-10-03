@@ -85,4 +85,4 @@ def test_schema_recusa_coisa_ou_busca_so_com_espaco(campo: str) -> None:
     item = {**_d(3, 4), campo: "  \n "}
     saida = json.dumps({"is_error": False, "structured_output": {"deixas": [item]}})
     with pytest.raises(ErroLLM, match="fora do schema"):
-        chamar("p", SCHEMA_DEIXAS, SISTEMA_DEIXAS, executar=lambda a, e: saida)
+        chamar("p", SCHEMA_DEIXAS, SISTEMA_DEIXAS, executar=lambda a, e, c: saida)
