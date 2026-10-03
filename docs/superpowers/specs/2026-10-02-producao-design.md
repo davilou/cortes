@@ -14,9 +14,11 @@ mesmo servidor do painel de contas (`2026-10-01-painel-contas-design.md`).
 
 ### Fora desta spec
 
-Upload de vídeo do PC e transcrição por arquivo enviado; formatos f2, f5, f6, f8; publicação
-automática; nicho humor. O `cortes detectar` do terminal segue com o openai-whisper
-(`cortes/transcricao.py`) — passar o terminal para a transcrição local (§4.2) fica para depois.
+Upload de vídeo do PC e transcrição por arquivo enviado; formato f2; f4 B-roll e f3 Motion (ficam
+nos planos D e E — dependem de material que o app ainda não produz: clipes buscados e painéis
+gerados); publicação automática; nicho humor. O `cortes detectar` do terminal segue com o
+openai-whisper (`cortes/transcricao.py`) — passar o terminal para a transcrição local (§4.2) fica
+para depois.
 
 ## 2. Decisões
 
@@ -24,8 +26,8 @@ automática; nicho humor. O `cortes detectar` do terminal segue com o openai-whi
 |---|---|---|
 | Entrada | Só link do YouTube | Davi escolheu; cobre os podcasts-fonte |
 | Transcrição | **Local, faster-whisper `large-v3-turbo`** na GPU (Davi decidiu em 2026-10-02; substitui a legenda do YouTube) | ~35 s por hora de áudio, boa pontuação, início e fim por palavra, sem depender do YouTube (que devolveu HTTP 429) — benchmark em §4.2. Transcrição colada removida em 2026-10-02 — com a transcrição local a ~35 s/h ela virou passo extra sem ganho |
-| Render | Automático nos N melhores (padrão 5) + "Renderizar" manual nos demais | Como o Opus; rejeição vira exemplo para o detector |
-| Formatos | f7 Conversa, f1 Falante, f4 B-roll, f3 Motion | Davi escolheu; f7 é o sinal mais forte da R2, f4/f3 os que ele mais gostou |
+| Render | **Sem render automático** (decisão de 2026-10-02): nada renderiza sem pedido. "Renderizar" por candidato, com seletor de formato; "Cancelar" tira da fila um Short que ainda não começou | O "N melhores" automático gastava render em Short que Davi ia rejeitar sem assistir; cada Short só é feito no formato que Davi escolher |
+| Formatos | f7 Conversa, f1 Falante, f6 Hormozi, f8 Desfoque, f5 Gameplay no app; f4 B-roll e f3 Motion nos planos D e E | Davi escolheu; f7 é o sinal mais forte da R2; f6/f8/f5 só dependem de template e entraram junto (decisão de 2026-10-02); f4/f3 dependem de material que o app ainda não produz (clipes buscados, painéis gerados) |
 | Motor de render | **HyperFrames**, não Remotion | Os 8 formatos testados e aprovados foram feitos nele (`testes/`); substitui a decisão "Remotion" da spec principal §5 |
 | Nota mostrada | Nota do detector (0–10) com a rubrica aberta | Explica o porquê, em vez de "viralidade" opaca |
 | Execução | Uma fila, um trabalho por vez | GPU, cota do Claude e CPU do render são únicos |
@@ -36,7 +38,7 @@ automática; nicho humor. O `cortes detectar` do terminal segue com o openai-whi
 | Plano | Entrega | Risco |
 |---|---|---|
 | **A. Produção** | Link → vídeo + transcrição local → detector, com progresso por etapa; candidatos com nota, rubrica, justificativa e player do trecho | baixo |
-| **B. Render f1 + f7** | N melhores renderizados sozinhos; grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4; pausas cortadas sempre; sem trilha; transições em corte seco, sem flash nem zoom nas emendas (Davi, 2026-10-02) | baixo — o código existe nos protótipos |
+| **B. Render f1 + f7** | Renderizar sob pedido (sem automático), com formato por Short e Cancelar; f6 Hormozi, f8 Desfoque e f5 Gameplay somam-se a f1/f7 (Davi, 2026-10-02); grade de Shorts; aprovar/rejeitar (→ exemplos); baixar MP4; pausas cortadas sempre; sem trilha; transições em corte seco, sem flash nem zoom nas emendas em nenhum formato | baixo — o código existe nos protótipos |
 | **C. Editor** | Início/fim por palavra, texto da legenda, título, troca de formato, quem aparece por plano, versões | médio (multirrosto) |
 | **D. f4 B-roll** | Deixas pelo Claude → busca no YouTube → conferência visual → 3 opções por deixa no editor | médio |
 | **E. f3 Motion** | Biblioteca de componentes + cenas em JSON pelo Claude; teste cego contra o f3 manual | alto |
@@ -154,11 +156,14 @@ casar cortes de episódio pelo título, e não só as pastas de `testes/` (`liga
 - Trabalhos: `processar_episodio(id)` e `renderizar(id, n, versão)`. FIFO, uma thread.
 - Cada etapa grava seu arquivo e é pulada se ele existe (padrão do `cortes detectar`).
 - Ao subir, o servidor relê os `estado.json` e recoloca na fila o que estava `rodando`.
-- O detector termina enfileirando o render dos N melhores no formato escolhido na entrada.
-- O render é a 5ª etapa do episódio (vídeo, transcrição, sinais, momentos, render); planeja os
-  N melhores uma vez (`cortes/planejado.json`) e depois renderiza, um por vez, os cortes com
-  `status: na_fila`. "Renderizar" manual grava um corte `na_fila` e reenfileira o episódio; um
-  gancho `antes` da fila reabre a etapa `render` se ela já tinha fechado.
+- **Sem render automático** (Davi, 2026-10-02): o detector termina em `momentos`; nenhum corte é
+  posto na fila sozinho. A fila só processa o que foi pedido — "Renderizar" num candidato grava
+  um corte `na_fila` no formato escolhido no seletor e reenfileira o episódio; um gancho `antes`
+  da fila reabre a etapa `render` se ela já tinha fechado. Um `cortes/planejado.json` antigo no
+  disco (de antes desta decisão) é ignorado.
+- **Cancelar** (`POST /cortes/{indice}/cancelar`, sob a trava `escrita`): só vale para corte
+  `na_fila`; em qualquer outro status, recusa com motivo. A fila pode pegar o corte entre a
+  leitura e o cancelamento (corrida conhecida) — nesse caso o Short renderiza mesmo assim.
 - Cota do Claude atingida → a fila **pausa** e a tela avisa; não descarta trabalhos.
 
 ### 4.5 Curadoria e retorno ao detector
@@ -172,13 +177,19 @@ Trilho com dois grupos: **Produção** (Episódios) e **Retorno** (Contas, Short
 rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 
 **Episódios**
-1. Entrada: link, nicho, formato padrão (f7/f1; f4/f3 quando os planos D/E existirem), quantos
-   renderizar (3/5/10), "Gerar Shorts". Link sem id de vídeo ou já processado → recusa com motivo.
-2. Lista de episódios: capa, título, canal, duração, barra de 5 etapas (vídeo, transcrição, sinais,
-   momentos, render k/N) com estados ok/rodando/erro; erro mostra a causa e "tentar de novo".
+1. Entrada: link, nicho, **formato padrão** (f7/f1/f6/f8/f5; f4/f3 quando os planos D/E
+   existirem) — só o valor pré-marcado no seletor de cada Short, não um campo "Shorts"/quantos
+   renderizar, que saiu (decisão de 2026-10-02: sem render automático). "Gerar Shorts". Link sem
+   id de vídeo ou já processado → recusa com motivo.
+2. Lista de episódios: capa, título, canal, duração, barra de etapas (vídeo, transcrição, sinais,
+   momentos, render) com estados ok/rodando/erro; a etapa render mostra "k/N" só quando há algum
+   corte pedido (`total > 0`) — com `total == 0` o rótulo é só "render", e ela já conta como ok;
+   erro mostra a causa e "tentar de novo".
 3. Episódio selecionado: grade de Shorts 9:16 (nota 0–10, status, prévia, título, duração,
-   formato, ✓ ✕ Editar); tabela "Outros candidatos" (nota, início, duração, título,
-   justificativa, "Renderizar").
+   formato, ✓ ✕ Editar; "Cancelar" quando `na_fila`; "Renderizar de novo" com seletor de formato
+   quando pronto, gera uma versão nova); tabela "Outros candidatos" (nota, início, duração,
+   título, justificativa, **seletor de formato** pré-marcado com o formato padrão do episódio +
+   "Renderizar"). O mesmo seletor aparece no "tentar de novo" de um corte em erro.
 4. Painel do Short: player, as 5 notas da rubrica em barras, justificativa, tags de bônus,
    aprovar/rejeitar/editar, baixar MP4, copiar título.
 
