@@ -3,9 +3,11 @@ acontecimentos que dá para mostrar num clipe em tela cheia (plano 2026-10-03-br
 
 As regras de ritmo vão no prompt e são aplicadas de novo aqui no código: o LLM pode errar a conta,
 e um clipe cobrindo o gancho, trocando sem deixar o rosto voltar ou tapando a maior parte do Short
-estraga o corte (spec §6, R2 pista).
+estraga o corte (spec §6, R2 pista). Depois de espaçadas, as deixas são esticadas até DUR_MAX_S
+(plano 2026-10-03-melhora-f4): com o fim na última palavra que cita a coisa, o clipe ficava em
+~1,5 s e o B-roll cobria só 16–17% do Short, longe dos ~40–60% da R2.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal, get_args
 
 from cortes.detector import ChamarLLM, chamar_llm_real
@@ -17,7 +19,7 @@ TipoDeixa = Literal["literal", "acontecimento"]
 TIPOS: tuple[str, ...] = get_args(TipoDeixa)
 GANCHO_S = 1.0          # nada de B-roll no primeiro 1 s: é o gancho, com o rosto
 DUR_MIN_S = 1.5         # menos que isso o clipe pisca e some antes de ser visto
-DUR_MAX_S = 3.0         # mais que isso o clipe tapa o rosto tempo demais
+DUR_MAX_S = 4.0         # mais que isso o clipe tapa o rosto tempo demais (o f3 usa o mesmo teto)
 ROSTO_MIN_S = 1.5       # rosto entre o fim de um clipe e o início do próximo
 FRACAO_MAX = 0.6        # B-roll somado ≤ 60% da duração do Short (spec §6, R2 pista)
 MAX_DEIXAS = 12
@@ -144,6 +146,32 @@ def _limitar(deixas: list[Deixa], dur: float) -> list[Deixa]:
     return ficam
 
 
+def _esticar(deixas: list[Deixa], fim_fala: float, dur: float) -> list[Deixa]:
+    """Cada deixa vai até DUR_MAX_S, sem chegar a menos de ROSTO_MIN_S da próxima, sem passar do fim
+    da fala e sem a soma passar de FRACAO_MAX do Short (a folga vai para as primeiras)."""
+    folga = FRACAO_MAX * dur - sum(d.fim - d.inicio for d in deixas)
+    esticadas: list[Deixa] = []
+    for i, d in enumerate(deixas):
+        teto = min(d.inicio + DUR_MAX_S, fim_fala)
+        if i + 1 < len(deixas):
+            teto = min(teto, deixas[i + 1].inicio - ROSTO_MIN_S)
+        ganho = max(0.0, min(teto - d.fim, folga))
+        folga -= ganho
+        esticadas.append(replace(d, fim=round(d.fim + ganho, 3)))
+    return esticadas
+
+
+def ritmo_broll(clipes: list[Deixa], dur: float) -> tuple[float, float]:
+    """Puro. (fração do Short coberta pelos clipes, trocas de plano por 10 s): cada clipe entra e
+    sai do rosto; o que vai até o fim do Short só entra. Base da comparação com a R2 (alvo ~40–60%
+    de visual e 0,6–0,8 trocas/10 s)."""
+    if not clipes:
+        return 0.0, 0.0
+    coberto = sum(min(c.fim, dur) - c.inicio for c in clipes)
+    trocas = sum(1 if c.fim >= dur - 1e-6 else 2 for c in clipes)
+    return coberto / dur, trocas / dur * 10
+
+
 def deixas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM = chamar_llm_real,
                     modelo: str = "sonnet") -> list[Deixa]:
     """`palavras` já no tempo do trecho sem pausas (as mesmas da legenda); `dur` é a duração desse
@@ -157,4 +185,4 @@ def deixas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM = cha
     for item in bruto["deixas"]:
         ini, fim = _tempos(item, palavras)
         deixas.append(Deixa(ini, fim, item["coisa"].strip(), item["busca"].strip(), _tipo(item)))
-    return _limitar(_espacar(deixas), dur)
+    return _esticar(_limitar(_espacar(deixas), dur), palavras[-1].fim, dur)

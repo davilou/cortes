@@ -4,7 +4,14 @@ from typing import Any
 import pytest
 
 from cortes.llm import ErroLLM, chamar
-from cortes.render.ilustracao import SCHEMA_DEIXAS, SISTEMA_DEIXAS, Deixa, deixas_do_corte, prompt_deixas
+from cortes.render.ilustracao import (
+    SCHEMA_DEIXAS,
+    SISTEMA_DEIXAS,
+    Deixa,
+    deixas_do_corte,
+    prompt_deixas,
+    ritmo_broll,
+)
 from cortes.render.processo import ErroRender
 from cortes.tipos import Palavra
 
@@ -36,7 +43,7 @@ DUR = 30.0   # longo o bastante para o limite de 60% não pesar, salvo nos teste
 def test_prompt_numera_as_palavras() -> None:
     p = prompt_deixas([Palavra("comprei", 0.0, 0.3), Palavra("um", 0.3, 0.4), Palavra("Vans", 0.4, 0.8)])
     assert "[0] (0.0s) comprei [1] um [2] Vans" in p   # o tempo vai a cada 10 palavras
-    assert "primeiro 1 s" in p and "1.5 a 3 s" in p and "1.5 s de rosto" in p and "60%" in p
+    assert "primeiro 1 s" in p and "1.5 a 4 s" in p and "1.5 s de rosto" in p and "60%" in p
 
 
 def test_prompt_explica_os_dois_tipos_e_a_busca_de_video() -> None:
@@ -61,8 +68,8 @@ def test_schema_limita_a_12_deixas_e_exige_o_tipo() -> None:
 
 def test_indice_vira_tempo_no_trecho_com_o_tipo() -> None:
     chamar = _chamar_que_devolve([_d(4, 7, tipo="acontecimento")])   # p4 começa 2,0; p7 termina 3,9
-    assert deixas_do_corte(_palavras(20), DUR, chamar) == [
-        Deixa(2.0, 3.9, "tênis", "tênis Vans Old Skool", "acontecimento")]
+    assert deixas_do_corte(_palavras(20), DUR, chamar) == [   # esticada até 4 s
+        Deixa(2.0, 6.0, "tênis", "tênis Vans Old Skool", "acontecimento")]
     prompt, schema, sistema, _ = chamar.chamadas[0]
     assert schema is SCHEMA_DEIXAS and sistema == SISTEMA_DEIXAS and "[4] p4" in prompt
 
@@ -72,11 +79,22 @@ def test_tipo_desconhecido_e_erro() -> None:
         deixas_do_corte(_palavras(20), DUR, _chamar_que_devolve([_d(4, 7, tipo="foto")]))
 
 
-def test_deixa_curta_estica_ate_1_5s_e_longa_corta_em_3s() -> None:
-    chamar = _chamar_que_devolve([_d(4, 4), _d(12, 19)])   # 2,0-2,4 e 6,0-9,9
+def test_deixa_estica_ate_4s_sem_chegar_a_1_5s_da_proxima() -> None:
+    # 2,0-2,4 estica até 4,5 (a próxima começa em 6,0); 6,0-9,9 corta em 10,0 (4 s)
+    chamar = _chamar_que_devolve([_d(4, 4), _d(12, 19)])
     curta, longa = deixas_do_corte(_palavras(30), DUR, chamar)
-    assert (curta.inicio, curta.fim) == (2.0, 3.5)
-    assert (longa.inicio, longa.fim) == (6.0, 9.0)
+    assert (curta.inicio, curta.fim) == (2.0, 4.5)
+    assert (longa.inicio, longa.fim) == (6.0, 10.0)
+
+
+def test_esticar_para_no_fim_da_fala_e_no_teto_de_60_por_cento() -> None:
+    chamar = _chamar_que_devolve([_d(4, 4)])   # 2,0-2,4; a fala acaba em 3,9
+    assert [(d.inicio, d.fim) for d in deixas_do_corte(_palavras(8), DUR, chamar)] == [(2.0, 3.9)]
+    chamar = _chamar_que_devolve([_d(2, 2), _d(12, 12)])   # teto 2,7 s: a 2ª sai, a 1ª vai a 2,7 s
+    assert [(d.inicio, d.fim) for d in deixas_do_corte(_palavras(30), 4.5, chamar)] == [(1.0, 3.7)]
+    chamar = _chamar_que_devolve([_d(2, 2), _d(12, 12)])   # Short de 6 s: teto 3,6 s, a 2ª fica curta
+    assert [(d.inicio, d.fim) for d in deixas_do_corte(_palavras(30), 6.0, chamar)] == [
+        (1.0, 3.1), (6.0, 7.5)]
 
 
 def test_esticar_nao_passa_do_fim_da_fala_e_descarta_o_que_nao_cabe() -> None:
@@ -92,15 +110,17 @@ def test_descarta_o_gancho() -> None:
 def test_rosto_de_1_5s_entre_o_fim_de_um_clipe_e_o_proximo() -> None:
     # 2,0-3,5; p10 em 5,0 (1,5 s de rosto: fica, até 6,5); p15 em 7,5 (só 1,0 s: sai); p19 em 9,5
     chamar = _chamar_que_devolve([_d(4, 4), _d(10, 10), _d(15, 15), _d(19, 19)])
+    # depois, cada uma estica até 4 s ou até 1,5 s antes da próxima
     assert [(d.inicio, d.fim) for d in deixas_do_corte(_palavras(30), DUR, chamar)] == [
-        (2.0, 3.5), (5.0, 6.5), (9.5, 11.0)]
+        (2.0, 3.5), (5.0, 8.0), (9.5, 13.5)]
 
 
 def test_passou_de_60_por_cento_descarta_as_ultimas_sem_cortar_as_do_meio() -> None:
-    # três clipes de 2,9 s (8,7 s): num Short de 12 s o teto é 7,2 s e a última sai, sem encurtar nada
+    # três clipes de 2,9 s (8,7 s): num Short de 12 s o teto é 7,2 s e a última sai, sem encurtar
+    # nada; a folga (7,2 - 5,8 = 1,4 s) estica a 1ª até 1,5 s antes da 2ª e a 2ª até 4 s
     chamar = _chamar_que_devolve([_d(2, 7), _d(11, 16), _d(20, 25)])   # 1,0-3,9; 5,5-8,4; 10,0-12,9
     assert [(d.inicio, d.fim) for d in deixas_do_corte(_palavras(30), 12.0, chamar)] == [
-        (1.0, 3.9), (5.5, 8.4)]
+        (1.0, 4.0), (5.5, 9.5)]
     assert len(deixas_do_corte(_palavras(30), 15.0, chamar)) == 3   # teto 9,0 s
 
 
@@ -146,3 +166,14 @@ def test_prompt_nao_marca_peca_ou_caracteristica_vaga_de_produto() -> None:
     assert "peça ou característica de um produto" in p
     assert '"negócio que evita torção"' in p and '"sola ultra resistente"' in p
     assert "a coisa inteira, que dá para nomear" in p
+
+
+def test_ritmo_conta_cobertura_e_trocas_por_10s() -> None:
+    # render real de 2026-10-03 (bota, 38,5 s): 4 clipes, 6,4 s — 17% e 2,1 trocas/10 s
+    janelas = [(5.48, 6.98), (16.12, 18.04), (21.12, 22.62), (24.76, 26.26)]
+    deixas = [Deixa(a, b, "x", "x", "literal") for a, b in janelas]
+    cobertura, trocas = ritmo_broll(deixas, 38.5)
+    assert round(cobertura, 3) == 0.167 and round(trocas, 2) == 2.08
+    # o clipe que vai até o fim do Short entra, mas não sai: 1 troca
+    assert ritmo_broll([Deixa(8.0, 10.0, "x", "x", "literal")], 10.0) == (0.2, 1.0)
+    assert ritmo_broll([], 10.0) == (0.0, 0.0)

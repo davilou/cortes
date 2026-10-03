@@ -138,11 +138,11 @@ def test_id_invalido_e_recusado(vid: str) -> None:
         args_video(VideoCandidato(vid, 100.0, "c", "t"), Path("x.%(ext)s"))
 
 
-def test_args_tela_cheia_cortam_3s_a_partir_de_25_por_cento_em_cover_sem_audio() -> None:
+def test_args_tela_cheia_cortam_4s_a_partir_de_25_por_cento_em_cover_sem_audio() -> None:
     args = args_cheio(Path("b.mp4"), Path("d.mp4"), VANS)
     vf = args[args.index("-vf") + 1]
     assert "scale=1080:1920:force_original_aspect_ratio=increase" in vf and "crop=1080:1920" in vf
-    assert "-an" in args and args[args.index("-t") + 1] == "3.000"
+    assert "-an" in args and args[args.index("-t") + 1] == "4.000"
     assert args[args.index("-ss") + 1] == "25.000" and args.index("-ss") < args.index("-i")
 
 
@@ -215,7 +215,7 @@ def test_ffmpeg_que_falha_nao_deixa_mp4_nem_bruto(tmp_path: Path) -> None:
 def test_quadros_inicio_meio_e_fim_num_ffmpeg_so(tmp_path: Path) -> None:
     ds = (Path("q1.jpg"), Path("q2.jpg"), Path("q3.jpg"))
     args = quadros_args(Path("t.mp4"), ds)
-    assert [args[i + 1] for i, a in enumerate(args) if a == "-ss"] == ["0.10", "1.50", "2.80"]
+    assert [args[i + 1] for i, a in enumerate(args) if a == "-ss"] == ["0.10", "2.00", "3.80"]
     assert [args[i + 1] for i, a in enumerate(args) if a == "-map"] == ["0:v", "1:v", "2:v"]
     assert args[-1] == "q3.jpg"
 

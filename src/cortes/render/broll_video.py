@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from cortes.render.ilustracao import DUR_MAX_S
 from cortes.render.ilustracao_imagens import ErroBusca
 from cortes.render.processo import CAUDA, ErroRender, Rodar, exigir, rodar_com_prazo
 from cortes.render.recorte import gerar_por_parcial
@@ -23,7 +24,7 @@ N_RESULTADOS = 15           # resultados pedidos à busca (uma página só); o f
 DUR_MIN_VIDEO_S = 15.0      # menos que isso é Short ou vinheta
 DUR_MAX_VIDEO_S = 3 * 60.0  # o vídeo é baixado inteiro: acima disso o download passa do prazo
 MAX_CANDIDATOS = 2          # por deixa
-TRECHO_S = 3.0
+TRECHO_S = DUR_MAX_S        # o clipe mais longo que a deixa pode pedir
 # O vídeo inteiro pelo downloader nativo do yt-dlp, só vídeo, e o ffmpeg corta os TRECHO_S local. Medido
 # em 2026-10-03: `--download-sections` (o ffmpeg lendo a seção por HTTP) levava ~45 s por 5 s de vídeo e
 # estourava o prazo em metade dos casos; o vídeo inteiro de 71 s/1080p/38 MB veio em 9 s (spec §11).
