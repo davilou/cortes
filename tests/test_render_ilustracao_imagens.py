@@ -1,4 +1,5 @@
 import re
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -135,6 +136,35 @@ def test_falha_numa_candidata_nao_para_as_outras(tmp_path: Path) -> None:
     baixadas, falhas = baixar_candidatas(cands, tmp_path, "d1", _rodar_que_falha_em("u2"))
     assert [(c.url, p.name) for c, p in baixadas] == [("u1", "d1-c1.jpg"), ("u3", "d1-c3.jpg")]
     assert len(falhas) == 1 and "u2" in falhas[0] and "403" in falhas[0]
+
+
+def test_baixa_ate_4_candidatas_ao_mesmo_tempo_e_devolve_na_ordem(tmp_path: Path) -> None:
+    """A barreira de 4 só abre com 4 downloads simultâneos: em série, estoura o prazo dela."""
+    barreira = threading.Barrier(4, timeout=5)
+    simultaneos: list[int] = []
+    ativos = [0]
+    trava = threading.Lock()
+
+    def rodar(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        with trava:
+            ativos[0] += 1
+            simultaneos.append(ativos[0])
+        url = args[args.index("-i") + 1]
+        if url != "u5":
+            barreira.wait()
+        with trava:
+            ativos[0] -= 1
+        if url == "u3":
+            return 1, "HTTP error 404"
+        Path(args[-1]).write_bytes(url.encode())
+        return 0, ""
+
+    cands = [Candidata(f"u{j}", "o", None, None) for j in range(1, 6)]
+    baixadas, falhas = baixar_candidatas(cands, tmp_path, "D1", rodar)
+    assert [(c.url, p.name) for c, p in baixadas] == [
+        ("u1", "D1-c1.jpg"), ("u2", "D1-c2.jpg"), ("u4", "D1-c4.jpg"), ("u5", "D1-c5.jpg")]
+    assert (tmp_path / "D1-c4.jpg").read_bytes() == b"u4"
+    assert len(falhas) == 1 and falhas[0].startswith("u3:") and max(simultaneos) == 4
 
 
 def test_folha_uma_linha_por_deixa_com_numero_em_cada_tile() -> None:

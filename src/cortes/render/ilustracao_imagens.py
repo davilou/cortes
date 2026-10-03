@@ -13,6 +13,7 @@ teto ali nunca dispararia e não protegeria nada.
 import ipaddress
 import socket
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -44,6 +45,7 @@ PROTOCOLOS = "http,https,tls,tcp"        # o que o ffmpeg pode abrir (redirecion
 # abririam outras URLs ou vídeo. Conferido com jpg, png e webp reais em 2026-10-02; avif (mov) fica fora.
 DEMUXERS = "image2,jpeg_pipe,png_pipe,webp_pipe,gif_pipe,bmp_pipe,tiff_pipe"
 MAX_PIXELS = 50_000_000   # ~7000×7000: acima disso é bomba de descompressão, não foto de produto
+DOWNLOADS_SIMULTANEOS = 4   # candidatas de uma deixa baixadas ao mesmo tempo
 PRAZO_DOWNLOAD_S = 30     # por candidata; o -rw_timeout só pega servidor parado, não o que pinga devagar
 
 
@@ -164,21 +166,25 @@ def baixar(url: str, destino: Path, rodar: Rodar) -> None:
         raise
 
 
+def _baixar_uma(c: Candidata, destino: Path, rodar: Rodar) -> str | None:
+    """A causa da falha, ou None se baixou."""
+    try:
+        baixar(c.url, destino, rodar)
+    except ErroRender as e:
+        return f"{c.url}: {e}"
+    return None
+
+
 def baixar_candidatas(cands: Sequence[Candidata], pasta: Path, prefixo: str,
                       rodar: Rodar) -> tuple[list[tuple[Candidata, Path]], list[str]]:
-    """Baixa cada candidata em `<pasta>/<prefixo>-c<j>.jpg`. Falha numa não para as outras: a causa
-    vai para a lista de falhas, que entra no relatório da deixa."""
-    baixadas: list[tuple[Candidata, Path]] = []
-    falhas: list[str] = []
-    for j, c in enumerate(cands, start=1):
-        destino = pasta / f"{prefixo}-c{j}.jpg"
-        try:
-            baixar(c.url, destino, rodar)
-        except ErroRender as e:
-            falhas.append(f"{c.url}: {e}")
-            continue
-        baixadas.append((c, destino))
-    return baixadas, falhas
+    """Baixa cada candidata em `<pasta>/<prefixo>-c<j>.jpg`, até DOWNLOADS_SIMULTANEOS ao mesmo
+    tempo; o resultado sai na ordem das candidatas. Falha numa não para as outras: a causa vai para
+    a lista de falhas, que entra no relatório da deixa."""
+    destinos = [pasta / f"{prefixo}-c{j}.jpg" for j in range(1, len(cands) + 1)]
+    with ThreadPoolExecutor(max_workers=max(1, min(DOWNLOADS_SIMULTANEOS, len(cands)))) as pool:
+        causas = list(pool.map(lambda c, d: _baixar_uma(c, d, rodar), cands, destinos))
+    baixadas = [(c, d) for c, d, causa in zip(cands, destinos, causas, strict=True) if causa is None]
+    return baixadas, [causa for causa in causas if causa is not None]
 
 
 def _fonte_ffmpeg() -> str:

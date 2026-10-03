@@ -79,7 +79,7 @@ def test_f9_ilustra_uma_vez_e_reaproveita_o_cache(tmp_path: Path) -> None:
     renderizar_corte(pasta, concluir(C9), tmp_path, il.dep(f))
     # recorte, rosto, folha, MP4 — e no segundo render só o MP4; os downloads têm prazo próprio
     assert f.chamadas == ["ffmpeg", "py-visao", "ffmpeg", "npx", "npx"]
-    assert il.downloads == ["http://img/tênis Vans Old Skool/1.jpg", "http://img/tênis Vans Old Skool/2.jpg"]
+    assert sorted(il.downloads) == [f"http://img/tênis Vans Old Skool/{j}.jpg" for j in (1, 2)]
     assert (il.llm, il.conferencias, il.buscas) == (1, 1, ["tênis Vans Old Skool"])
     d = pasta / "cortes" / "0"
     assert il.pasta_read == d / "ilustracao" and (d / "ilustracao" / "folha-1.jpg").exists()
