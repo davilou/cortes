@@ -1,6 +1,6 @@
 """API do editor (plano C; spec produção §5 "Editor"): estado do editor, edições, a prévia no
 navegador (o projeto HyperFrames do corte com o runtime injetado), miniaturas dos rostos por plano,
-as ilustrações do f9 (leitura e "refazer") e as versões renderizadas. `pasta_de` vem de rotas.py (valida o
+o B-roll do f4 (leitura e "refazer") e as versões renderizadas. `pasta_de` vem de rotas.py (valida o
 id do episódio)."""
 import re
 import shutil
@@ -18,12 +18,12 @@ from cortes.episodio import ler_json
 from cortes.producao.estado import ErroProducao
 from cortes.producao.previas import Previas
 from cortes.regra_inicio import comeca_no_meio
-from cortes.render.assets import FUNDO, GAMEPLAY
+from cortes.render.assets import FUNDO, GAMEPLAY, apagar_clipes
 from cortes.render.corte import ARQUIVO, Corte, gravar_corte, ler_corte, pasta_corte
 from cortes.render.edicao import Edicao, aplicar, indices_do_corte, mascarar
 from cortes.render.ilustracao_cache import ARQUIVO as ARQUIVO_ILUSTRACAO
 from cortes.render.ilustracao_cache import PASTA as PASTA_ILUSTRACAO
-from cortes.render.ilustracao_cache import ler_ilustracoes
+from cortes.render.ilustracao_cache import ler_ilustracoes, miniatura
 from cortes.render.miniatura import gerar_miniatura
 from cortes.render.montagem import FORMATOS
 from cortes.render.previa import com_runtime
@@ -35,7 +35,9 @@ JANELA_S = 30.0                 # transcrição mostrada em volta do corte, para
 PALAVRAS_AVISO = 8              # quantas palavras do início a regra de início lê
 SEM_CACHE = {"Cache-Control": "no-store"}
 _VERSAO = re.compile(r"short-v(\d+)\.mp4$")
-_IMAGEM_PREVIA = re.compile(r"assets/ilus-\d+\.jpg")   # cartões do f9 (render/ilustracao_cache.py)
+# clipes do f4 (render/ilustracao_cache.py, nome_asset): o tipo vem da extensão, em lista fechada
+_BROLL_PREVIA = re.compile(r"assets/broll-\d+\.(mp4|jpg)")
+_TIPO_BROLL = {"mp4": "video/mp4", "jpg": "image/jpeg"}
 # lista fechada: trecho de todos, fundo desfocado do f8 e gameplay do f5 (render/assets.py)
 _VIDEOS_PREVIA = frozenset(f"assets/{v}" for v in ("trecho.mp4", FUNDO, GAMEPLAY))
 
@@ -103,9 +105,9 @@ def _planos_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str 
     return [_plano_json(id, c, v, p) for p in rp[1]], None
 
 
-def _ilustracoes_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str | None]:
-    """Só o f9. Cache da ilustração ilegível não derruba o editor: fica em `ilustracao_erro`."""
-    if c.formato != "f9":
+def _broll_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str | None]:
+    """Só o f4. Cache do B-roll ilegível não derruba o editor: fica em `broll_erro`."""
+    if c.formato != "f4":
         return [], None
     try:
         lido = ler_ilustracoes(d)
@@ -115,8 +117,10 @@ def _ilustracoes_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]],
         return [], None
     v = int((d / PASTA_ILUSTRACAO / ARQUIVO_ILUSTRACAO).stat().st_mtime)
     return [{"k": i.k, "inicio": i.deixa.inicio, "fim": i.deixa.fim, "coisa": i.deixa.coisa,
-             "busca": i.deixa.busca, "fonte_url": i.fonte_url, "motivo": i.motivo,
-             "imagem": f"{_url(id, c.indice)}/ilustracao/{i.k}?v={v}" if i.imagem else None}
+             "busca": i.deixa.busca, "tipo": i.deixa.tipo, "midia": i.midia,
+             "fonte_url": i.fonte.url if i.fonte else None, "canal": i.fonte.canal if i.fonte else None,
+             "motivo": i.motivo,
+             "miniatura": f"{_url(id, c.indice)}/broll/{i.k}?v={v}" if i.arquivo else None}
             for i in lido.ilustracoes], None
 
 
@@ -156,11 +160,11 @@ def estado_editor(pasta: Path, n: int, previas: Previas) -> dict[str, Any]:
     meta = ler_json(pasta / "meta.json") if (pasta / "meta.json").exists() else {}
     abertura = " ".join(p.texto for p in todas[i0:i0 + PALAVRAS_AVISO])
     planos_json, rosto_erro = _planos_json(id, d, c)
-    ilustracoes, ilustracao_erro = _ilustracoes_json(id, d, c)
+    broll, broll_erro = _broll_json(id, d, c)
     return {"corte": asdict(c), "episodio": {"id": id, "titulo": meta.get("titulo")},
             "palavras": _palavras_json(todas, c), "inicio_palavra": i0, "fim_palavra": i1,
             "aviso_inicio": comeca_no_meio(abertura), "planos": planos_json, "rosto_erro": rosto_erro,
-            "ilustracoes": ilustracoes, "ilustracao_erro": ilustracao_erro,
+            "broll": broll, "broll_erro": broll_erro,
             "previa": situacao_previa(previas, d, id, c), "versoes": _versoes(id, d, n),
             "formatos": list(FORMATOS), "editavel": editavel(previas, id, c)}
 
@@ -200,18 +204,18 @@ def editar(pasta: Path, n: int, pedido: PedidoEdicao, previas: Previas) -> None:
         previas.pedir(pasta.name, n)
 
 
-def refazer_ilustracao(pasta: Path, n: int, previas: Previas) -> None:
-    """Apaga o cache do f9 (`ilustracao/`, deixas incluídas) e os cartões, e pede a prévia: o LLM,
-    a busca e a conferência rodam de novo. Recusado enquanto a prévia ou o render usam a pasta."""
+def refazer_broll(pasta: Path, n: int, previas: Previas) -> None:
+    """Apaga o cache do f4 (`ilustracao/`, deixas incluídas) e os clipes, e pede a prévia: o LLM,
+    as buscas e a conferência rodam de novo. Recusado enquanto a prévia ou o render usam a pasta."""
     c = corte_de(pasta, n)
-    if c.formato != "f9":
-        raise ErroProducao(f"corte {n} não é Ilustrado (f9): não há ilustração para refazer")
+    if c.formato != "f4":
+        raise ErroProducao(f"corte {n} não é B-roll (f4): não há B-roll para refazer")
     _exigir_editavel(previas, pasta.name, c)
     d = pasta_corte(pasta, n)
     if (d / PASTA_ILUSTRACAO).exists():
         shutil.rmtree(d / PASTA_ILUSTRACAO)
-    for cartao in (d / "projeto" / "assets").glob("ilus-*.jpg"):
-        cartao.unlink()
+    if (d / "projeto" / "assets").exists():
+        apagar_clipes(d / "projeto" / "assets")
     previas.pedir(pasta.name, n)
 
 
@@ -234,8 +238,8 @@ def _rotas_leitura(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previ
             return HTMLResponse(html, headers=SEM_CACHE)
         if arquivo in _VIDEOS_PREVIA and (proj / arquivo).exists():
             return FileResponse(proj / arquivo, media_type="video/mp4", headers=SEM_CACHE)
-        if _IMAGEM_PREVIA.fullmatch(arquivo) and (proj / arquivo).exists():
-            return FileResponse(proj / arquivo, media_type="image/jpeg", headers=SEM_CACHE)
+        if (m := _BROLL_PREVIA.fullmatch(arquivo)) and (proj / arquivo).exists():
+            return FileResponse(proj / arquivo, media_type=_TIPO_BROLL[m.group(1)], headers=SEM_CACHE)
         raise ErroProducao(f"arquivo da prévia indisponível: {arquivo!r}")
 
     @app.get("/api/episodios/{id}/cortes/{n}/planos/{k}/pessoas/{j}")
@@ -257,22 +261,22 @@ def _rotas_leitura(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previ
             gerar_miniatura(trecho, arq, pls[k], j, r.largura, r.altura, rodar)
         return FileResponse(arq, media_type="image/jpeg")
 
-    @app.get("/api/episodios/{id}/cortes/{n}/ilustracao/{k}")
-    def api_ilustracao(id: str, n: int, k: int) -> FileResponse:
-        return FileResponse(imagem_ilustracao(pasta_de(id), n, k, previas), media_type="image/jpeg")
+    @app.get("/api/episodios/{id}/cortes/{n}/broll/{k}")
+    def api_broll(id: str, n: int, k: int) -> FileResponse:
+        return FileResponse(miniatura_broll(pasta_de(id), n, k, previas), media_type="image/jpeg")
 
 
-def imagem_ilustracao(pasta: Path, n: int, k: int, previas: Previas) -> Path:
-    """A imagem escolhida para a deixa k do f9. Recusada enquanto a prévia ou o render podem estar
-    refazendo a pasta `ilustracao/` (como a miniatura de rosto)."""
+def miniatura_broll(pasta: Path, n: int, k: int, previas: Previas) -> Path:
+    """A miniatura do clipe da deixa k do f4: um quadro do vídeo ou a foto. Recusada enquanto a
+    prévia ou o render podem estar refazendo a pasta `ilustracao/` (como a miniatura de rosto)."""
     c = corte_de(pasta, n)
     if not editavel(previas, pasta.name, c):
-        raise ErroProducao(f"corte {n} está sendo preparado; espere terminar para ver as ilustrações")
+        raise ErroProducao(f"corte {n} está sendo preparado; espere terminar para ver o B-roll")
     lido = ler_ilustracoes(pasta_corte(pasta, n))
-    img = next((i.imagem for i in lido.ilustracoes if i.k == k), None) if lido else None
-    if img is None or not img.exists():
-        raise ErroProducao(f"ilustração {k} do corte {n} não existe ou ficou sem imagem")
-    return img
+    mini = next((miniatura(i) for i in lido.ilustracoes if i.k == k), None) if lido else None
+    if mini is None or not mini.exists():
+        raise ErroProducao(f"B-roll {k} do corte {n} não existe ou ficou sem visual")
+    return mini
 
 
 def _rotas_edicao(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previas,
@@ -284,11 +288,11 @@ def _rotas_edicao(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previa
             editar(pasta, n, pedido, previas)
         return estado_editor(pasta, n, previas)
 
-    @app.post("/api/episodios/{id}/cortes/{n}/ilustracao/refazer")
-    def api_refazer_ilustracao(id: str, n: int) -> Any:
+    @app.post("/api/episodios/{id}/cortes/{n}/broll/refazer")
+    def api_refazer_broll(id: str, n: int) -> Any:
         pasta = pasta_de(id)
         with escrita:
-            refazer_ilustracao(pasta, n, previas)
+            refazer_broll(pasta, n, previas)
         return estado_editor(pasta, n, previas)
 
     @app.post("/api/episodios/{id}/cortes/{n}/previa")

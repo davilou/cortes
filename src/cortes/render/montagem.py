@@ -5,7 +5,7 @@ import re
 from collections.abc import Sequence
 from pathlib import Path
 
-from cortes.render.ilustracao_cache import Ilustracao, nome_asset
+from cortes.render.ilustracao_cache import Ilustracao, Midia, nome_asset
 from cortes.render.legenda import Grupo, legenda_html
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import (
@@ -18,16 +18,21 @@ from cortes.render.rosto import (
     trilha_fixa,
 )
 
-FORMATOS = ("f7", "f1", "f6", "f5", "f8", "f9")   # ordem da tela; planos D e E acrescentam f4 e f3
+FORMATOS = ("f7", "f1", "f6", "f5", "f8", "f4")   # ordem da tela; o plano E acrescenta o f3
 _TEMPLATES = {"f7": "conversa", "f1": "falante", "f6": "hormozi", "f5": "gameplay", "f8": "desfoque",
-              "f9": "ilustrado"}
+              "f4": "broll"}
+# o f9 Ilustrado (cartão de foto) virou o f4 B-roll automático (plano 2026-10-03-broll-automatico):
+# corte.json antigo em f9 dá este erro, sem conversão silenciosa
+F9_SAIU = "o formato f9 virou o f4 B-roll; renderize de novo em f4"
 _POR_PALAVRA = ("f6",)
 _PLACEHOLDER = re.compile(r"\{\{[A-Z_]+\}\}")
-FADE_CARTAO_S = 0.15   # a entrada e a saída do cartão no ilustrado.tpl
+CLIPE_MIN_S = 0.3   # clipe que sobra menos que isso antes do fim do Short só pisca: não entra
 _PLACEHOLDERS_ROSTO = {"QW", "TRILHA_CHEIO", "QM_W", "QM_H", "TRILHA_METADE"}
 
 
 def caminho_template(raiz: Path, formato: str) -> Path:
+    if formato == "f9":
+        raise ErroRender(F9_SAIU)
     if formato not in _TEMPLATES:
         raise ErroRender(f"formato '{formato}' sem template; use um de {FORMATOS}")
     return raiz / "render" / "formatos" / f"{_TEMPLATES[formato]}.tpl"
@@ -61,20 +66,26 @@ def montar_html(tpl: str, valores: dict[str, str]) -> str:
     return saida
 
 
-def imagens_html(ilustracoes: Sequence[Ilustracao], dur: float) -> str:
-    """Um cartão por ilustração com imagem (f9). A deixa sem imagem não vira cartão, nem a que não
-    cabe antes do fim do Short (menos que a entrada e a saída de 0,15 s cada)."""
-    cartoes = []
+def _clipe(i: Ilustracao, midia: Midia, ini: float, dur: float) -> str:
+    attrs = f'id="broll-{i.k}" data-start="{ini}" data-duration="{dur}" data-track-index="15"'
+    src = f"assets/{nome_asset(i.k, midia)}"
+    if midia == "video":
+        return (f'      <video class="clip broll" {attrs} data-media-start="0" src="{src}" muted '
+                f'playsinline></video>')
+    return (f'      <div class="clip broll" {attrs}><img src="{src}" '
+            f'alt="{html.escape(i.deixa.coisa, quote=True)}"></div>')
+
+
+def broll_html(ilustracoes: Sequence[Ilustracao], dur: float) -> str:
+    """Um clipe em tela cheia por deixa com vídeo ou foto (f4). A deixa sem visual não vira clipe,
+    nem a que sobra menos de CLIPE_MIN_S antes do fim do Short; a que passa do fim é cortada nele."""
+    clipes = []
     for i in ilustracoes:
         ini = round(i.deixa.inicio, 2)
-        dur_cartao = round(min(i.deixa.fim, dur) - ini, 2)
-        if i.imagem is None or dur_cartao < 2 * FADE_CARTAO_S:
-            continue
-        cartoes.append(
-            f'      <div class="clip ilus" id="ilus-{i.k}" data-start="{ini}" data-duration="{dur_cartao}" '
-            f'data-track-index="15"><img src="assets/{nome_asset(i.k)}" '
-            f'alt="{html.escape(i.deixa.coisa, quote=True)}"></div>')
-    return "\n".join(cartoes)
+        dur_clipe = round(min(i.deixa.fim, dur) - ini, 2)
+        if i.midia is not None and dur_clipe >= CLIPE_MIN_S:
+            clipes.append(_clipe(i, i.midia, ini, dur_clipe))
+    return "\n".join(clipes)
 
 
 def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], escolhas: dict[int, int],
@@ -86,8 +97,8 @@ def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], esco
     usa = _placeholders(tpl)
     out = {"DUR": str(round(dur, 2)), "LEGENDAS": legenda_html(grupos, por_palavra=formato in _POR_PALAVRA),
            "TITULO": html.escape(titulo)}
-    if "IMAGENS" in usa:
-        out["IMAGENS"] = imagens_html(ilustracoes, dur)
+    if "BROLL" in usa:
+        out["BROLL"] = broll_html(ilustracoes, dur)
     if usa & _PLACEHOLDERS_ROSTO:
         if rosto is None:
             raise ErroRender(f"formato '{formato}' usa rosto no template mas nenhum foi medido")

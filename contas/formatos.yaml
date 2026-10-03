@@ -23,9 +23,9 @@ formatos:
   f4:
     nome: B-roll real
     obs: risco alto de Content ID
-    descricao: "Imagens reais do que está sendo dito, na metade de cima ou em tela cheia."
-    evidencia: "'Acontecimento' 14%×7% (pista). Fonte do YouTube: risco alto de Content ID."
-    no_app: "plano D"
+    descricao: "Quando a pessoa cita uma coisa ou um acontecimento, corta seco para um clipe de 1,5 a 3 s em tela cheia e volta para ela; vídeo do YouTube, com foto só para coisa citada. Substitui o f9 Ilustrado."
+    evidencia: "'Acontecimento' 14%×7% (pista). Fonte do YouTube: risco alto de Content ID; foto de terceiros com licença desconhecida."
+    no_app: "plano B"
     demo: "testes/f4-broll-liquidez/f4-broll-liquidez-v2.mp4"
   f5:
     nome: Gameplay embaixo
@@ -55,9 +55,3 @@ formatos:
     evidencia: "Anti-controle: zero virais na R1 e na R2."
     no_app: "plano B"
     demo: "testes/f8-desfoque-20-vezes/f8-desfoque-20-vezes.mp4"
-  f9:
-    nome: Ilustrado
-    obs: imagem da coisa citada
-    descricao: "A coisa citada aparece num cartão enquanto a pessoa fala (ex.: 'Vans' mostra o tênis); a base é o f7, com corte seco e legenda embaixo."
-    evidencia: "Pedido do Davi (2026-10-02); sem dado da pesquisa ainda. Fotos de terceiros achadas na busca: licença desconhecida."
-    no_app: "plano B"

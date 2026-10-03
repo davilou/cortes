@@ -14,7 +14,7 @@ from cortes.producao.fila import Fila
 from cortes.producao.previas import Previas
 from cortes.render.corte import Corte, Edicoes, concluir, gravar_corte, ler_corte, novo_corte, pasta_corte
 from cortes.render.ilustracao import Deixa
-from cortes.render.ilustracao_cache import FORMATO, Chave, Ilustracao, gravar_ilustracoes
+from cortes.render.ilustracao_cache import FORMATO, Chave, Fonte, Ilustracao, gravar_ilustracoes
 from cortes.render.previa import RUNTIME
 from tests.test_producao_rotas import preparar_concluido
 
@@ -70,7 +70,7 @@ def test_estado_do_editor(cfg: Config) -> None:
     assert url_previa.startswith(f"{EP}/cortes/0/previa/index.html?v=")
     assert [(p["k"], len(p["pessoas"]), p["escolha"]) for p in d["planos"]] == [(0, 1, 0), (1, 2, 0)]
     assert d["versoes"] == [{"versao": 1, "url": f"{EP}/cortes/0/video?versao=1"}]
-    assert d["editavel"] is True and d["formatos"] == ["f7", "f1", "f6", "f5", "f8", "f9"]
+    assert d["editavel"] is True and d["formatos"] == ["f7", "f1", "f6", "f5", "f8", "f4"]
 
 
 def test_previa_pronta_quando_nao_alterado_mesmo_com_corte_json_mais_novo(cfg: Config) -> None:
@@ -198,60 +198,73 @@ def test_miniatura_recusada_com_a_previa_preparando(cfg: Config) -> None:
     assert r.status_code == 422 and "preparado" in r.json()["detail"]
 
 
-def ambiente_f9(cfg: Config) -> Ambiente:
+def ambiente_f4(cfg: Config) -> Ambiente:
     a = Ambiente(cfg)
-    gravar_corte(a.d, replace(ler_corte(a.d), formato="f9"))
+    gravar_corte(a.d, replace(ler_corte(a.d), formato="f4"))
     pasta = a.d / "ilustracao"
     pasta.mkdir()
-    (pasta / "D1-c2.jpg").write_bytes(b"vans")
-    vans, bota = Deixa(1.2, 2.6, "Vans", "b", "literal"), Deixa(4.5, 5.7, "bota", "b", "literal")
-    ilus = [Ilustracao(1, vans, pasta / "D1-c2.jpg", "http://loja/vans", "é o tênis", (), False),
-            Ilustracao(2, bota, None, None, "nenhuma é a bota", (), False)]
+    (pasta / "D1-v2.mp4").write_bytes(b"trecho")
+    (pasta / "D1-v2-q2.jpg").write_bytes(b"quadro")
+    (pasta / "D2-c1-cheia.jpg").write_bytes(b"camisa")
+    vans, camisa = Deixa(1.2, 2.6, "Vans", "b", "literal"), Deixa(3.0, 4.0, "camisa", "c", "literal")
+    pandemia = Deixa(4.5, 5.7, "pandemia", "empty street", "acontecimento")
+    ilus = [Ilustracao(1, vans, "video", pasta / "D1-v2.mp4", Fonte("https://yt/v", "Canal", "T"),
+                       "é o tênis", (), False),
+            Ilustracao(2, camisa, "foto", pasta / "D2-c1-cheia.jpg", Fonte("http://loja"), "só a foto",
+                       (), False),
+            Ilustracao(3, pandemia, None, None, None, "sem visual: nenhum vídeo", (), False)]
     gravar_ilustracoes(pasta, Chave(0.7, 7.8, "h"), ilus, None)
-    (a.d / "projeto" / "assets" / "ilus-1.jpg").write_bytes(b"vans")
+    (a.d / "projeto" / "assets" / "broll-1.mp4").write_bytes(b"trecho")
+    (a.d / "projeto" / "assets" / "broll-2.jpg").write_bytes(b"camisa")
     return a
 
 
-def test_editor_lista_as_ilustracoes_do_f9(cfg: Config) -> None:
-    a = ambiente_f9(cfg)
+def test_editor_lista_o_broll_do_f4_com_tipo_e_miniatura(cfg: Config) -> None:
+    a = ambiente_f4(cfg)
     d = a.c.get(f"{EP}/cortes/0/editor").json()
-    vans, bota = d["ilustracoes"]
-    assert vans["coisa"] == "Vans" and vans["imagem"].startswith(f"{EP}/cortes/0/ilustracao/1?v=")
-    assert vans["fonte_url"] == "http://loja/vans" and d["ilustracao_erro"] is None
-    assert bota["imagem"] is None and bota["motivo"] == "nenhuma é a bota"
-    assert a.c.get(vans["imagem"]).content == b"vans"
-    r = a.c.get(f"{EP}/cortes/0/ilustracao/2")
-    assert r.status_code == 422 and "sem imagem" in r.json()["detail"]
+    vans, camisa, pandemia = d["broll"]
+    assert (vans["midia"], camisa["midia"], pandemia["midia"]) == ("video", "foto", None)
+    assert vans["miniatura"].startswith(f"{EP}/cortes/0/broll/1?v=") and d["broll_erro"] is None
+    assert vans["fonte_url"] == "https://yt/v" and vans["canal"] == "Canal" and vans["tipo"] == "literal"
+    assert pandemia["miniatura"] is None and pandemia["tipo"] == "acontecimento"
+    assert a.c.get(vans["miniatura"]).content == b"quadro"      # um quadro do vídeo
+    assert a.c.get(camisa["miniatura"]).content == b"camisa"    # a própria foto
+    r = a.c.get(f"{EP}/cortes/0/broll/3")
+    assert r.status_code == 422 and "sem visual" in r.json()["detail"]
 
 
-def test_imagem_da_ilustracao_caminho_feliz(cfg: Config) -> None:
-    r = ambiente_f9(cfg).c.get(f"{EP}/cortes/0/ilustracao/1")
-    assert r.status_code == 200 and r.content == b"vans" and r.headers["content-type"] == "image/jpeg"
+def test_miniatura_do_broll_e_jpeg(cfg: Config) -> None:
+    r = ambiente_f4(cfg).c.get(f"{EP}/cortes/0/broll/1")
+    assert r.status_code == 200 and r.content == b"quadro" and r.headers["content-type"] == "image/jpeg"
 
 
-def test_editor_sem_ilustracoes_fora_do_f9(cfg: Config) -> None:
+def test_editor_sem_broll_fora_do_f4(cfg: Config) -> None:
     d = Ambiente(cfg).c.get(f"{EP}/cortes/0/editor").json()
-    assert d["ilustracoes"] == [] and d["ilustracao_erro"] is None
+    assert d["broll"] == [] and d["broll_erro"] is None
 
 
-def test_cache_da_ilustracao_invalido_nao_derruba_o_editor(cfg: Config) -> None:
-    a = ambiente_f9(cfg)
+def test_cache_do_broll_invalido_nao_derruba_o_editor(cfg: Config) -> None:
+    a = ambiente_f4(cfg)
     (a.d / "ilustracao" / "ilustracao.json").write_text(f'{{"formato": {FORMATO}}}', encoding="utf-8")
     d = a.c.get(f"{EP}/cortes/0/editor").json()
-    assert d["ilustracoes"] == [] and "cache da ilustração inválido" in d["ilustracao_erro"]
+    assert d["broll"] == [] and "cache da ilustração inválido" in d["broll_erro"]
 
 
-def test_imagem_da_ilustracao_recusada_com_a_previa_preparando(cfg: Config) -> None:
-    a = ambiente_f9(cfg)
+def test_miniatura_do_broll_recusada_com_a_previa_preparando(cfg: Config) -> None:
+    a = ambiente_f4(cfg)
     a.previas.pedir("abcdefghijk", 0)
-    r = a.c.get(f"{EP}/cortes/0/ilustracao/1")
+    r = a.c.get(f"{EP}/cortes/0/broll/1")
     assert r.status_code == 422 and "preparado" in r.json()["detail"]
 
 
-def test_previa_serve_o_cartao_do_f9(cfg: Config) -> None:
-    a = ambiente_f9(cfg)
-    assert a.c.get(f"{EP}/cortes/0/previa/assets/ilus-1.jpg").content == b"vans"
-    assert a.c.get(f"{EP}/cortes/0/previa/assets/ilus-1.png").status_code == 422
+def test_previa_serve_os_clipes_do_f4_por_lista_fechada(cfg: Config) -> None:
+    a = ambiente_f4(cfg)
+    r = a.c.get(f"{EP}/cortes/0/previa/assets/broll-1.mp4")
+    assert r.content == b"trecho" and r.headers["content-type"] == "video/mp4"
+    r = a.c.get(f"{EP}/cortes/0/previa/assets/broll-2.jpg")
+    assert r.content == b"camisa" and r.headers["content-type"] == "image/jpeg"
+    for nome in ("broll-1.png", "broll-x.mp4", "broll-1.mp4.jpg", "ilus-1.jpg", "broll-9.mp4"):
+        assert a.c.get(f"{EP}/cortes/0/previa/assets/{nome}").status_code == 422
 
 
 @pytest.mark.parametrize("nome", ["fundo.mp4", "gameplay.mp4"])
@@ -265,32 +278,32 @@ def test_previa_serve_o_video_de_fundo_do_f8_e_do_f5(cfg: Config, nome: str) -> 
     assert a.c.get(travessia).status_code == 422
 
 
-def test_refazer_ilustracao_apaga_o_cache_e_os_cartoes_e_pede_a_previa(cfg: Config) -> None:
-    a = ambiente_f9(cfg)
-    (a.d / "projeto" / "assets" / "ilus-9.jpg").write_bytes(b"velha")
-    d = a.c.post(f"{EP}/cortes/0/ilustracao/refazer").json()
-    assert d["previa"]["situacao"] == "preparando" and d["ilustracoes"] == []
+def test_refazer_broll_apaga_o_cache_e_os_clipes_e_pede_a_previa(cfg: Config) -> None:
+    a = ambiente_f4(cfg)
     assets = a.d / "projeto" / "assets"
-    assert not (a.d / "ilustracao").exists() and not list(assets.glob("ilus-*.jpg"))
-    assert (assets / "trecho.mp4").exists()
+    (assets / "ilus-9.jpg").write_bytes(b"cartao do f9")
+    d = a.c.post(f"{EP}/cortes/0/broll/refazer").json()
+    assert d["previa"]["situacao"] == "preparando" and d["broll"] == []
+    assert not (a.d / "ilustracao").exists()
+    assert not [*assets.glob("broll-*"), *assets.glob("ilus-*")] and (assets / "trecho.mp4").exists()
 
 
-def test_refazer_ilustracao_recusado_com_a_previa_preparando(cfg: Config) -> None:
-    a = ambiente_f9(cfg)
+def test_refazer_broll_recusado_com_a_previa_preparando(cfg: Config) -> None:
+    a = ambiente_f4(cfg)
     a.previas.pedir("abcdefghijk", 0)
-    r = a.c.post(f"{EP}/cortes/0/ilustracao/refazer")
+    r = a.c.post(f"{EP}/cortes/0/broll/refazer")
     assert r.status_code == 422 and "preparada" in r.json()["detail"]
     assert (a.d / "ilustracao" / "ilustracao.json").exists()
 
 
-def test_refazer_ilustracao_recusado_com_o_corte_na_fila(cfg: Config) -> None:
-    a = ambiente_f9(cfg)
+def test_refazer_broll_recusado_com_o_corte_na_fila(cfg: Config) -> None:
+    a = ambiente_f4(cfg)
     a.c.post(f"{EP}/cortes/0/renderizar", json={})
-    r = a.c.post(f"{EP}/cortes/0/ilustracao/refazer")
+    r = a.c.post(f"{EP}/cortes/0/broll/refazer")
     assert r.status_code == 422 and "fila" in r.json()["detail"]
     assert (a.d / "ilustracao" / "ilustracao.json").exists()
 
 
-def test_refazer_ilustracao_recusado_fora_do_f9(cfg: Config) -> None:
-    r = Ambiente(cfg).c.post(f"{EP}/cortes/0/ilustracao/refazer")
-    assert r.status_code == 422 and "f9" in r.json()["detail"]
+def test_refazer_broll_recusado_fora_do_f4(cfg: Config) -> None:
+    r = Ambiente(cfg).c.post(f"{EP}/cortes/0/broll/refazer")
+    assert r.status_code == 422 and "f4" in r.json()["detail"]

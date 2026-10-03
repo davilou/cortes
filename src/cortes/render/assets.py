@@ -49,9 +49,14 @@ def preparar_assets(assets: Path, formato: str, indice: int, dur: float, raiz: P
         gerar_por_parcial(assets / GAMEPLAY, lambda p: args_gameplay(fonte, p, dur), rodar, "gameplay")
 
 
+def apagar_clipes(assets: Path) -> None:
+    """Os clipes do f4 (`broll-<k>.mp4|jpg`) e os cartões do antigo f9 (`ilus-<k>.jpg`)."""
+    for velho in [*assets.glob("broll-*.mp4"), *assets.glob("broll-*.jpg"), *assets.glob("ilus-*.jpg")]:
+        velho.unlink()
+
+
 def apagar_assets(assets: Path) -> None:
-    """Também as imagens do f9 (`ilus-<k>.jpg`): vêm das deixas da fala do trecho anterior."""
+    """Também os clipes do f4: vêm das deixas da fala do trecho anterior."""
     for nome in (FUNDO, GAMEPLAY):
         (assets / nome).unlink(missing_ok=True)
-    for ilus in assets.glob("ilus-*.jpg"):
-        ilus.unlink()
+    apagar_clipes(assets)

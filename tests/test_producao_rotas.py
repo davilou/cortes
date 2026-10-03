@@ -45,7 +45,7 @@ def test_novo_episodio_entra_na_fila(cfg: Config) -> None:
     ({**NOVO, "link": "https://www.youtube.com/@canal"}, "sem id"),
     ({**NOVO, "nicho": "humor"}, "nicho 'humor'"),
     ({**NOVO, "nicho": "../contas"}, "nicho '../contas'"),
-    ({**NOVO, "formato": "f4"}, "formato 'f4'"),
+    ({**NOVO, "formato": "f9"}, "formato 'f9'"),
 ])
 def test_novo_episodio_recusado(cfg: Config, corpo: dict[str, object], erro: str) -> None:
     c, fila = montar(cfg)

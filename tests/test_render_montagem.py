@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 
 from cortes.render.ilustracao import Deixa
-from cortes.render.ilustracao_cache import Ilustracao
+from cortes.render.ilustracao_cache import Fonte, Ilustracao, Midia
 from cortes.render.legenda import Grupo
-from cortes.render.montagem import FORMATOS, caminho_template, imagens_html, montar_html, valores
+from cortes.render.montagem import F9_SAIU, FORMATOS, broll_html, caminho_template, montar_html, valores
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import Amostra, Face, Rosto
 
@@ -24,15 +24,21 @@ def test_valor_com_placeholder_literal_nao_e_reprocessado() -> None:
 
 
 def test_formato_sem_template_e_erro() -> None:
-    with pytest.raises(ErroRender, match="formato 'f4'"):
-        caminho_template(REPO, "f4")
+    with pytest.raises(ErroRender, match="formato 'f3'"):
+        caminho_template(REPO, "f3")
+
+
+def test_f9_virou_f4_com_erro_claro() -> None:
+    with pytest.raises(ErroRender, match="o formato f9 virou o f4 B-roll; renderize de novo em f4"):
+        caminho_template(REPO, "f9")
+    assert "f9" in F9_SAIU and not (REPO / "render" / "formatos" / "ilustrado.tpl").exists()
 
 
 G = [Grupo(0.0, 1.0, ("Oi",), (0.0,))]
 
 
 def test_formatos_do_app() -> None:
-    assert FORMATOS == ("f7", "f1", "f6", "f5", "f8", "f9")
+    assert FORMATOS == ("f7", "f1", "f6", "f5", "f8", "f4")
 
 
 @pytest.mark.parametrize("formato", FORMATOS)
@@ -40,7 +46,7 @@ def test_templates_reais_montam_sem_sobra(formato: str) -> None:
     tpl = caminho_template(REPO, formato).read_text(encoding="utf-8")
     html = montar_html(tpl, valores(tpl, 12.5, R, G, {}, formato, "Título"))
     assert 'data-duration="12.5"' in html and ">Oi<" in html
-    cheio = formato in ("f7", "f1", "f6", "f9")
+    cheio = formato in ("f7", "f1", "f6", "f4")
     assert ("3413px" in html) == cheio   # quadro cheio: fonte a 1920 de altura
     # corte seco, sem efeito nenhum: nem flash, nem zoom nas emendas ou nas frases (Davi, 2026-10-02)
     assert 'id="flash"' not in html and "scale: k % 2" not in html and "scale: n % 2" not in html
@@ -84,30 +90,40 @@ def test_falante_com_rosto_vazio_continua_com_erro_claro() -> None:
         valores(tpl, 12.5, SEM_ROSTO, G, {}, "f1", "T")
 
 
-def _ilus(k: int, coisa: str, imagem: bool = True) -> Ilustracao:
-    img = Path(f"D{k}-c1.jpg") if imagem else None
+def _ilus(k: int, coisa: str, midia: Midia | None = "video") -> Ilustracao:
+    arq = Path(f"D{k}-v1.mp4" if midia == "video" else f"D{k}-c1-cheia.jpg") if midia else None
     deixa = Deixa(2.0 * k, 2.0 * k + 1.5, coisa, coisa, "literal")
-    return Ilustracao(k, deixa, img, "http://loja", "ok", (), False)
+    return Ilustracao(k, deixa, midia, arq, Fonte("http://x") if midia else None, "ok", (), False)
 
 
-def test_ilustrado_poe_um_cartao_por_imagem_escapado() -> None:
-    tpl = caminho_template(REPO, "f9").read_text(encoding="utf-8")
-    ilus = [_ilus(1, 'tênis "Vans" <&>'), _ilus(2, "bota", imagem=False), _ilus(3, "camisa")]
-    html = montar_html(tpl, valores(tpl, 6.0, R, G, {}, "f9", "T", ilustracoes=ilus))
-    assert ('<div class="clip ilus" id="ilus-1" data-start="2.0" data-duration="1.5" data-track-index="15">'
-            '<img src="assets/ilus-1.jpg" alt="tênis &quot;Vans&quot; &lt;&amp;&gt;"></div>') in html
-    assert "ilus-2.jpg" not in html   # deixa sem imagem não vira cartão
-    assert "ilus-3" not in html   # começa no fim do Short: não cabe
-    # entrada e saída só por opacidade, sem scale nem flash
-    assert "{ opacity: 0 }, { opacity: 1, duration: 0.15" in html and 'id="flash"' not in html
+def test_broll_poe_um_clipe_em_tela_cheia_por_deixa_com_visual() -> None:
+    tpl = caminho_template(REPO, "f4").read_text(encoding="utf-8")
+    ilus = [_ilus(1, "tênis"), _ilus(2, 'bota "boa" <&>', "foto"), _ilus(3, "x", None)]
+    html = montar_html(tpl, valores(tpl, 7.0, R, G, {}, "f4", "T", ilustracoes=ilus))
+    assert ('<video class="clip broll" id="broll-1" data-start="2.0" data-duration="1.5" '
+            'data-track-index="15" data-media-start="0" src="assets/broll-1.mp4" muted playsinline>'
+            '</video>') in html
+    assert ('<div class="clip broll" id="broll-2" data-start="4.0" data-duration="1.5" data-track-index="15">'
+            '<img src="assets/broll-2.jpg" alt="bota &quot;boa&quot; &lt;&amp;&gt;"></div>') in html
+    assert "broll-3" not in html   # deixa sem visual não vira clipe
+    # aparece e some seco, por cima do rosto e por baixo da legenda (que vem depois no DOM)
+    assert html.index('id="broll-2"') < html.index('id="leg-0"')
 
 
-def test_imagens_vazio_fora_do_f9() -> None:
+def test_broll_nao_tem_efeito_nenhum() -> None:
+    """Sem Ken Burns, flash, zoom nem fade: o runtime liga e desliga o clipe na janela dele."""
+    tpl = caminho_template(REPO, "f4").read_text(encoding="utf-8")
+    script = tpl[tpl.index("<script>"):]
+    assert ".broll" not in script and "scale: 1.08" not in script
+    assert "{ opacity: 0 }, { opacity: 1, d" not in script
+    assert "transition" not in tpl and "animation" not in tpl
+
+
+def test_broll_vazio_fora_do_f4() -> None:
     tpl = caminho_template(REPO, "f7").read_text(encoding="utf-8")
-    assert "IMAGENS" not in valores(tpl, 6.0, R, G, {}, "f7", "T", ilustracoes=[_ilus(1, "x")])
+    assert "BROLL" not in valores(tpl, 6.0, R, G, {}, "f7", "T", ilustracoes=[_ilus(1, "x")])
 
 
-def test_cartao_que_passa_do_fim_do_short_e_cortado_no_fim() -> None:
-    vans = Deixa(5.0, 6.5, "Vans", "Vans", "literal")
-    ilus = Ilustracao(1, vans, Path("D1-c1.jpg"), "http://loja", "ok", (), False)
-    assert 'data-start="5.0" data-duration="1.0"' in imagens_html([ilus], 6.0)
+def test_clipe_que_passa_do_fim_do_short_e_cortado_e_o_que_sobra_pouco_sai() -> None:
+    assert 'data-start="2.0" data-duration="1.0"' in broll_html([_ilus(1, "x")], 3.0)
+    assert broll_html([_ilus(1, "x")], 2.2) == ""

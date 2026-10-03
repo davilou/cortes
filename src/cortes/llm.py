@@ -24,7 +24,7 @@ class ErroLLM(RuntimeError):
 
 def _flags_ferramentas(ferramentas: str) -> list[str]:
     """Sem ferramenta, `--tools ""` desliga todas. Com ferramenta (ex.: "Read" na conferência visual
-    do Ilustrado), o escopo vem do cwd, não de regra de allow: não há `--allowedTools`, e o modo
+    do B-roll), o escopo vem do cwd, não de regra de allow: não há `--allowedTools`, e o modo
     `dontAsk` nega sozinho tudo que pediria permissão — Read fora das pastas de trabalho incluído.
     Leitura dentro do cwd não pede permissão, então passa. Conferido numa chamada real em 2026-10-02
     (claude 2.1.280): Read da folha no cwd leu; Read de um arquivo do repo por caminho absoluto veio

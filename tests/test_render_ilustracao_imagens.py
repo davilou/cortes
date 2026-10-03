@@ -6,23 +6,16 @@ from typing import Any
 import pytest
 from ddgs.exceptions import DDGSException, RatelimitException, TimeoutException
 
-from cortes.render.ilustracao import Deixa
 from cortes.render.ilustracao_imagens import (
     Candidata,
     ErroBusca,
-    LinhaFolha,
     args_baixar,
     baixar,
     baixar_candidatas,
     buscar,
-    dividir_folhas,
     falha_temporaria,
-    folha_args,
-    gerar_folha,
 )
 from cortes.render.processo import ErroRender
-
-DEIXA = Deixa(2.0, 3.5, "tênis", "tênis Vans Old Skool", "literal")
 
 
 class DdgsFalso:
@@ -178,50 +171,3 @@ def test_baixa_ate_4_candidatas_ao_mesmo_tempo_e_devolve_na_ordem(tmp_path: Path
     ("u: download de u: ffmpeg não gerou a imagem", False)])
 def test_falha_temporaria_so_para_prazo_rede_e_5xx(falha: str, temporaria: bool) -> None:
     assert falha_temporaria(falha) is temporaria
-
-
-def test_folha_uma_linha_por_deixa_com_numero_em_cada_tile() -> None:
-    linhas = [LinhaFolha(1, DEIXA, (Path("a1.jpg"), Path("a2.jpg"))),
-              LinhaFolha(2, DEIXA, ()),
-              LinhaFolha(3, DEIXA, (Path("c1.jpg"),))]
-    args = folha_args(linhas, Path("folha.jpg"))
-    assert [args[i + 1] for i, a in enumerate(args) if a == "-i"] == ["a1.jpg", "a2.jpg", "c1.jpg"]
-    grafo = args[args.index("-filter_complex") + 1]
-    assert "text='D1-1'" in grafo and "text='D1-2'" in grafo and "text='D3-1'" in grafo
-    assert "D2-" not in grafo   # deixa sem candidata não entra
-    assert "scale=320:320" in grafo and "arial.ttf" in grafo
-    # rótulo numa faixa branca de 48 px acima da foto, não por cima dela
-    assert "pad=320:368:0:48:white" in grafo and "fontcolor=black" in grafo and "boxcolor" not in grafo
-    assert "xstack=inputs=3:layout=0_0|320_0|0_368:fill=white" in grafo
-    assert args[-1] == "folha.jpg"
-
-
-def test_dividir_folhas_de_6_em_6_deixas_com_imagem() -> None:
-    linhas = [LinhaFolha(k, DEIXA, (Path(f"{k}.jpg"),) if k != 3 else ()) for k in range(1, 15)]
-    folhas = dividir_folhas(linhas)
-    assert [[ln.k for ln in f] for f in folhas] == [[1, 2, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13], [14]]
-    assert dividir_folhas([LinhaFolha(1, DEIXA, ())]) == []
-
-
-def test_folha_de_uma_imagem_so_nao_usa_xstack() -> None:
-    args = folha_args([LinhaFolha(4, DEIXA, (Path("a.jpg"),))], Path("f.jpg"))
-    grafo = args[args.index("-filter_complex") + 1]
-    assert "xstack" not in grafo and "text='D4-1'" in grafo
-
-
-def test_folha_sem_imagem_nenhuma_e_erro() -> None:
-    with pytest.raises(ErroRender, match="nenhuma imagem"):
-        folha_args([LinhaFolha(1, DEIXA, ())], Path("f.jpg"))
-
-
-def test_gerar_folha_confere_o_arquivo(tmp_path: Path) -> None:
-    linhas = [LinhaFolha(1, DEIXA, (Path("a.jpg"),))]
-    with pytest.raises(ErroRender, match="não gerou"):
-        gerar_folha(linhas, tmp_path / "folha.jpg", lambda a, c: (0, ""))
-
-    def rodar(args: list[str], cwd: Path | None) -> tuple[int, str]:
-        Path(args[-1]).write_bytes(b"jpg")
-        return 0, ""
-
-    gerar_folha(linhas, tmp_path / "folha.jpg", rodar)
-    assert (tmp_path / "folha.jpg").exists()

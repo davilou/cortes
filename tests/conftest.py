@@ -37,7 +37,7 @@ def cfg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Config:
     (skill / "src").mkdir(parents=True)
     (skill / "src" / "cli.mjs").write_text("", encoding="utf-8")
     (skill / "node_modules").mkdir()
-    nomes = ("falante", "conversa", "hormozi", "gameplay", "desfoque", "ilustrado")
+    nomes = ("falante", "conversa", "hormozi", "gameplay", "desfoque", "broll")
     tpls = [f"render/formatos/{n}.tpl" for n in nomes]
     for arq in (*tpls, "render/visao/rosto.py", "visao/python.exe", "visao/rosto.onnx"):
         (tmp_path / arq).parent.mkdir(parents=True, exist_ok=True)

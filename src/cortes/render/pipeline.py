@@ -3,7 +3,7 @@
 Trecho e rosto são caros e só dependem de início/fim: ficam gravados com `recorte.json` como
 marcador, que é escrito por último. Se início/fim mudarem (editor, plano C), os dois são refeitos,
 e os assets do formato (fundo do f8, gameplay do f5; render/assets.py) são apagados e refeitos.
-O f9 (Ilustrado) tem ainda a etapa de ilustração (render/ilustracao_etapa.py), com cache em
+O f4 (B-roll) tem ainda a etapa do B-roll (render/ilustracao_etapa.py), com cache em
 `ilustracao/`, apagada junto quando o trecho é refeito.
 `montar_projeto` (trecho + rosto + index.html com as edições) é o que a prévia do editor mostra;
 `renderizar_corte` chama `montar_projeto` e depois gera o MP4.
@@ -16,6 +16,7 @@ from pathlib import Path
 from cortes.detector import ChamarLLM, chamar_llm_real
 from cortes.episodio import ler_json, salvar_json
 from cortes.render.assets import apagar_assets, preparar_assets
+from cortes.render.broll_video import rodar_busca_real, rodar_trecho_real
 from cortes.render.corte import Corte, pasta_corte
 from cortes.render.edicao import palavras_editadas
 from cortes.render.hyperframes import criar_projeto, renderizar
@@ -52,10 +53,12 @@ class DepRender:
     npx: str
     rodar: Rodar = rodar_processo
     ler_audio: LerAudio = ler_trecho_wav
-    chamar_llm: ChamarLLM = chamar_llm_real                    # deixas do f9
-    chamar_llm_com_read: ChamarComRead = chamar_com_read_real  # conferência visual do f9
-    ddgs: Callable[[], BuscaImagens] = ddgs_real               # busca de imagens do f9
-    rodar_download: Rodar = rodar_download_real                # download das imagens do f9 (30 s)
+    chamar_llm: ChamarLLM = chamar_llm_real                    # deixas do f4
+    chamar_llm_com_read: ChamarComRead = chamar_com_read_real  # conferência visual do f4
+    ddgs: Callable[[], BuscaImagens] = ddgs_real               # busca de fotos do f4
+    rodar_download: Rodar = rodar_download_real                # download das fotos do f4 (30 s)
+    rodar_busca_video: Rodar = rodar_busca_real                # busca no YouTube do f4 (30 s)
+    rodar_video: Rodar = rodar_trecho_real                     # trecho do YouTube e quadros (90 s)
 
 
 def janela(c: Corte) -> tuple[float, float]:
@@ -117,7 +120,7 @@ def _medir_rosto_se_possivel(trecho: Path, destino: Path, raiz: Path, formato: s
 
 def _palavras_trecho(pasta_ep: Path, c: Corte, segs: list[Segmento], *, com_mascara: bool) -> list[Palavra]:
     """As palavras do corte, com as edições, no tempo do trecho sem pausas: com máscara para a
-    legenda, sem máscara para as deixas do f9 (o LLM precisa ler a palavra)."""
+    legenda, sem máscara para as deixas do f4 (o LLM precisa ler a palavra)."""
     ini, fim = janela(c)
     todas = palavras_editadas([Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")], c.edicoes,
                               com_mascara=com_mascara)
@@ -134,13 +137,13 @@ def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento], ilus: list
 
 
 def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> list[Ilustracao]:
-    """Só o f9. Erro de LLM, de folha ou "nada ilustrável" vira ErroRender e o corte fica em erro."""
-    if c.formato != "f9":
+    """Só o f4. Erro de LLM, de folha ou "nada a mostrar" vira ErroRender e o corte fica em erro."""
+    if c.formato != "f4":
         return []
     d = pasta_corte(pasta_ep, c.indice)
     ini, fim = janela(c)
     deps = DepIlustracao(dep.chamar_llm, dep.chamar_llm_com_read, dep.ddgs, dep.rodar,
-                         dep.rodar_download)
+                         dep.rodar_download, dep.rodar_busca_video, dep.rodar_video)
     palavras = _palavras_trecho(pasta_ep, c, segs, com_mascara=False)
     return ilustrar(d, ini, fim, palavras, duracao(segs), d / "projeto" / "assets", deps)
 
@@ -148,7 +151,8 @@ def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) ->
 def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
     """Trecho + rosto (com cache) e o index.html com as edições — o que a prévia do editor mostra
     e o render grava em MP4. Rápido quando início/fim não mudaram (só regera o HTML)."""
-    segs = preparar_trecho(pasta_ep, c, raiz, dep)
+    caminho_template(raiz, c.formato)   # formato que não renderiza (ex.: o antigo f9) para antes do trecho
+    segs =preparar_trecho(pasta_ep, c, raiz, dep)
     proj = pasta_corte(pasta_ep, c.indice) / "projeto"
     preparar_assets(proj / "assets", c.formato, c.indice, duracao(segs), raiz, dep.rodar)
     ilus = _ilustrar(pasta_ep, c, segs, dep)

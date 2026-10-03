@@ -51,7 +51,7 @@ def test_renderizar_recusa(cfg: Config) -> None:
     pasta = preparar_concluido(cfg)
     c, _ = montar(cfg)
     assert "não existe" in c.post(f"{EP}/cortes/7/renderizar", json={}).json()["detail"]
-    assert "formato 'f4'" in c.post(f"{EP}/cortes/0/renderizar", json={"formato": "f4"}).json()["detail"]
+    assert "formato 'f9'" in c.post(f"{EP}/cortes/0/renderizar", json={"formato": "f9"}).json()["detail"]
     c.post(f"{EP}/cortes/0/renderizar", json={})
     assert "já está na fila" in c.post(f"{EP}/cortes/0/renderizar", json={}).json()["detail"]
     gravar(pasta, marcar(ler(pasta), "momentos", "pendente", AGORA))
