@@ -252,7 +252,7 @@ rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 
 > **Feito como f4 B-roll automático — ver §11**, que vale no lugar desta seção onde as duas
 > divergem: clipe em tela cheia (não dividido/cheio), escolha automática pela conferência (não 3
-> opções no editor), vídeos de 20 s a 20 min, foto de reserva na deixa literal. O texto abaixo é o
+> opções no editor), vídeos de 15 s a 3 min, foto de reserva na deixa literal. O texto abaixo é o
 > desenho original, mantido como histórico.
 
 1. **Deixas:** `claude -p` (schema obrigatório) lê a transcrição do corte e devolve
@@ -307,8 +307,9 @@ verdade, render ponta a ponta) é marcado `lento` e fica fora do check padrão (
 - **Direitos:** cortes de podcast e B-roll do YouTube são de terceiros (spec principal §14);
   f4 marca risco alto de Content ID por visual. A foto de reserva do f4 vem da busca de imagens
   do DuckDuckGo: fotos de loja e de terceiros, com `fonte_url` e `licenca: desconhecida` (§11).
-- **YouTube lento e sujeito a bloqueio no B-roll:** cada trecho leva ~45 s e às vezes estoura o
-  prazo; um f4 levou 13–16 min no render real (§11).
+- **YouTube sujeito a bloqueio no B-roll:** o vídeo inteiro (15 s a 3 min) vem em ~10 s pelo
+  downloader nativo; antes, a seção pelo ffmpeg levava ~45 s e estourava o prazo em metade dos
+  casos (§11). 403/429 tiram o YouTube da rodada.
 - **Transcrição automática erra nomes e números** — o editor (plano C) corrige; até lá, o
   render usa a transcrição como veio.
 - **GPU dividida:** o modelo só ocupa a placa durante a transcrição, mas o ComfyUI rodando
@@ -333,7 +334,8 @@ Etapa do corte, só no f4, antes do `index.html`:
    - `tipo: "literal"` é a coisa citada (Vans, camisa do Corinthians); `"acontecimento"` é a cena
      que a fala evoca ("a pandemia" → rua vazia; "fui de jatinho" → jato decolando). A busca do
      acontecimento pode ser em inglês quando render mais vídeo.
-   - Nada abstrato. Cada coisa entra uma vez só, sem busca genérica para uma coisa específica já
+   - Nada abstrato, nem peça ou característica de produto descrita de forma vaga ("negócio que
+     evita torção", "sola ultra resistente"): só a coisa inteira e nomeável. Cada coisa entra uma vez só, sem busca genérica para uma coisa específica já
      citada ("a camiseta" depois de "camisa do Corinthians" trouxe a camisa da seleção no render
      de 2026-10-02).
    - **Ritmo no prompt e no código** (`ilustracao.deixas_do_corte`): nada no primeiro 1 s (gancho
@@ -343,9 +345,12 @@ Etapa do corte, só no f4, antes do `index.html`:
      descartada em silêncio.
 2. **Candidatos por deixa** (`broll_candidatos.py`), sempre **em série**, nunca em paralelo no
    YouTube:
-   - **2 vídeos:** `yt-dlp ytsearch8:` filtrado para 20 s a 20 min, os 2 primeiros. De cada um
-     baixa só uma seção de 5 s a partir de 25% da duração (passa da vinheta), até 1080p, só vídeo,
-     e o ffmpeg tira 3 s em 1080×1920 em **cover** com corte central (o 16:9 preenche a tela).
+   - **2 vídeos:** `yt-dlp ytsearch15:` filtrado para 15 s a 3 min, os 2 primeiros. De cada um
+     baixa o **vídeo inteiro** pelo downloader nativo do yt-dlp (sem `--download-sections`), até
+     1080p, só vídeo, com `--max-filesize 120M` e prazo de 45 s; o ffmpeg tira localmente 3 s a
+     partir de 25% da duração (passa da vinheta) em 1080×1920 em **cover** com corte central (o
+     16:9 preenche a tela), gravando por `.parcial`. O vídeo baixado é apagado sempre; se o Windows
+     não deixa apagar, isso vira nota no erro original ou, sem erro, `ErroRender` com o caminho.
      Id validado (`^[A-Za-z0-9_-]{11}$`), argumentos em lista, sem shell.
    - **2 fotos**, só na deixa literal: busca ddgs, download pelo ffmpeg com os limites do f9
      (só `http`/`https`, só demuxers de imagem, `-max_pixels`, prazo de 30 s por foto). A foto
@@ -354,7 +359,15 @@ Etapa do corte, só no f4, antes do `index.html`:
    - **YouTube fora da rodada no primeiro bloqueio:** a primeira busca que falha, ou um 429 / "não
      é um robô" na saída do yt-dlp, marca o YouTube como fora; as deixas seguintes nem tentam e
      ficam transitórias (a foto ainda cobre a literal). Nada é repetido em laço (§8: o IP já foi
-     bloqueado uma vez).
+     bloqueado uma vez). No download, o downloader nativo diz `unable to download video data: HTTP
+     Error 403: Forbidden` (ou 429): os dois contam como bloqueio — o 403 da googlevideo vale para a
+     sessão (URL sem PO Token ou estrangulada), não para um vídeo.
+   - **yt-dlp quebrado não é "temporário":** na busca, só prazo, bloqueio e sinal de rede
+     (`Unable to download`, `urlopen error`, `timed out`, ...) viram falha transitória; outro código
+     diferente de 0 (módulo ausente, extractor quebrado) derruba o corte com a mensagem do yt-dlp.
+   - **Candidatos guardados antes da conferência** (`ilustracao/candidatos.json`, mesma chave e
+     mesma deixa, arquivos ainda no disco): erro na folha ou na conferência (ErroLLM) não faz buscar
+     e baixar de novo na próxima rodada. Apagado quando a conferência responde.
 3. **Conferência:** os candidatos viram **folhas mistas** — uma linha por deixa, tiles `D<k>-V<j>`
    (3 quadros do trecho: início, meio e fim) e `D<k>-F<j>` (a foto), rótulo numa faixa acima de
    cada tile — com **até 4 deixas por folha** (com 2 vídeos + 2 fotos a linha fica larga; 6
@@ -368,7 +381,8 @@ Etapa do corte, só no f4, antes do `index.html`:
    some **seco** — sem Ken Burns, sem flash, sem zoom, sem opacidade gradual. A legenda continua
    por cima. Clipe que sobraria menos de 0,3 s antes do fim do Short não entra.
 5. **Sem visual:** a deixa sem candidato aprovado fica **"sem visual"**, com o motivo, visível no
-   editor; nunca entra um visual qualquer. Se nenhuma deixa ganhou visual, o corte para em erro:
+   editor; nunca entra um visual qualquer. A foto escolhida que o ffmpeg não monta em tela cheia
+   também fica "sem visual" com o motivo (não transitória). Se nenhuma deixa ganhou visual, o corte para em erro:
    "nada a mostrar em B-roll" (guardado, não refaz sozinho) ou, se alguma falha foi transitória,
    "falha temporária do YouTube ou da busca de fotos — tente de novo mais tarde" (refeita no
    próximo render).
@@ -385,13 +399,31 @@ Davi); na tela é "B-roll".
 **f9 removido:** saiu de `montagem.FORMATOS` e de `contas/formatos.yaml` (`f4` passou a
 `no_app: "plano B"`), `ilustrado.tpl` virou `broll.tpl`, e um `corte.json` com `formato: "f9"` dá
 erro claro no render ("o formato f9 virou o f4 B-roll; renderize de novo em f4"), sem conversão
-silenciosa.
+silenciosa. Pedir f9 no app (episódio novo, renderizar, edição) dá a mesma mensagem
+(`montagem.validar_formato`).
 
 **Editor:** a seção "B-roll" mostra, por deixa, o tipo (vídeo, foto ou sem visual), a miniatura (um
-quadro do vídeo ou a foto) e o motivo, e tem o botão "Refazer B-roll". Trocar ou tirar um clipe à
+quadro do vídeo ou a foto) e o motivo, e tem o botão "Refazer B-roll". O link da fonte mostra o
+canal do vídeo e só sai com `http`/`https`. Trocar ou tirar um clipe à
 mão fica para depois.
 
-**Tempo do trecho (medido em 2026-10-03):** é o gargalo.
+**Tempo do vídeo (medido em 2026-10-03, segunda rodada):** o vídeo inteiro pelo downloader
+nativo resolveu o gargalo.
+- Vídeo inteiro só-vídeo 1080p: 71 s/38 MB em 9 s (controlador); 96 s/43,8 MB em 9,7 s mais
+  2,4 s do ffmpeg dos 3 s (conferência isolada, 2 requisições). Prazo: 45 s. O cliente
+  `android_vr` não serve (exige PO Token, 403).
+- **Render real de novo** (mesmos 2 cortes, depois das mudanças desta seção): 270 s e 377 s por
+  corte (eram 769 s e 935 s); YouTube somado (busca + downloads + ffmpeg dos trechos, quadros e
+  foto cheia) 45 s e 68 s para 6 e 7 vídeos baixados. Nenhum estouro de prazo, nenhum 429/403;
+  2 vídeos "This video is not available". Deixas: 120 s numa chamada do LLM (a outra, 32 s).
+- Resultado: 7 clipes, **4 de vídeo e 3 de foto** (eram 2 e 5). A deixa vaga da peça da bota
+  sumiu. Visto nos quadros do MP4: Corinthians, Macboot, moto trocando marcha e Vans em vídeo;
+  camisa do São Paulo, boné New Era e All Star em foto; entra e sai seco, rosto entre os clipes.
+  Ainda falha: o vídeo da Macboot tem um quadro de paisagem no meio dos 3 s (a conferência viu
+  isso na folha e aprovou), e "fazer comercial" (acontecimento) ficou sem visual — só 1 vídeo
+  entre 15 s e 3 min na busca, e ele era texto.
+
+**Tempo do trecho (medido em 2026-10-03, primeira rodada, histórico):**
 - `yt-dlp --download-sections` leva ~43 s por trecho, igual com ou sem recodificar e em 1080p ou
   720p; o 720p sai mole no 1080×1920, então fica 1080p. Prazo do trecho: 90 s.
 - **URL direta não acelera:** `yt-dlp -g` leva 2,5–3,7 s, mas `ffmpeg -ss <ini> -i <url>` passou
@@ -404,7 +436,7 @@ mão fica para depois.
 - **Render real** (episódio `wxCto9WSZcI`, 2 cortes): 769 s e 935 s por corte, dos quais ~400 s
   no YouTube (8 trechos por corte). 7 dos 16 trechos estouraram os 90 s (outros 2 falharam: vídeo indisponível e seção sem vídeo); nenhum 429.
 
-**Render real de 2026-10-03** (cortes "Camisa de 700 reais, sério?" e "Bota boa por 250, não
+**Render real de 2026-10-03, primeira rodada** (cortes "Camisa de 700 reais, sério?" e "Bota boa por 250, não
 600"): 7 clipes, 2 de vídeo e 5 de foto; nos quadros o clipe mostra a coisa, entra e sai seco e o
 rosto volta entre um clipe e outro. A foto domina porque metade dos vídeos não baixou no prazo e a
 conferência recusou vídeo com texto grande ou com a coisa num quadro só. Um "negócio que evita
