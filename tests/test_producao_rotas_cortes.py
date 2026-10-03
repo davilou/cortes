@@ -2,6 +2,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from cortes.painel.servidor import Config, criar_app
@@ -136,3 +137,20 @@ def test_cancelar_renderizar_de_novo_restaura_o_formato_da_versao_pronta(cfg: Co
     assert c.post(f"{EP}/cortes/0/cancelar").status_code == 200
     corte = ler_corte(pasta_corte(pasta, 0))
     assert corte.status == "pronto" and corte.formato == "f7"
+
+
+def test_cancelar_com_erro_de_disco_e_erro_claro_sem_corte_fantasma(cfg: Config,
+                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    import cortes.producao.rotas_cortes as rotas
+
+    def rmtree_travado(d: Path) -> None:
+        raise PermissionError(f"arquivo em uso em {d}")
+
+    pasta = preparar_concluido(cfg)
+    c, _ = montar(cfg)
+    c.post(f"{EP}/cortes/0/renderizar", json={})
+    monkeypatch.setattr(rotas.shutil, "rmtree", rmtree_travado)
+    r = c.post(f"{EP}/cortes/0/cancelar")
+    assert r.status_code == 422 and "não deu para apagar" in r.json()["detail"]
+    assert "arquivo em uso" in r.json()["detail"]
+    assert cortes_do_episodio(pasta) == [] and c.get(EP).json()["candidatos"][0]["corte"] is None

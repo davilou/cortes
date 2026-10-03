@@ -77,9 +77,19 @@ def cancelar_render(pasta: Path, indice: int) -> None:
         raise ErroProducao(f"corte {indice} não existe")
     c = cancelar(ler_corte(d))
     if c is None:
-        shutil.rmtree(d)   # nunca renderizou nem foi editado: o candidato volta a ter "Renderizar"
+        _apagar_corte(d)
     else:
         gravar_corte(d, c)
+
+
+def _apagar_corte(d: Path) -> None:
+    """Nunca renderizou nem foi editado: o candidato volta a ter "Renderizar". O corte.json sai
+    primeiro — se o resto da pasta não sair (arquivo em uso), não sobra um corte "na fila" fantasma."""
+    try:
+        (d / ARQUIVO).unlink()
+        shutil.rmtree(d)
+    except OSError as ex:
+        raise ErroProducao(f"não deu para apagar {d}: {ex}") from ex
 
 
 def montar(app: FastAPI, pasta_de: Callable[[str], Path], fila: Fila, escrita: threading.Lock,
