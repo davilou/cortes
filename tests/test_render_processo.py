@@ -1,3 +1,4 @@
+import subprocess
 import sys
 from pathlib import Path
 
@@ -40,3 +41,60 @@ def test_exigir_falha_alto_com_o_fim_do_log() -> None:
     with pytest.raises(ErroRender, match=r"recorte falhou \(código 2\).*causa real") as ex:
         exigir(rodar, ["ffmpeg"], None, "recorte")
     assert len(str(ex.value)) < 1700
+
+
+class PopenQueTrava:
+    """Processo falso cujo `communicate` estoura sempre: nem o taskkill solta os pipes."""
+    pid = 4242
+    returncode = None
+
+    def __init__(self, *a: object, **k: object) -> None:
+        self.esperas: list[float | None] = []
+
+    def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+        self.esperas.append(timeout)
+        PopenQueTrava.ultimo = self
+        raise subprocess.TimeoutExpired("x", timeout or 0)
+
+    ultimo: "PopenQueTrava"
+
+
+def _taskkill(codigo: int, chamados: list[list[str]]):  # type: ignore[no-untyped-def]
+    def run(args: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        chamados.append(args)
+        return subprocess.CompletedProcess(args, codigo, "ERRO: acesso negado", "")
+    return run
+
+
+def test_arvore_que_nao_morre_vira_erro_com_a_causa(monkeypatch: pytest.MonkeyPatch) -> None:
+    chamados: list[list[str]] = []
+    monkeypatch.setattr(processo_mod.sys, "platform", "win32")
+    monkeypatch.setattr(subprocess, "Popen", PopenQueTrava)
+    monkeypatch.setattr(subprocess, "run", _taskkill(1, chamados))
+    with pytest.raises(ErroRender, match=r"ffmpeg passou de 2 s.*não morreu.*código 1.*acesso negado"):
+        rodar_com_prazo(2)(["ffmpeg"], None)
+    assert chamados == [["taskkill", "/F", "/T", "/PID", "4242"]]
+    assert PopenQueTrava.ultimo.esperas == [2, 10]   # o segundo communicate tem prazo: nada de travar
+
+
+def test_taskkill_ok_mas_pipes_presos_tambem_e_erro(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(processo_mod.sys, "platform", "win32")
+    monkeypatch.setattr(subprocess, "Popen", PopenQueTrava)
+    monkeypatch.setattr(subprocess, "run", _taskkill(0, []))
+    with pytest.raises(ErroRender, match=r"não morreu.*10 s"):
+        rodar_com_prazo(2)(["ffmpeg"], None)
+
+
+def test_taskkill_que_falha_mas_processo_morto_e_so_o_erro_de_prazo(monkeypatch: pytest.MonkeyPatch) -> None:
+    class PopenQueMorre(PopenQueTrava):
+        def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+            self.esperas.append(timeout)
+            if len(self.esperas) == 1:
+                raise subprocess.TimeoutExpired("x", timeout or 0)
+            return "", ""
+
+    monkeypatch.setattr(processo_mod.sys, "platform", "win32")
+    monkeypatch.setattr(subprocess, "Popen", PopenQueMorre)
+    monkeypatch.setattr(subprocess, "run", _taskkill(128, []))   # 128: o processo já tinha saído
+    with pytest.raises(ErroRender, match=r"passou de 2 s e foi interrompido \(taskkill.*código 128"):
+        rodar_com_prazo(2)(["ffmpeg"], None)
