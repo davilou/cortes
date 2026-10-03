@@ -55,7 +55,9 @@ _REGRAS = f"""Regras:
   - "literal": uma coisa concreta citada, que dá para filmar ou fotografar: produto, marca com \
 objeto (ex.: tênis Vans), lugar, veículo, comida, animal, roupa ou objeto.
   - "acontecimento": uma cena que a fala evoca e que um vídeo mostra (ex.: "a pandemia" → rua \
-vazia; "fui de jatinho" → jato particular decolando).
+vazia; "fui de jatinho" → jato particular decolando; "fiz um comercial" → bastidor de gravação).
+- Quando a fala narra um fato (algo que aconteceu, que a pessoa ou alguém fez), marque um \
+acontecimento com a cena desse fato, mesmo sem coisa concreta citada.
 - Nada abstrato: "dinheiro" no sentido genérico, "sucesso", "ideia", "vida", sentimentos.
 - Nada de peça ou característica de um produto descrita de forma vaga (ex.: "negócio que evita \
 torção", "sola ultra resistente", "o tecido que não amassa"): a busca disso traz outra coisa. \
@@ -66,10 +68,16 @@ Marque só a coisa inteira, que dá para nomear (a bota, o tênis, a camisa), se
 com marca e modelo quando forem ditos (ex.: "tênis Vans Old Skool", "camisa do Corinthians"). Use \
 o termo que mais acharia vídeo daquilo: em português no literal; no acontecimento, em inglês \
 quando render mais vídeo (ex.: "empty city street lockdown", "private jet takeoff").
+- Na busca do acontecimento, descreva o que a câmera filmaria, em termos visuais concretos (quem, \
+fazendo o quê, onde), não o tema (ex.: "fazer comercial" → "filming a commercial behind the \
+scenes", não "commercial"). Evite o que traz gente explicando em vez da cena: tutorial, review, \
+"how to", "dicas".
 - O clipe mostra a coisa de que a pessoa fala, não outra parecida. Cada coisa entra uma vez só: \
 não marque de novo uma coisa já marcada, nem uma palavra genérica que volta a ela (ex.: "a \
 camiseta" depois de "camisa do Corinthians" é a mesma camisa; uma busca "camisa de futebol" \
 traria a de outro time). Busca genérica só quando a fala é genérica de verdade.
+- Procure uma deixa a cada 6 a 10 s de fala, quando houver o que mostrar: o clipe cobre também \
+a fala seguinte.
 - Ritmo: nada no primeiro {GANCHO_S:.0f} s, que é o gancho com o rosto; cada clipe dura de \
 {DUR_MIN_S:.1f} a {DUR_MAX_S:.0f} s; pelo menos {ROSTO_MIN_S:.1f} s de rosto entre um clipe e o \
 próximo; somados, no máximo {FRACAO_MAX:.0%} do Short.

@@ -177,3 +177,16 @@ def test_ritmo_conta_cobertura_e_trocas_por_10s() -> None:
     # o clipe que vai até o fim do Short entra, mas não sai: 1 troca
     assert ritmo_broll([Deixa(8.0, 10.0, "x", "x", "literal")], 10.0) == (0.2, 1.0)
     assert ritmo_broll([], 10.0) == (0.0, 0.0)
+
+
+def test_prompt_pede_acontecimento_quando_a_fala_narra_um_fato_com_busca_visual() -> None:
+    # real (wxCto9WSZcI, "Camisa de 700 reais"): "fazer comercial" buscou "filming a commercial
+    # shoot" e só achou 1 vídeo de 15 s a 3 min, que era texto: ficou sem visual
+    p = prompt_deixas([Palavra("comercial", 0.0, 0.5)])
+    assert "narra um fato" in p and "marque um acontecimento" in p
+    assert "o que a câmera filmaria" in p and '"filming a commercial behind the scenes"' in p
+    assert "tutorial" in p and "review" in p   # busca que traz gente explicando, não a cena
+
+
+def test_prompt_pede_uma_deixa_a_cada_6_a_10_s() -> None:
+    assert "uma deixa a cada 6 a 10 s de fala" in prompt_deixas([Palavra("x", 0.0, 0.5)])
