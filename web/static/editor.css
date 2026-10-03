@@ -51,7 +51,7 @@ hyperframes-player.previa, .previa.vazia { display: block; width: 100%; max-widt
 .pessoa:focus-visible { outline: 1px solid var(--up); outline-offset: 2px; }
 .pessoa:disabled { cursor: default; opacity: .6; }
 
-/* Editor: ilustrações do f9 (só leitura) — miniatura da imagem escolhida, ou "sem imagem". */
+/* Editor: ilustrações do f9 — miniatura da imagem escolhida, ou "sem imagem"; botão de refazer. */
 .ilustracoes { list-style: none; padding: 0; display: grid; gap: 10px; }
 .ilustracao { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: start; }
 .ilustracao img, .ilustracao .sem-imagem { width: 64px; height: 64px; border-radius: 10px; border: 1px solid var(--line); }
@@ -59,3 +59,4 @@ hyperframes-player.previa, .previa.vazia { display: block; width: 100%; max-widt
 .ilustracao .sem-imagem { display: grid; place-content: center; text-align: center; font: 10px var(--mono); color: var(--faint); }
 .ilustracao .num { font-size: 11.5px; color: var(--muted); }
 .ilustracao .sub { margin-top: 2px; font-size: 12px; overflow-wrap: anywhere; }
+.refazer-ilustracao { margin-top: 10px; }

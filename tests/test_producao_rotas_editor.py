@@ -263,3 +263,34 @@ def test_previa_serve_o_video_de_fundo_do_f8_e_do_f5(cfg: Config, nome: str) -> 
     assert a.c.get(f"{EP}/cortes/0/previa/assets/outro.mp4").status_code == 422
     travessia = f"{EP}/cortes/0/previa/assets%2F..%2Fassets%2F{nome}"   # %2F: o cliente não normaliza
     assert a.c.get(travessia).status_code == 422
+
+
+def test_refazer_ilustracao_apaga_o_cache_e_os_cartoes_e_pede_a_previa(cfg: Config) -> None:
+    a = ambiente_f9(cfg)
+    (a.d / "projeto" / "assets" / "ilus-9.jpg").write_bytes(b"velha")
+    d = a.c.post(f"{EP}/cortes/0/ilustracao/refazer").json()
+    assert d["previa"]["situacao"] == "preparando" and d["ilustracoes"] == []
+    assets = a.d / "projeto" / "assets"
+    assert not (a.d / "ilustracao").exists() and not list(assets.glob("ilus-*.jpg"))
+    assert (assets / "trecho.mp4").exists()
+
+
+def test_refazer_ilustracao_recusado_com_a_previa_preparando(cfg: Config) -> None:
+    a = ambiente_f9(cfg)
+    a.previas.pedir("abcdefghijk", 0)
+    r = a.c.post(f"{EP}/cortes/0/ilustracao/refazer")
+    assert r.status_code == 422 and "preparada" in r.json()["detail"]
+    assert (a.d / "ilustracao" / "ilustracao.json").exists()
+
+
+def test_refazer_ilustracao_recusado_com_o_corte_na_fila(cfg: Config) -> None:
+    a = ambiente_f9(cfg)
+    a.c.post(f"{EP}/cortes/0/renderizar", json={})
+    r = a.c.post(f"{EP}/cortes/0/ilustracao/refazer")
+    assert r.status_code == 422 and "fila" in r.json()["detail"]
+    assert (a.d / "ilustracao" / "ilustracao.json").exists()
+
+
+def test_refazer_ilustracao_recusado_fora_do_f9(cfg: Config) -> None:
+    r = Ambiente(cfg).c.post(f"{EP}/cortes/0/ilustracao/refazer")
+    assert r.status_code == 422 and "f9" in r.json()["detail"]

@@ -2,7 +2,7 @@
 // Editor do Short (plano C, spec produção §5 "Editor"): três colunas — prévia 9:16 tocando o
 // próprio projeto HyperFrames no navegador (<hyperframes-player>), transcrição palavra a palavra
 // (transcricao.js) e ajustes: título, formato, quem aparece (planos.js), as ilustrações do f9
-// (ilustracoes.js, só leitura), renderizar e versões.
+// (ilustracoes.js, com "refazer"), renderizar e versões.
 // Toda edição vai por POST .../editar, que devolve o estado novo; a prévia é refeita fora da fila
 // do render e a tela acompanha até ela ficar pronta.
 let ED = null;   // /api/episodios/{id}/cortes/{n}/editor + {id, n}
@@ -123,6 +123,7 @@ function acompanharEditor() {
 function ligarEditor() {
   ligarTranscricao();
   ligarPlanos();
+  ligarIlustracoes();
   const t = $("#ed-titulo");
   if (t) t.onchange = () => { const v = t.value.trim(); if (v && v !== ED.corte.titulo) editar({ titulo: v }); };
   const f = $("#ed-formato");

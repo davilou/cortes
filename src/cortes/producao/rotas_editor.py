@@ -1,8 +1,9 @@
 """API do editor (plano C; spec produção §5 "Editor"): estado do editor, edições, a prévia no
 navegador (o projeto HyperFrames do corte com o runtime injetado), miniaturas dos rostos por plano,
-as ilustrações do f9 (só leitura) e as versões renderizadas. `pasta_de` vem de rotas.py (valida o
+as ilustrações do f9 (leitura e "refazer") e as versões renderizadas. `pasta_de` vem de rotas.py (valida o
 id do episódio)."""
 import re
+import shutil
 import threading
 from collections.abc import Callable
 from dataclasses import asdict
@@ -199,6 +200,21 @@ def editar(pasta: Path, n: int, pedido: PedidoEdicao, previas: Previas) -> None:
         previas.pedir(pasta.name, n)
 
 
+def refazer_ilustracao(pasta: Path, n: int, previas: Previas) -> None:
+    """Apaga o cache do f9 (`ilustracao/`, deixas incluídas) e os cartões, e pede a prévia: o LLM,
+    a busca e a conferência rodam de novo. Recusado enquanto a prévia ou o render usam a pasta."""
+    c = corte_de(pasta, n)
+    if c.formato != "f9":
+        raise ErroProducao(f"corte {n} não é Ilustrado (f9): não há ilustração para refazer")
+    _exigir_editavel(previas, pasta.name, c)
+    d = pasta_corte(pasta, n)
+    if (d / PASTA_ILUSTRACAO).exists():
+        shutil.rmtree(d / PASTA_ILUSTRACAO)
+    for cartao in (d / "projeto" / "assets").glob("ilus-*.jpg"):
+        cartao.unlink()
+    previas.pedir(pasta.name, n)
+
+
 def montar(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previas, rodar: Rodar,
           escrita: threading.Lock) -> None:
     _rotas_leitura(app, pasta_de, previas, rodar)
@@ -266,6 +282,13 @@ def _rotas_edicao(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previa
         pasta = pasta_de(id)
         with escrita:
             editar(pasta, n, pedido, previas)
+        return estado_editor(pasta, n, previas)
+
+    @app.post("/api/episodios/{id}/cortes/{n}/ilustracao/refazer")
+    def api_refazer_ilustracao(id: str, n: int) -> Any:
+        pasta = pasta_de(id)
+        with escrita:
+            refazer_ilustracao(pasta, n, previas)
         return estado_editor(pasta, n, previas)
 
     @app.post("/api/episodios/{id}/cortes/{n}/previa")
