@@ -79,8 +79,10 @@ def ep9(tmp: Path) -> Path:
     return pasta
 
 
-VANS = {"inicio_palavra": 3, "fim_palavra": 5, "coisa": "Vans", "busca": "tênis Vans Old Skool"}
-CAMISA = {"inicio_palavra": 14, "fim_palavra": 16, "coisa": "camisa", "busca": "camisa do Corinthians"}
+VANS = {"inicio_palavra": 3, "fim_palavra": 5, "coisa": "Vans", "busca": "tênis Vans Old Skool",
+        "tipo": "literal"}
+CAMISA = {"inicio_palavra": 14, "fim_palavra": 16, "coisa": "camisa", "busca": "camisa do Corinthians",
+          "tipo": "literal"}
 
 
 def test_f9_ilustra_uma_vez_e_reaproveita_o_cache(tmp_path: Path) -> None:

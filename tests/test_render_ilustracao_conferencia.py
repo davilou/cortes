@@ -19,9 +19,10 @@ from cortes.render.ilustracao_imagens import LinhaFolha
 
 FOLHA = Path("C:/tmp/ilus/folha-1.jpg")
 FOLHAS = [FOLHA]
-LINHAS = [LinhaFolha(1, Deixa(2.0, 3.5, "tênis", "tênis Vans Old Skool"), (Path("a"), Path("b"))),
-          LinhaFolha(2, Deixa(6.0, 7.5, "camisa", "camisa do Corinthians"), (Path("c"),)),
-          LinhaFolha(3, Deixa(9.0, 10.5, "bota", "bota de couro"), ())]
+LINHAS = [LinhaFolha(1, Deixa(2.0, 3.5, "tênis", "tênis Vans Old Skool", "literal"),
+                     (Path("a"), Path("b"))),
+          LinhaFolha(2, Deixa(6.0, 7.5, "camisa", "camisa do Corinthians", "literal"), (Path("c"),)),
+          LinhaFolha(3, Deixa(9.0, 10.5, "bota", "bota de couro", "literal"), ())]
 
 
 def _chamar_que_devolve(escolhas: list[dict[str, Any]]):  # type: ignore[no-untyped-def]

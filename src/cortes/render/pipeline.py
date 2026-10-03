@@ -142,7 +142,7 @@ def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) ->
     deps = DepIlustracao(dep.chamar_llm, dep.chamar_llm_com_read, dep.ddgs, dep.rodar,
                          dep.rodar_download)
     palavras = _palavras_trecho(pasta_ep, c, segs, com_mascara=False)
-    return ilustrar(d, ini, fim, palavras, d / "projeto" / "assets", deps)
+    return ilustrar(d, ini, fim, palavras, duracao(segs), d / "projeto" / "assets", deps)
 
 
 def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:

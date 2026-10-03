@@ -14,7 +14,7 @@ from cortes.producao.fila import Fila
 from cortes.producao.previas import Previas
 from cortes.render.corte import Corte, Edicoes, concluir, gravar_corte, ler_corte, novo_corte, pasta_corte
 from cortes.render.ilustracao import Deixa
-from cortes.render.ilustracao_cache import Chave, Ilustracao, gravar_ilustracoes
+from cortes.render.ilustracao_cache import FORMATO, Chave, Ilustracao, gravar_ilustracoes
 from cortes.render.previa import RUNTIME
 from tests.test_producao_rotas import preparar_concluido
 
@@ -204,9 +204,9 @@ def ambiente_f9(cfg: Config) -> Ambiente:
     pasta = a.d / "ilustracao"
     pasta.mkdir()
     (pasta / "D1-c2.jpg").write_bytes(b"vans")
-    ilus = [Ilustracao(1, Deixa(1.2, 2.6, "Vans", "b"), pasta / "D1-c2.jpg", "http://loja/vans", "é o tênis",
-                       (), False),
-            Ilustracao(2, Deixa(4.5, 5.7, "bota", "b"), None, None, "nenhuma é a bota", (), False)]
+    vans, bota = Deixa(1.2, 2.6, "Vans", "b", "literal"), Deixa(4.5, 5.7, "bota", "b", "literal")
+    ilus = [Ilustracao(1, vans, pasta / "D1-c2.jpg", "http://loja/vans", "é o tênis", (), False),
+            Ilustracao(2, bota, None, None, "nenhuma é a bota", (), False)]
     gravar_ilustracoes(pasta, Chave(0.7, 7.8, "h"), ilus, None)
     (a.d / "projeto" / "assets" / "ilus-1.jpg").write_bytes(b"vans")
     return a
@@ -236,7 +236,7 @@ def test_editor_sem_ilustracoes_fora_do_f9(cfg: Config) -> None:
 
 def test_cache_da_ilustracao_invalido_nao_derruba_o_editor(cfg: Config) -> None:
     a = ambiente_f9(cfg)
-    (a.d / "ilustracao" / "ilustracao.json").write_text('{"formato": 2}', encoding="utf-8")
+    (a.d / "ilustracao" / "ilustracao.json").write_text(f'{{"formato": {FORMATO}}}', encoding="utf-8")
     d = a.c.get(f"{EP}/cortes/0/editor").json()
     assert d["ilustracoes"] == [] and "cache da ilustração inválido" in d["ilustracao_erro"]
 

@@ -22,7 +22,7 @@ from cortes.render.ilustracao_imagens import (
 )
 from cortes.render.processo import ErroRender
 
-DEIXA = Deixa(2.0, 3.5, "tênis", "tênis Vans Old Skool")
+DEIXA = Deixa(2.0, 3.5, "tênis", "tênis Vans Old Skool", "literal")
 
 
 class DdgsFalso:

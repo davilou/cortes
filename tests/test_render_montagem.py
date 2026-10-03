@@ -86,7 +86,8 @@ def test_falante_com_rosto_vazio_continua_com_erro_claro() -> None:
 
 def _ilus(k: int, coisa: str, imagem: bool = True) -> Ilustracao:
     img = Path(f"D{k}-c1.jpg") if imagem else None
-    return Ilustracao(k, Deixa(2.0 * k, 2.0 * k + 1.5, coisa, coisa), img, "http://loja", "ok", (), False)
+    deixa = Deixa(2.0 * k, 2.0 * k + 1.5, coisa, coisa, "literal")
+    return Ilustracao(k, deixa, img, "http://loja", "ok", (), False)
 
 
 def test_ilustrado_poe_um_cartao_por_imagem_escapado() -> None:
@@ -107,5 +108,6 @@ def test_imagens_vazio_fora_do_f9() -> None:
 
 
 def test_cartao_que_passa_do_fim_do_short_e_cortado_no_fim() -> None:
-    ilus = Ilustracao(1, Deixa(5.0, 6.5, "Vans", "Vans"), Path("D1-c1.jpg"), "http://loja", "ok", (), False)
+    vans = Deixa(5.0, 6.5, "Vans", "Vans", "literal")
+    ilus = Ilustracao(1, vans, Path("D1-c1.jpg"), "http://loja", "ok", (), False)
     assert 'data-start="5.0" data-duration="1.0"' in imagens_html([ilus], 6.0)

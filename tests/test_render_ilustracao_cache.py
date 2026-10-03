@@ -33,7 +33,7 @@ def test_deixas_ficam_num_arquivo_proprio_com_a_chave(tmp_path: Path) -> None:
     montar_projeto(pasta, C9, tmp_path, Ilustra([VANS], OK).dep(f))
     bruto = json.loads((_d(pasta) / "ilustracao" / ARQUIVO_DEIXAS).read_text(encoding="utf-8"))
     assert set(bruto["chave"]) == {"inicio", "fim", "texto"} and len(bruto["chave"]["texto"]) == 64
-    assert [d["coisa"] for d in bruto["deixas"]] == ["Vans"]
+    assert [(d["coisa"], d["tipo"]) for d in bruto["deixas"]] == [("Vans", "literal")]
 
 
 def test_busca_que_falhou_e_refeita_sem_llm_e_so_ela_vai_a_conferencia(tmp_path: Path) -> None:
@@ -157,3 +157,26 @@ def test_cache_de_formato_anterior_e_refeito(tmp_path: Path) -> None:
     arq.parent.mkdir(parents=True)
     arq.write_text(json.dumps({"inicio": 10.0, "fim": 16.0, "ilustracoes": []}), encoding="utf-8")
     assert ler_ilustracoes(_d(pasta)) is None
+
+
+def test_cache_do_formato_2_sem_o_tipo_da_deixa_e_refeito(tmp_path: Path) -> None:
+    pasta, f = ep9(tmp_path), Falso()
+    il = Ilustra([VANS], OK)
+    montar_projeto(pasta, C9, tmp_path, il.dep(f))
+    for nome in ("ilustracao.json", ARQUIVO_DEIXAS):
+        arq = _d(pasta) / "ilustracao" / nome
+        bruto = json.loads(arq.read_text(encoding="utf-8"))
+        arq.write_text(json.dumps({**bruto, "formato": 2}), encoding="utf-8")
+    montar_projeto(pasta, C9, tmp_path, il.dep(f))
+    assert il.llm == 2
+
+
+def test_tipo_de_deixa_invalido_no_cache_e_erro(tmp_path: Path) -> None:
+    pasta, f = ep9(tmp_path), Falso()
+    montar_projeto(pasta, C9, tmp_path, Ilustra([VANS], OK).dep(f))
+    arq = _d(pasta) / "ilustracao" / "ilustracao.json"
+    bruto = json.loads(arq.read_text(encoding="utf-8"))
+    bruto["ilustracoes"][0]["tipo"] = "foto"
+    arq.write_text(json.dumps(bruto), encoding="utf-8")
+    with pytest.raises(ErroRender, match="cache da ilustração inválido.*tipo de deixa inválido"):
+        ler_ilustracoes(_d(pasta))

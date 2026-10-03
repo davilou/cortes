@@ -107,7 +107,8 @@ def _conferir(pasta: Path, linhas: list[LinhaFolha], dep: DepIlustracao) -> dict
     return conferir(folhas, linhas, dep.chamar_com_read)
 
 
-def _deixas(pasta: Path, chave: Chave, palavras: list[Palavra], dep: DepIlustracao) -> list[Deixa]:
+def _deixas(pasta: Path, chave: Chave, palavras: list[Palavra], dur: float,
+            dep: DepIlustracao) -> list[Deixa]:
     """De `deixas.json` quando a chave bate; senão a pasta é refeita do zero e o LLM é chamado."""
     deixas = ler_deixas(pasta, chave)
     if deixas is not None:
@@ -115,7 +116,7 @@ def _deixas(pasta: Path, chave: Chave, palavras: list[Palavra], dep: DepIlustrac
     if pasta.exists():
         shutil.rmtree(pasta)   # restos de outro início/fim ou de outro texto
     pasta.mkdir(parents=True)
-    deixas = deixas_do_corte(palavras, dep.chamar_llm)
+    deixas = deixas_do_corte(palavras, dur, dep.chamar_llm)
     gravar_deixas(pasta, chave, deixas)
     return deixas
 
@@ -158,25 +159,27 @@ def _cache_vale(pasta: Path, chave: Chave) -> list[Ilustracao] | None:
     return cache.ilustracoes
 
 
-def _resolver(pasta: Path, chave: Chave, palavras: list[Palavra], dep: DepIlustracao) -> list[Ilustracao]:
+def _resolver(pasta: Path, chave: Chave, palavras: list[Palavra], dur: float,
+              dep: DepIlustracao) -> list[Ilustracao]:
     ilus = _cache_vale(pasta, chave)
     if ilus is None:
-        deixas = _deixas(pasta, chave, palavras, dep)
+        deixas = _deixas(pasta, chave, palavras, dur, dep)
         return _gravar(pasta, chave, _escolher(pasta, list(enumerate(deixas, start=1)), dep))
     if any(i.transitorio for i in ilus):
         return _gravar(pasta, chave, _refazer_temporarias(pasta, ilus, dep))
     return ilus
 
 
-def ilustrar(d_corte: Path, ini: float, fim: float, palavras: list[Palavra], assets: Path,
+def ilustrar(d_corte: Path, ini: float, fim: float, palavras: list[Palavra], dur: float, assets: Path,
              dep: DepIlustracao) -> list[Ilustracao]:
     """Ilustrações do corte (do cache quando início, fim e texto não mudaram), com as imagens
     escolhidas copiadas para `assets/ilus-<k>.jpg` — os cartões de antes são apagados primeiro.
-    `palavras` no tempo do trecho sem pausas, com as correções da legenda e sem máscara."""
+    `palavras` no tempo do trecho sem pausas, com as correções da legenda e sem máscara; `dur` é a
+    duração desse trecho."""
     for velho in assets.glob("ilus-*.jpg"):
         velho.unlink()
     try:
-        ilus = _resolver(d_corte / PASTA, chave_de(ini, fim, palavras), palavras, dep)
+        ilus = _resolver(d_corte / PASTA, chave_de(ini, fim, palavras), palavras, dur, dep)
     except ErroLLM as e:
         raise ErroRender(f"ilustração: {e}") from e
     for i in ilus:

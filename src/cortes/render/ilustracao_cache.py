@@ -8,8 +8,8 @@ Dois arquivos, com a mesma chave (início, fim e um hash do texto das palavras q
   "Nada ilustrável" (sem deixa, ou a conferência recusou tudo) fica guardado em `vazio`, com o
   motivo: o próximo render dá o mesmo erro sem gastar LLM nem busca.
 
-Corrigir uma palavra da legenda muda o hash e invalida tudo. Cache de antes do `formato` 2 (sem a
-chave do texto) conta como ausente e é refeito.
+Corrigir uma palavra da legenda muda o hash e invalida tudo. Cache de antes do `formato` 3 (sem a
+chave do texto ou sem o `tipo` da deixa) conta como ausente e é refeito.
 """
 import hashlib
 import json
@@ -18,14 +18,14 @@ from pathlib import Path
 from typing import Any
 
 from cortes.episodio import ler_json, salvar_json
-from cortes.render.ilustracao import Deixa
+from cortes.render.ilustracao import TIPOS, Deixa, TipoDeixa, tipo_valido
 from cortes.render.processo import ErroRender
 from cortes.tipos import Palavra
 
 PASTA = "ilustracao"
 ARQUIVO = "ilustracao.json"
 ARQUIVO_DEIXAS = "deixas.json"
-FORMATO = 2
+FORMATO = 3   # 3: a deixa ganhou `tipo` (B-roll); cache de antes é refeito
 LICENCA = "desconhecida"   # foto de terceiros achada na busca (risco como o do B-roll, spec §10)
 
 
@@ -72,11 +72,18 @@ def _chave(b: dict[str, Any]) -> Chave:
 
 
 def _deixa_json(d: Deixa) -> dict[str, Any]:
-    return {"inicio": d.inicio, "fim": d.fim, "coisa": d.coisa, "busca": d.busca}
+    return {"inicio": d.inicio, "fim": d.fim, "coisa": d.coisa, "busca": d.busca, "tipo": d.tipo}
+
+
+def _tipo(v: Any) -> TipoDeixa:
+    t = tipo_valido(v)
+    if t is not None:
+        return t
+    raise ValueError(f"tipo de deixa inválido: {v!r} (esperado um de {', '.join(TIPOS)})")
 
 
 def _deixa(b: dict[str, Any]) -> Deixa:
-    return Deixa(float(b["inicio"]), float(b["fim"]), str(b["coisa"]), str(b["busca"]))
+    return Deixa(float(b["inicio"]), float(b["fim"]), str(b["coisa"]), str(b["busca"]), _tipo(b["tipo"]))
 
 
 def _para_json(i: Ilustracao) -> dict[str, Any]:
