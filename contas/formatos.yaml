@@ -55,3 +55,9 @@ formatos:
     evidencia: "Anti-controle: zero virais na R1 e na R2."
     no_app: "plano B"
     demo: "testes/f8-desfoque-20-vezes/f8-desfoque-20-vezes.mp4"
+  f9:
+    nome: Ilustrado
+    obs: imagem da coisa citada
+    descricao: "A coisa citada aparece num cartão enquanto a pessoa fala (ex.: 'Vans' mostra o tênis); a base é o f7, com corte seco e legenda embaixo."
+    evidencia: "Pedido do Davi (2026-10-02); sem dado da pesquisa ainda. Fotos de terceiros achadas na busca: licença desconhecida."
+    no_app: "plano B"

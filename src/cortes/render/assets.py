@@ -50,5 +50,8 @@ def preparar_assets(assets: Path, formato: str, indice: int, dur: float, raiz: P
 
 
 def apagar_assets(assets: Path) -> None:
+    """Também as imagens do f9 (`ilus-<k>.jpg`): vêm das deixas da fala do trecho anterior."""
     for nome in (FUNDO, GAMEPLAY):
         (assets / nome).unlink(missing_ok=True)
+    for ilus in assets.glob("ilus-*.jpg"):
+        ilus.unlink()

@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from cortes.render.ilustracao import Deixa
+from cortes.render.ilustracao_etapa import Ilustracao
 from cortes.render.legenda import Grupo
 from cortes.render.montagem import FORMATOS, caminho_template, montar_html, valores
 from cortes.render.processo import ErroRender
@@ -30,7 +32,7 @@ G = [Grupo(0.0, 1.0, ("Oi",), (0.0,))]
 
 
 def test_formatos_do_app() -> None:
-    assert FORMATOS == ("f7", "f1", "f6", "f5", "f8")
+    assert FORMATOS == ("f7", "f1", "f6", "f5", "f8", "f9")
 
 
 @pytest.mark.parametrize("formato", FORMATOS)
@@ -38,7 +40,8 @@ def test_templates_reais_montam_sem_sobra(formato: str) -> None:
     tpl = caminho_template(REPO, formato).read_text(encoding="utf-8")
     html = montar_html(tpl, valores(tpl, 12.5, R, G, {}, formato, "Título"))
     assert 'data-duration="12.5"' in html and ">Oi<" in html
-    assert ("3413px" in html) == (formato in ("f7", "f1", "f6"))   # quadro cheio: fonte a 1920 de altura
+    cheio = formato in ("f7", "f1", "f6", "f9")
+    assert ("3413px" in html) == cheio   # quadro cheio: fonte a 1920 de altura
     # corte seco, sem efeito nenhum: nem flash, nem zoom nas emendas ou nas frases (Davi, 2026-10-02)
     assert 'id="flash"' not in html and "scale: k % 2" not in html and "scale: n % 2" not in html
     assert 'id="zoom"' not in html and "? 1.08" not in html
@@ -79,3 +82,25 @@ def test_falante_com_rosto_vazio_continua_com_erro_claro() -> None:
     tpl = caminho_template(REPO, "f1").read_text(encoding="utf-8")
     with pytest.raises(ErroRender, match="nenhum plano de câmera tem rosto"):
         valores(tpl, 12.5, SEM_ROSTO, G, {}, "f1", "T")
+
+
+def _ilus(k: int, coisa: str, imagem: bool = True) -> Ilustracao:
+    img = Path(f"D{k}-c1.jpg") if imagem else None
+    return Ilustracao(k, Deixa(2.0 * k, 2.0 * k + 1.5, coisa, coisa), img, "http://loja", "ok", ())
+
+
+def test_ilustrado_poe_um_cartao_por_imagem_escapado() -> None:
+    tpl = caminho_template(REPO, "f9").read_text(encoding="utf-8")
+    ilus = [_ilus(1, 'tênis "Vans" <&>'), _ilus(2, "bota", imagem=False), _ilus(3, "camisa")]
+    html = montar_html(tpl, valores(tpl, 6.0, R, G, {}, "f9", "T", ilustracoes=ilus))
+    assert ('<div class="clip ilus" id="ilus-1" data-start="2.0" data-duration="1.5" data-track-index="15">'
+            '<img src="assets/ilus-1.jpg" alt="tênis &quot;Vans&quot; &lt;&amp;&gt;"></div>') in html
+    assert "ilus-2.jpg" not in html   # deixa sem imagem não vira cartão
+    assert "ilus-3" not in html   # começa no fim do Short: não cabe
+    # entrada e saída só por opacidade, sem scale nem flash
+    assert "{ opacity: 0 }, { opacity: 1, duration: 0.15" in html and 'id="flash"' not in html
+
+
+def test_imagens_vazio_fora_do_f9() -> None:
+    tpl = caminho_template(REPO, "f7").read_text(encoding="utf-8")
+    assert "IMAGENS" not in valores(tpl, 6.0, R, G, {}, "f7", "T", ilustracoes=[_ilus(1, "x")])

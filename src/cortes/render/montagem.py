@@ -2,8 +2,10 @@
 import html
 import json
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
+from cortes.render.ilustracao_etapa import Ilustracao, nome_asset
 from cortes.render.legenda import Grupo, legenda_html
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import (
@@ -16,10 +18,12 @@ from cortes.render.rosto import (
     trilha_fixa,
 )
 
-FORMATOS = ("f7", "f1", "f6", "f5", "f8")   # ordem da tela; planos D e E acrescentam f4 e f3
-_TEMPLATES = {"f7": "conversa", "f1": "falante", "f6": "hormozi", "f5": "gameplay", "f8": "desfoque"}
+FORMATOS = ("f7", "f1", "f6", "f5", "f8", "f9")   # ordem da tela; planos D e E acrescentam f4 e f3
+_TEMPLATES = {"f7": "conversa", "f1": "falante", "f6": "hormozi", "f5": "gameplay", "f8": "desfoque",
+              "f9": "ilustrado"}
 _POR_PALAVRA = ("f6",)
 _PLACEHOLDER = re.compile(r"\{\{[A-Z_]+\}\}")
+FADE_CARTAO_S = 0.15   # a entrada e a saída do cartão no ilustrado.tpl
 _PLACEHOLDERS_ROSTO = {"QW", "TRILHA_CHEIO", "QM_W", "QM_H", "TRILHA_METADE"}
 
 
@@ -57,8 +61,24 @@ def montar_html(tpl: str, valores: dict[str, str]) -> str:
     return saida
 
 
+def imagens_html(ilustracoes: Sequence[Ilustracao], dur: float) -> str:
+    """Um cartão por ilustração com imagem (f9). A deixa sem imagem não vira cartão, nem a que não
+    cabe antes do fim do Short (menos que a entrada e a saída de 0,15 s cada)."""
+    cartoes = []
+    for i in ilustracoes:
+        ini = round(i.deixa.inicio, 2)
+        dur_cartao = round(min(i.deixa.fim, dur) - ini, 2)
+        if i.imagem is None or dur_cartao < 2 * FADE_CARTAO_S:
+            continue
+        cartoes.append(
+            f'      <div class="clip ilus" id="ilus-{i.k}" data-start="{ini}" data-duration="{dur_cartao}" '
+            f'data-track-index="15"><img src="assets/{nome_asset(i.k)}" '
+            f'alt="{html.escape(i.deixa.coisa, quote=True)}"></div>')
+    return "\n".join(cartoes)
+
+
 def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], escolhas: dict[int, int],
-            formato: str, titulo: str) -> dict[str, str]:
+            formato: str, titulo: str, ilustracoes: Sequence[Ilustracao] = ()) -> dict[str, str]:
     """Só os placeholders que `tpl` realmente usa: f8 (desfoque) não tem câmera nem metade, e
     calcular `TRILHA_CHEIO`/`TRILHA_METADE` ali exigiria rosto e escolhas válidas à toa — custo e
     chance de erro que o template nunca usa (revisão formatos novos, item 1). `rosto=None` só vale
@@ -66,6 +86,8 @@ def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], esco
     usa = _placeholders(tpl)
     out = {"DUR": str(round(dur, 2)), "LEGENDAS": legenda_html(grupos, por_palavra=formato in _POR_PALAVRA),
            "TITULO": html.escape(titulo)}
+    if "IMAGENS" in usa:
+        out["IMAGENS"] = imagens_html(ilustracoes, dur)
     if usa & _PLACEHOLDERS_ROSTO:
         if rosto is None:
             raise ErroRender(f"formato '{formato}' usa rosto no template mas nenhum foi medido")

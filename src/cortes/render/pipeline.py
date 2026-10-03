@@ -3,18 +3,26 @@
 Trecho e rosto são caros e só dependem de início/fim: ficam gravados com `recorte.json` como
 marcador, que é escrito por último. Se início/fim mudarem (editor, plano C), os dois são refeitos,
 e os assets do formato (fundo do f8, gameplay do f5; render/assets.py) são apagados e refeitos.
+O f9 (Ilustrado) tem ainda a etapa de ilustração (render/ilustracao_etapa.py), com cache em
+`ilustracao/`, apagada junto quando o trecho é refeito.
 `montar_projeto` (trecho + rosto + index.html com as edições) é o que a prévia do editor mostra;
 `renderizar_corte` chama `montar_projeto` e depois gera o MP4.
 """
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from cortes.detector import ChamarLLM, chamar_llm_real
 from cortes.episodio import ler_json, salvar_json
 from cortes.render.assets import apagar_assets, preparar_assets
 from cortes.render.corte import Corte, pasta_corte
 from cortes.render.edicao import palavras_editadas
 from cortes.render.hyperframes import criar_projeto, renderizar
+from cortes.render.ilustracao_conferencia import ChamarComRead, chamar_com_read_real
+from cortes.render.ilustracao_etapa import PASTA as PASTA_ILUSTRACAO
+from cortes.render.ilustracao_etapa import DepIlustracao, Ilustracao, ilustrar
+from cortes.render.ilustracao_imagens import BuscaImagens, ddgs_real
 from cortes.render.legenda import grupos, palavras_do_corte
 from cortes.render.montagem import caminho_template, montar_html, usa_rosto, valores
 from cortes.render.processo import ErroRender, Rodar, rodar_processo
@@ -43,6 +51,9 @@ class DepRender:
     npx: str
     rodar: Rodar = rodar_processo
     ler_audio: LerAudio = ler_trecho_wav
+    chamar_llm: ChamarLLM = chamar_llm_real                    # deixas do f9
+    chamar_llm_com_read: ChamarComRead = chamar_com_read_real  # conferência visual do f9
+    ddgs: Callable[[], BuscaImagens] = ddgs_real               # busca de imagens do f9
 
 
 def janela(c: Corte) -> tuple[float, float]:
@@ -78,9 +89,10 @@ def preparar_trecho(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> lis
     segs = segmentos_sem_pausa(dep.ler_audio(pasta_ep / "audio.wav", ini, fim - ini))
     trecho = d / "projeto" / "assets" / "trecho.mp4"
     trecho.parent.mkdir(parents=True, exist_ok=True)
-    mini = d / "miniaturas"   # quadros do trecho anterior: o trecho mudou, elas não valem mais
-    if mini.exists():
-        shutil.rmtree(mini)
+    # quadros e ilustrações do trecho anterior: o trecho mudou, eles não valem mais
+    for velha in (d / "miniaturas", d / PASTA_ILUSTRACAO):
+        if velha.exists():
+            shutil.rmtree(velha)
     apagar_assets(trecho.parent)   # fundo e gameplay saem do trecho (e da duração) anterior
     recortar(pasta_ep / "video.mp4", trecho, ini, segs, dep.rodar)
     _medir_rosto_se_possivel(trecho, d / "rosto.json", raiz, c.formato, dep)
@@ -101,14 +113,30 @@ def _medir_rosto_se_possivel(trecho: Path, destino: Path, raiz: Path, formato: s
             raise
 
 
-def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento]) -> str:
+def _palavras_trecho(pasta_ep: Path, c: Corte, segs: list[Segmento]) -> list[Palavra]:
+    """As palavras do corte, com as edições, no tempo do trecho sem pausas (legenda e deixas)."""
     ini, fim = janela(c)
     todas = palavras_editadas([Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")], c.edicoes)
-    ws = palavras_sem_pausa(palavras_do_corte(todas, ini, fim), segs)
+    return palavras_sem_pausa(palavras_do_corte(todas, ini, fim), segs)
+
+
+def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento], ilus: list[Ilustracao]) -> str:
+    ws = _palavras_trecho(pasta_ep, c, segs)
     dur = duracao(segs)
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
     rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json") if usa_rosto(tpl) else None
-    return montar_html(tpl, valores(tpl, dur, rosto, grupos(ws, dur), c.edicoes.rostos, c.formato, c.titulo))
+    return montar_html(tpl, valores(tpl, dur, rosto, grupos(ws, dur), c.edicoes.rostos, c.formato, c.titulo,
+                                    ilustracoes=ilus))
+
+
+def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> list[Ilustracao]:
+    """Só o f9. Erro de LLM, de folha ou "nada ilustrável" vira ErroRender e o corte fica em erro."""
+    if c.formato != "f9":
+        return []
+    d = pasta_corte(pasta_ep, c.indice)
+    ini, fim = janela(c)
+    deps = DepIlustracao(dep.chamar_llm, dep.chamar_llm_com_read, dep.ddgs, dep.rodar)
+    return ilustrar(d, ini, fim, _palavras_trecho(pasta_ep, c, segs), d / "projeto" / "assets", deps)
 
 
 def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
@@ -117,7 +145,8 @@ def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None
     segs = preparar_trecho(pasta_ep, c, raiz, dep)
     proj = pasta_corte(pasta_ep, c.indice) / "projeto"
     preparar_assets(proj / "assets", c.formato, c.indice, duracao(segs), raiz, dep.rodar)
-    criar_projeto(proj, _html(pasta_ep, c, raiz, segs))
+    ilus = _ilustrar(pasta_ep, c, segs, dep)
+    criar_projeto(proj, _html(pasta_ep, c, raiz, segs, ilus))
 
 
 def renderizar_corte(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
