@@ -139,10 +139,17 @@ def _arquivo(pasta: Path, nome: Any) -> Path | None:
     return pasta / nome
 
 
+def _texto(b: dict[str, Any], campo: str, opcional: bool) -> str | None:
+    v = b[campo]
+    if isinstance(v, str) or (opcional and v is None):
+        return v
+    raise ValueError(f"{campo} inválido: {v!r} (esperado texto{' ou null' if opcional else ''})")
+
+
 def _fonte(b: dict[str, Any]) -> Fonte | None:
     if b["fonte_url"] is None:
         return None
-    return Fonte(str(b["fonte_url"]), b["canal"], b["titulo"])
+    return Fonte(str(_texto(b, "fonte_url", False)), _texto(b, "canal", True), _texto(b, "titulo", True))
 
 
 def _de_json(pasta: Path, b: dict[str, Any]) -> Ilustracao:

@@ -212,7 +212,9 @@ def ambiente_f4(cfg: Config) -> Ambiente:
                        "é o tênis", (), False),
             Ilustracao(2, camisa, "foto", pasta / "D2-c1-cheia.jpg", Fonte("http://loja"), "só a foto",
                        (), False),
-            Ilustracao(3, pandemia, None, None, None, "sem visual: nenhum vídeo", (), False)]
+            Ilustracao(3, pandemia, None, None, None, "sem visual: nenhum vídeo", (), False),
+            Ilustracao(4, camisa, "foto", pasta / "D2-c1-cheia.jpg", Fonte("javascript:alert(1)"), "ok", (),
+                       False)]
     gravar_ilustracoes(pasta, Chave(0.7, 7.8, "h"), ilus, None)
     (a.d / "projeto" / "assets" / "broll-1.mp4").write_bytes(b"trecho")
     (a.d / "projeto" / "assets" / "broll-2.jpg").write_bytes(b"camisa")
@@ -222,11 +224,12 @@ def ambiente_f4(cfg: Config) -> Ambiente:
 def test_editor_lista_o_broll_do_f4_com_tipo_e_miniatura(cfg: Config) -> None:
     a = ambiente_f4(cfg)
     d = a.c.get(f"{EP}/cortes/0/editor").json()
-    vans, camisa, pandemia = d["broll"]
+    vans, camisa, pandemia, perigosa = d["broll"]
     assert (vans["midia"], camisa["midia"], pandemia["midia"]) == ("video", "foto", None)
     assert vans["miniatura"].startswith(f"{EP}/cortes/0/broll/1?v=") and d["broll_erro"] is None
     assert vans["fonte_url"] == "https://yt/v" and vans["canal"] == "Canal" and vans["tipo"] == "literal"
     assert pandemia["miniatura"] is None and pandemia["tipo"] == "acontecimento"
+    assert camisa["fonte_url"] == "http://loja" and perigosa["fonte_url"] is None   # só http/https
     assert a.c.get(vans["miniatura"]).content == b"quadro"      # um quadro do vídeo
     assert a.c.get(camisa["miniatura"]).content == b"camisa"    # a própria foto
     r = a.c.get(f"{EP}/cortes/0/broll/3")

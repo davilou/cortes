@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse, Response
@@ -23,7 +24,7 @@ from cortes.render.corte import ARQUIVO, Corte, gravar_corte, ler_corte, pasta_c
 from cortes.render.edicao import Edicao, aplicar, indices_do_corte, mascarar
 from cortes.render.ilustracao_cache import ARQUIVO as ARQUIVO_ILUSTRACAO
 from cortes.render.ilustracao_cache import PASTA as PASTA_ILUSTRACAO
-from cortes.render.ilustracao_cache import ler_ilustracoes, miniatura
+from cortes.render.ilustracao_cache import Fonte, ler_ilustracoes, miniatura
 from cortes.render.miniatura import gerar_miniatura
 from cortes.render.montagem import FORMATOS
 from cortes.render.previa import com_runtime
@@ -105,6 +106,13 @@ def _planos_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str 
     return [_plano_json(id, c, v, p) for p in rp[1]], None
 
 
+def _link(f: Fonte | None) -> str | None:
+    """Só http/https vai para o href do editor: `javascript:` num cache adulterado viraria script."""
+    if f is None or urlparse(f.url).scheme not in ("http", "https"):
+        return None
+    return f.url
+
+
 def _broll_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str | None]:
     """Só o f4. Cache do B-roll ilegível não derruba o editor: fica em `broll_erro`."""
     if c.formato != "f4":
@@ -118,7 +126,7 @@ def _broll_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str |
     v = int((d / PASTA_ILUSTRACAO / ARQUIVO_ILUSTRACAO).stat().st_mtime)
     return [{"k": i.k, "inicio": i.deixa.inicio, "fim": i.deixa.fim, "coisa": i.deixa.coisa,
              "busca": i.deixa.busca, "tipo": i.deixa.tipo, "midia": i.midia,
-             "fonte_url": i.fonte.url if i.fonte else None, "canal": i.fonte.canal if i.fonte else None,
+             "fonte_url": _link(i.fonte), "canal": i.fonte.canal if i.fonte else None,
              "motivo": i.motivo,
              "miniatura": f"{_url(id, c.indice)}/broll/{i.k}?v={v}" if i.arquivo else None}
             for i in lido.ilustracoes], None

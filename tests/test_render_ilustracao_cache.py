@@ -163,8 +163,11 @@ def test_nome_de_arquivo_com_caminho_no_cache_e_erro(tmp_path: Path, nome: str) 
 
 @pytest.mark.parametrize("campo,valor,causa", [("midia", "gif", "mídia inválida"),
                                                 ("midia", None, "não combina"),
-                                                ("tipo", "foto", "tipo de deixa inválido")])
-def test_midia_ou_tipo_invalidos_no_cache_sao_erro(tmp_path: Path, campo: str, valor: str | None,
+                                                ("tipo", "foto", "tipo de deixa inválido"),
+                                                ("canal", 7, "canal inválido"),
+                                                ("titulo", ["x"], "titulo inválido"),
+                                                ("fonte_url", 3, "fonte_url inválido")])
+def test_midia_tipo_ou_fonte_invalidos_no_cache_sao_erro(tmp_path: Path, campo: str, valor: object,
                                                    causa: str) -> None:
     pasta, f = ep4(tmp_path), Falso()
     montar_projeto(pasta, C4, tmp_path, Ilustra([VANS], OK).dep(f))

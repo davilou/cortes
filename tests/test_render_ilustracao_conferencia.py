@@ -55,6 +55,11 @@ def test_prompt_manda_preferir_video() -> None:
     assert "Prefira vídeo" in p and "3 quadros" in p and "D<deixa>-F<número>: uma foto" in p
 
 
+def test_prompt_recusa_quem_fala_para_a_camera_e_a_coisa_num_quadro_so() -> None:
+    p = prompt_conferencia(FOLHAS, LINHAS)
+    assert "alguém falando para a câmera" in p and "só aparece num dos quadros" in p
+
+
 def test_prompt_lista_todas_as_folhas_numa_chamada_so() -> None:
     folhas = [FOLHA, FOLHA.with_name("folha-2.jpg")]
     chamar = _chamar_que_devolve([_e(1, "V1"), _e(2, "V1")])

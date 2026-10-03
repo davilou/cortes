@@ -152,7 +152,7 @@ def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None
     """Trecho + rosto (com cache) e o index.html com as edições — o que a prévia do editor mostra
     e o render grava em MP4. Rápido quando início/fim não mudaram (só regera o HTML)."""
     caminho_template(raiz, c.formato)   # formato que não renderiza (ex.: o antigo f9) para antes do trecho
-    segs =preparar_trecho(pasta_ep, c, raiz, dep)
+    segs = preparar_trecho(pasta_ep, c, raiz, dep)
     proj = pasta_corte(pasta_ep, c.indice) / "projeto"
     preparar_assets(proj / "assets", c.formato, c.indice, duracao(segs), raiz, dep.rodar)
     ilus = _ilustrar(pasta_ep, c, segs, dep)
