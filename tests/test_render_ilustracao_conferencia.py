@@ -1,9 +1,10 @@
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from cortes.llm import ErroLLM
+from cortes.llm import ErroLLM, chamar
 from cortes.render.ilustracao import Deixa
 from cortes.render.ilustracao_conferencia import (
     SCHEMA_CONFERENCIA,
@@ -69,3 +70,9 @@ def test_conferir_recusa_imagem_ou_deixa_inexistente(escolha: dict[str, Any], ca
 def test_conferir_recusa_deixa_repetida() -> None:
     with pytest.raises(ErroLLM, match="deixa 1.*duas vezes"):
         conferir(FOLHA, LINHAS, _chamar_que_devolve([_e(1, 1), _e(1, 2)]))
+
+
+def test_schema_recusa_motivo_so_com_espaco() -> None:
+    saida = json.dumps({"is_error": False, "structured_output": {"escolhas": [_e(1, 1, "   ")]}})
+    with pytest.raises(ErroLLM, match="fora do schema"):
+        chamar("p", SCHEMA_CONFERENCIA, SISTEMA_CONFERENCIA, executar=lambda a, e: saida)

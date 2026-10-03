@@ -12,6 +12,7 @@ from typing import Any
 
 from cortes import llm
 from cortes.llm import ErroLLM
+from cortes.render.ilustracao import NAO_VAZIO
 from cortes.render.ilustracao_imagens import LinhaFolha
 
 ChamarComRead = Callable[[str, dict[str, Any], str, str, Path], dict[str, Any]]
@@ -33,7 +34,7 @@ SCHEMA_CONFERENCIA: dict[str, Any] = {
             "properties": {
                 "deixa": {"type": "integer"},
                 "imagem": {"type": ["integer", "null"]},
-                "motivo": {"type": "string", "minLength": 1},
+                "motivo": {"type": "string", "pattern": NAO_VAZIO},
             },
         },
     }},

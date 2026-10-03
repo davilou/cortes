@@ -1,8 +1,9 @@
+import json
 from typing import Any
 
 import pytest
 
-from cortes.llm import ErroLLM
+from cortes.llm import ErroLLM, chamar
 from cortes.render.ilustracao import SCHEMA_DEIXAS, SISTEMA_DEIXAS, Deixa, deixas_do_corte, prompt_deixas
 from cortes.render.processo import ErroRender
 from cortes.tipos import Palavra
@@ -77,3 +78,11 @@ def test_indice_invalido_e_erro_com_a_causa(ini: int, fim: int) -> None:
 def test_sem_palavras_e_erro_sem_chamar_o_llm() -> None:
     with pytest.raises(ErroRender, match="sem palavras"):
         deixas_do_corte([], _chamar_que_devolve([]))
+
+
+@pytest.mark.parametrize("campo", ["coisa", "busca"])
+def test_schema_recusa_coisa_ou_busca_so_com_espaco(campo: str) -> None:
+    item = {**_d(3, 4), campo: "  \n "}
+    saida = json.dumps({"is_error": False, "structured_output": {"deixas": [item]}})
+    with pytest.raises(ErroLLM, match="fora do schema"):
+        chamar("p", SCHEMA_DEIXAS, SISTEMA_DEIXAS, executar=lambda a, e: saida)

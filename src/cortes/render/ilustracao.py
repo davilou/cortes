@@ -17,6 +17,7 @@ ESPACO_S = 3.0          # no máximo uma deixa a cada 3 s (início a início)
 DUR_MIN_S = 1.2         # menos que isso a imagem pisca e some antes de ser vista
 DUR_MAX_S = 3.0         # mais que isso a imagem tapa o rosto tempo demais
 MAX_DEIXAS = 12
+NAO_VAZIO = r"\S"     # no schema: texto só com espaço é resposta errada, não deixa sem nome
 
 SISTEMA_DEIXAS = (
     "Você marca, na fala de um Short, as coisas concretas que podem aparecer numa foto enquanto a "
@@ -35,8 +36,8 @@ SCHEMA_DEIXAS: dict[str, Any] = {
             "properties": {
                 "inicio_palavra": {"type": "integer", "minimum": 0},
                 "fim_palavra": {"type": "integer", "minimum": 0},
-                "coisa": {"type": "string", "minLength": 1},
-                "busca": {"type": "string", "minLength": 1},
+                "coisa": {"type": "string", "pattern": NAO_VAZIO},
+                "busca": {"type": "string", "pattern": NAO_VAZIO},
             },
         },
     }},
