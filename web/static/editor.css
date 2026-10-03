@@ -51,12 +51,12 @@ hyperframes-player.previa, .previa.vazia { display: block; width: 100%; max-widt
 .pessoa:focus-visible { outline: 1px solid var(--up); outline-offset: 2px; }
 .pessoa:disabled { cursor: default; opacity: .6; }
 
-/* Editor: ilustrações do f9 — miniatura da imagem escolhida, ou "sem imagem"; botão de refazer. */
-.ilustracoes { list-style: none; padding: 0; display: grid; gap: 10px; }
-.ilustracao { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: start; }
-.ilustracao img, .ilustracao .sem-imagem { width: 64px; height: 64px; border-radius: 10px; border: 1px solid var(--line); }
-.ilustracao img { display: block; object-fit: contain; background: #fff; }
-.ilustracao .sem-imagem { display: grid; place-content: center; text-align: center; font: 10px var(--mono); color: var(--faint); }
-.ilustracao .num { font-size: 11.5px; color: var(--muted); }
-.ilustracao .sub { margin-top: 2px; font-size: 12px; overflow-wrap: anywhere; }
-.refazer-ilustracao { margin-top: 10px; }
+/* Editor: B-roll do f4 — miniatura do clipe (quadro do vídeo ou a foto, 9:16), ou "sem visual"; botão de refazer. */
+.broll-lista { list-style: none; padding: 0; display: grid; gap: 10px; }
+.broll-item { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 10px; align-items: start; }
+.broll-item img, .broll-item .sem-visual { width: 54px; height: 96px; border-radius: 8px; border: 1px solid var(--line); }
+.broll-item img { display: block; object-fit: cover; background: #000; }
+.broll-item .sem-visual { display: grid; place-content: center; text-align: center; font: 10px var(--mono); color: var(--faint); }
+.broll-item .num { font-size: 11.5px; color: var(--muted); }
+.broll-item .sub { margin-top: 2px; font-size: 12px; overflow-wrap: anywhere; }
+.refazer-broll { margin-top: 10px; }

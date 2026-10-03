@@ -1,46 +1,49 @@
 "use strict";
-// Ilustrações do f9 (plano 2026-10-02-ilustrado): uma linha por deixa com a miniatura da imagem
-// escolhida pela conferência, ou "sem imagem" com o motivo. "Refazer ilustração" apaga o cache
-// (deixas, imagens e escolhas) e pede a prévia, que roda LLM, busca e conferência de novo.
-function htmlIlustracao(i) {
-  const fonte = i.fonte_url
-    ? ` · <a href="${esc(i.fonte_url)}" target="_blank" rel="noopener noreferrer">fonte</a>` : "";
-  const img = i.imagem
-    ? `<img src="${esc(i.imagem)}" alt="${esc(i.coisa)}" loading="lazy">`
-    : `<span class="sem-imagem">sem imagem</span>`;
-  return `<li class="ilustracao">${img}<div>
-      <span class="num">${tempo(i.inicio)}–${tempo(i.fim)}</span> <strong>${esc(i.coisa)}</strong>
-      <p class="sub" title="${esc(i.motivo)}">${esc(i.motivo)}${fonte}</p></div></li>`;
+// B-roll do f4 (plano 2026-10-03-broll-automatico): uma linha por deixa com o tipo do clipe
+// escolhido pela conferência (vídeo, foto ou "sem visual") e a miniatura (um quadro do vídeo ou a
+// foto). "Refazer B-roll" apaga o cache (deixas, candidatos e escolhas) e pede a prévia, que roda
+// LLM, buscas e conferência de novo.
+const NOMES_MIDIA = { video: "vídeo", foto: "foto" };
+
+function htmlClipeBroll(b) {
+  const fonte = b.fonte_url
+    ? ` · <a href="${esc(b.fonte_url)}" target="_blank" rel="noopener noreferrer">fonte</a>` : "";
+  const mini = b.miniatura
+    ? `<img src="${esc(b.miniatura)}" alt="${esc(b.coisa)}" loading="lazy">`
+    : `<span class="sem-visual">sem visual</span>`;
+  const midia = b.midia ? NOMES_MIDIA[b.midia] ?? b.midia : "sem visual";
+  return `<li class="broll-item">${mini}<div>
+      <span class="num">${tempo(b.inicio)}–${tempo(b.fim)} · ${esc(midia)}</span> <strong>${esc(b.coisa)}</strong>
+      <p class="sub" title="${esc(b.motivo)}">${esc(b.motivo)}${fonte}</p></div></li>`;
 }
 
-function htmlListaIlustracoes(ed) {
-  if (ed.ilustracao_erro) return `<p class="sub erro-txt" title="${esc(ed.ilustracao_erro)}">não deu para
-    ler as ilustrações: ${esc(ed.ilustracao_erro)}</p>`;
-  if (!ed.ilustracoes.length) return `<p class="sub">As ilustrações aparecem quando a prévia ficar pronta.</p>`;
-  return `<ul class="ilustracoes">${ed.ilustracoes.map(htmlIlustracao).join("")}</ul>`;
+function htmlListaBroll(ed) {
+  if (ed.broll_erro) return `<p class="sub erro-txt" title="${esc(ed.broll_erro)}">não deu para
+    ler o B-roll: ${esc(ed.broll_erro)}</p>`;
+  if (!ed.broll.length) return `<p class="sub">O B-roll aparece quando a prévia ficar pronta.</p>`;
+  return `<ul class="broll-lista">${ed.broll.map(htmlClipeBroll).join("")}</ul>`;
 }
 
-function htmlIlustracoes(ed) {
+function htmlBroll(ed) {
   const dis = ed.editavel ? "" : "disabled";
-  return `${htmlListaIlustracoes(ed)}
-    <button class="botao mini refazer-ilustracao" id="refazer-ilustracao" ${dis}>
-      Refazer ilustração</button>`;
+  return `${htmlListaBroll(ed)}
+    <button class="botao mini refazer-broll" id="refazer-broll" ${dis}>Refazer B-roll</button>`;
 }
 
-const AVISO_REFAZER = "Refazer a ilustração? As imagens escolhidas são descartadas e o Claude "
-  + "marca, busca e confere tudo de novo.";
+const AVISO_REFAZER_BROLL = "Refazer o B-roll? Os clipes escolhidos são descartados e o Claude "
+  + "marca, busca e confere tudo de novo (o YouTube leva perto de 1 min por vídeo).";
 
-async function refazerIlustracao(b) {
-  if (!confirm(AVISO_REFAZER)) return;
+async function refazerBroll(b) {
+  if (!confirm(AVISO_REFAZER_BROLL)) return;
   const ed = ED, meu = desenhar.n;
   b.disabled = true;
   try {
-    const novo = await post(`${urlCorte(ed.id, ed.n)}/ilustracao/refazer`);
+    const novo = await post(`${urlCorte(ed.id, ed.n)}/broll/refazer`);
     if (meu === desenhar.n && ED === ed) aplicarEstado(novo);
   } catch (e) { avisar(e.message); b.disabled = false; }
 }
 
-function ligarIlustracoes() {
-  const b = $("#refazer-ilustracao");
-  if (b) b.onclick = () => refazerIlustracao(b);
+function ligarBroll() {
+  const b = $("#refazer-broll");
+  if (b) b.onclick = () => refazerBroll(b);
 }
