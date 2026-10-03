@@ -46,7 +46,7 @@ def test_novo_episodio_entra_na_fila(cfg: Config) -> None:
     ({**NOVO, "nicho": "humor"}, "nicho 'humor'"),
     ({**NOVO, "nicho": "../contas"}, "nicho '../contas'"),
     ({**NOVO, "formato": "f9"}, "o formato f9 virou o f4 B-roll"),
-    ({**NOVO, "formato": "f3"}, "formato 'f3' ainda não renderiza"),
+    ({**NOVO, "formato": "f2"}, "formato 'f2' ainda não renderiza"),
 ])
 def test_novo_episodio_recusado(cfg: Config, corpo: dict[str, object], erro: str) -> None:
     c, fila = montar(cfg)

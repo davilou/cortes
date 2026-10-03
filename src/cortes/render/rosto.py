@@ -23,6 +23,11 @@ ALVO = (540, 700)          # onde o rosto fica na tela 9:16 (protótipo: CAM_CHE
 JANELA_METADE = (1080, 960)
 ALVO_METADE = (540, 380)
 ALTURA_QUADRO_METADE = 1080
+# f3 (motion), estado "div": a janela abaixo da faixa de 680 px, com o rosto mais acima. Protótipo
+# testes/short-400mil-dinamica/gera.py (CAMERAS["div"]): escala 1,2 na fonte 1080p → quadro 2304×1296.
+JANELA_DIV = (1080, 1240)
+ALVO_DIV = (540, 400)
+ALTURA_QUADRO_DIV = 1296
 PASSO_S = 0.25             # passo da amostragem em render/visao/rosto.py
 SEPARA = 0.08              # rostos a mais que isso (fração da largura) no eixo x são pessoas diferentes
 RUIDO = 0.2                # pessoa com menos que isso × as detecções da maior é ruído do detector
@@ -131,6 +136,17 @@ def escala_metade(r: Rosto) -> float:
 
 def quadro_metade(r: Rosto) -> tuple[int, int]:
     e = escala_metade(r)
+    return round(r.largura * e), round(r.altura * e)
+
+
+def escala_div(r: Rosto) -> float:
+    """Como `escala_metade`: a altura do protótipo manda, e o `max` cobre a largura da janela numa
+    fonte mais estreita."""
+    return max(ALTURA_QUADRO_DIV / r.altura, JANELA_DIV[0] / r.largura)
+
+
+def quadro_div(r: Rosto) -> tuple[int, int]:
+    e = escala_div(r)
     return round(r.largura * e), round(r.altura * e)
 
 

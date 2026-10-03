@@ -23,7 +23,7 @@ from cortes.render.corte import cortes_do_episodio
 from cortes.render.montagem import FORMATOS, validar_formato
 from cortes.render.processo import Rodar, rodar_processo
 
-FORMATOS_RENDER = FORMATOS   # render/montagem.py; planos D e E acrescentam f4 e f3
+FORMATOS_RENDER = FORMATOS   # render/montagem.py
 
 
 class NovoEpisodio(BaseModel):

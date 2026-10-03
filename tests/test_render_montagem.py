@@ -34,8 +34,8 @@ def test_valor_com_placeholder_literal_nao_e_reprocessado() -> None:
 
 
 def test_formato_sem_template_e_erro() -> None:
-    with pytest.raises(ErroRender, match="formato 'f3'"):
-        caminho_template(REPO, "f3")
+    with pytest.raises(ErroRender, match="formato 'f2'"):
+        caminho_template(REPO, "f2")
 
 
 def test_f9_virou_f4_com_erro_claro() -> None:
@@ -44,7 +44,7 @@ def test_f9_virou_f4_com_erro_claro() -> None:
     assert "f9" in F9_SAIU and not (REPO / "render" / "formatos" / "ilustrado.tpl").exists()
 
 
-@pytest.mark.parametrize("formato, erro", [("f9", F9_SAIU), ("f3", "formato 'f3' ainda não renderiza")])
+@pytest.mark.parametrize("formato, erro", [("f9", F9_SAIU), ("f2", "formato 'f2' ainda não renderiza")])
 def test_validar_formato_diz_que_o_f9_saiu(formato: str, erro: str) -> None:
     with pytest.raises(ErroProducao, match=re.escape(erro)):
         validar_formato(formato)
@@ -55,7 +55,7 @@ G = [Grupo(0.0, 1.0, ("Oi",), (0.0,))]
 
 
 def test_formatos_do_app() -> None:
-    assert FORMATOS == ("f7", "f1", "f6", "f5", "f8", "f4")
+    assert FORMATOS == ("f7", "f1", "f6", "f5", "f8", "f4", "f3")
 
 
 @pytest.mark.parametrize("formato", FORMATOS)
@@ -63,7 +63,7 @@ def test_templates_reais_montam_sem_sobra(formato: str) -> None:
     tpl = caminho_template(REPO, formato).read_text(encoding="utf-8")
     html = montar_html(tpl, valores(tpl, 12.5, R, G, {}, formato, "Título"))
     assert 'data-duration="12.5"' in html and ">Oi<" in html
-    cheio = formato in ("f7", "f1", "f6", "f4")
+    cheio = formato in ("f7", "f1", "f6", "f4", "f3")
     assert ("3413px" in html) == cheio   # quadro cheio: fonte a 1920 de altura
     # corte seco, sem efeito nenhum: nem flash, nem zoom nas emendas ou nas frases (Davi, 2026-10-02)
     assert 'id="flash"' not in html and "scale: k % 2" not in html and "scale: n % 2" not in html

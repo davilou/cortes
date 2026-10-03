@@ -8,27 +8,34 @@ from pathlib import Path
 from cortes.producao.estado import ErroProducao
 from cortes.render.ilustracao_cache import Ilustracao, Midia, nome_asset
 from cortes.render.legenda import Grupo, legenda_html
+from cortes.render.motion import Cena
+from cortes.render.motion_animacao import animacoes
+from cortes.render.motion_componentes import cenas_html, estados
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import (
+    ALVO_DIV,
     ALVO_METADE,
+    JANELA_DIV,
     JANELA_METADE,
     Rosto,
+    escala_div,
     escala_metade,
     largura_quadro,
+    quadro_div,
     quadro_metade,
     trilha_fixa,
 )
 
-FORMATOS = ("f7", "f1", "f6", "f5", "f8", "f4")   # ordem da tela; o plano E acrescenta o f3
+FORMATOS = ("f7", "f1", "f6", "f5", "f8", "f4", "f3")   # ordem da tela
 _TEMPLATES = {"f7": "conversa", "f1": "falante", "f6": "hormozi", "f5": "gameplay", "f8": "desfoque",
-              "f4": "broll"}
+              "f4": "broll", "f3": "motion"}
 # o f9 Ilustrado (cartão de foto) virou o f4 B-roll automático (plano 2026-10-03-broll-automatico):
 # corte.json antigo em f9 dá este erro, sem conversão silenciosa
 F9_SAIU = "o formato f9 virou o f4 B-roll; renderize de novo em f4"
 _POR_PALAVRA = ("f6",)
 _PLACEHOLDER = re.compile(r"\{\{[A-Z_]+\}\}")
 CLIPE_MIN_S = 0.3   # clipe que sobra menos que isso antes do fim do Short só pisca: não entra
-_PLACEHOLDERS_ROSTO = {"QW", "TRILHA_CHEIO", "QM_W", "QM_H", "TRILHA_METADE"}
+_PLACEHOLDERS_ROSTO = {"QW", "TRILHA_CHEIO", "QM_W", "QM_H", "TRILHA_METADE", "QD_W", "QD_H", "TRILHA_DIV"}
 
 
 def validar_formato(formato: str) -> None:
@@ -97,8 +104,42 @@ def broll_html(ilustracoes: Sequence[Ilustracao], dur: float) -> str:
     return "\n".join(clipes)
 
 
+def _camera(usa: set[str], rosto: Rosto, escolhas: dict[int, int]) -> dict[str, str]:
+    """Quadro e trilha fixa de cada janela que o template usa: cheia, metade (f5) e div (f3)."""
+    out: dict[str, str] = {}
+    if "QW" in usa:
+        out["QW"] = str(largura_quadro(rosto))
+    if "TRILHA_CHEIO" in usa:
+        out["TRILHA_CHEIO"] = json.dumps(trilha_fixa(rosto, escolhas))
+    if "QM_W" in usa or "QM_H" in usa:
+        qm_w, qm_h = quadro_metade(rosto)
+        out["QM_W"], out["QM_H"] = str(qm_w), str(qm_h)
+    if "TRILHA_METADE" in usa:
+        metade = trilha_fixa(rosto, escolhas, JANELA_METADE, ALVO_METADE, escala_metade(rosto))
+        out["TRILHA_METADE"] = json.dumps(metade)
+    if "QD_W" in usa or "QD_H" in usa:
+        qd_w, qd_h = quadro_div(rosto)
+        out["QD_W"], out["QD_H"] = str(qd_w), str(qd_h)
+    if "TRILHA_DIV" in usa:
+        out["TRILHA_DIV"] = json.dumps(trilha_fixa(rosto, escolhas, JANELA_DIV, ALVO_DIV, escala_div(rosto)))
+    return out
+
+
+def _motion(usa: set[str], cenas: Sequence[Cena]) -> dict[str, str]:
+    """As cenas do f3 (render/motion_componentes.py e motion_animacao.py)."""
+    out: dict[str, str] = {}
+    if "CENAS" in usa:
+        out["CENAS"] = cenas_html(list(cenas))
+    if "ESTADOS" in usa:
+        out["ESTADOS"] = estados(list(cenas))
+    if "ANIMACOES" in usa:
+        out["ANIMACOES"] = animacoes(list(cenas))
+    return out
+
+
 def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], escolhas: dict[int, int],
-            formato: str, titulo: str, ilustracoes: Sequence[Ilustracao] = ()) -> dict[str, str]:
+            formato: str, titulo: str, ilustracoes: Sequence[Ilustracao] = (),
+            cenas: Sequence[Cena] = ()) -> dict[str, str]:
     """Só os placeholders que `tpl` realmente usa: f8 (desfoque) não tem câmera nem metade, e
     calcular `TRILHA_CHEIO`/`TRILHA_METADE` ali exigiria rosto e escolhas válidas à toa — custo e
     chance de erro que o template nunca usa (revisão formatos novos, item 1). `rosto=None` só vale
@@ -108,17 +149,9 @@ def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], esco
            "TITULO": html.escape(titulo)}
     if "BROLL" in usa:
         out["BROLL"] = broll_html(ilustracoes, dur)
+    out |= _motion(usa, cenas)
     if usa & _PLACEHOLDERS_ROSTO:
         if rosto is None:
             raise ErroRender(f"formato '{formato}' usa rosto no template mas nenhum foi medido")
-        if "QW" in usa:
-            out["QW"] = str(largura_quadro(rosto))
-        if "TRILHA_CHEIO" in usa:
-            out["TRILHA_CHEIO"] = json.dumps(trilha_fixa(rosto, escolhas))
-        if "QM_W" in usa or "QM_H" in usa:
-            qm_w, qm_h = quadro_metade(rosto)
-            out["QM_W"], out["QM_H"] = str(qm_w), str(qm_h)
-        if "TRILHA_METADE" in usa:
-            metade = trilha_fixa(rosto, escolhas, JANELA_METADE, ALVO_METADE, escala_metade(rosto))
-            out["TRILHA_METADE"] = json.dumps(metade)
+        out |= _camera(usa, rosto, escolhas)
     return out

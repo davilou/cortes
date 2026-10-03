@@ -51,7 +51,7 @@ def test_renderizar_recusa(cfg: Config) -> None:
     pasta = preparar_concluido(cfg)
     c, _ = montar(cfg)
     assert "não existe" in c.post(f"{EP}/cortes/7/renderizar", json={}).json()["detail"]
-    for formato, erro in (("f9", "o formato f9 virou o f4"), ("f3", "formato 'f3' ainda não renderiza")):
+    for formato, erro in (("f9", "o formato f9 virou o f4"), ("f2", "formato 'f2' ainda não renderiza")):
         assert erro in c.post(f"{EP}/cortes/0/renderizar", json={"formato": formato}).json()["detail"]
     c.post(f"{EP}/cortes/0/renderizar", json={})
     assert "já está na fila" in c.post(f"{EP}/cortes/0/renderizar", json={}).json()["detail"]
