@@ -51,6 +51,10 @@ lugar, veículo, comida, animal, roupa ou objeto.
 - "coisa": o nome curto da coisa, como foi dita.
 - "busca": o texto para uma busca de imagens, em português, específico, com marca e modelo \
 quando forem ditos (ex.: "tênis Vans Old Skool", "camisa do Corinthians").
+- A imagem mostra a coisa de que a pessoa fala, não outra parecida. Cada coisa entra uma vez só: \
+não marque de novo uma coisa já marcada, nem uma palavra genérica que volta a ela (ex.: "a \
+camiseta" depois de "camisa do Corinthians" é a mesma camisa; uma busca "camisa de futebol" \
+traria a de outro time). Busca genérica só quando a fala é genérica de verdade.
 - No máximo uma deixa a cada {ESPACO_S:.0f} s e nenhuma no primeiro {GANCHO_S:.0f} s, que é o \
 gancho com o rosto.
 - No máximo {MAX_DEIXAS} deixas. Se não houver coisa concreta, devolva a lista vazia."""

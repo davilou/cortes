@@ -35,6 +35,14 @@ def test_prompt_numera_as_palavras() -> None:
     assert "1 s" in p and "3 s" in p   # as regras de tempo vão no texto
 
 
+def test_prompt_nao_remarca_a_mesma_coisa_com_busca_generica() -> None:
+    # real (wxCto9WSZcI, "Camisa de 700 reais"): "camiseta", dita da camisa do Corinthians, virou
+    # "camisa de time de futebol" e o cartão mostrou a camisa da seleção
+    p = prompt_deixas([Palavra("camiseta", 0.0, 0.5)])
+    assert "Cada coisa entra uma vez só" in p
+    assert '"a camiseta" depois de "camisa do Corinthians"' in p
+
+
 def test_schema_limita_a_12_deixas() -> None:
     assert SCHEMA_DEIXAS["properties"]["deixas"]["maxItems"] == 12
 
