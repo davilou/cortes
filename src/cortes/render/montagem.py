@@ -5,6 +5,7 @@ import re
 from collections.abc import Sequence
 from pathlib import Path
 
+from cortes.producao.estado import ErroProducao
 from cortes.render.ilustracao_cache import Ilustracao, Midia, nome_asset
 from cortes.render.legenda import Grupo, legenda_html
 from cortes.render.processo import ErroRender
@@ -28,6 +29,14 @@ _POR_PALAVRA = ("f6",)
 _PLACEHOLDER = re.compile(r"\{\{[A-Z_]+\}\}")
 CLIPE_MIN_S = 0.3   # clipe que sobra menos que isso antes do fim do Short só pisca: não entra
 _PLACEHOLDERS_ROSTO = {"QW", "TRILHA_CHEIO", "QM_W", "QM_H", "TRILHA_METADE"}
+
+
+def validar_formato(formato: str) -> None:
+    """O formato pedido (episódio novo, render ou edição) renderiza; o f9 diz que virou o f4."""
+    if formato == "f9":
+        raise ErroProducao(F9_SAIU)
+    if formato not in FORMATOS:
+        raise ErroProducao(f"formato '{formato}' ainda não renderiza; use um de {FORMATOS}")
 
 
 def caminho_template(raiz: Path, formato: str) -> Path:

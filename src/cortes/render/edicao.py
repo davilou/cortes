@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 
 from cortes.producao.estado import ErroProducao
 from cortes.render.corte import Corte, Edicoes
-from cortes.render.montagem import FORMATOS
+from cortes.render.montagem import validar_formato
 from cortes.tipos import Palavra
 
 DURACAO_MIN_S = 3.0
@@ -128,8 +128,7 @@ def _titulo_formato(c: Corte, ed: Edicao) -> Corte:
             raise ErroProducao(f"título vazio ou com mais de {TITULO_MAX} caracteres")
         c = replace(c, titulo=titulo)
     if ed.formato is not None:
-        if ed.formato not in FORMATOS:
-            raise ErroProducao(f"formato '{ed.formato}' ainda não renderiza; use um de {FORMATOS}")
+        validar_formato(ed.formato)
         c = replace(c, formato=ed.formato)
     return c
 

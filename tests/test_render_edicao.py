@@ -52,7 +52,8 @@ def test_mover_inicio_e_fim_por_palavra_zera_rostos() -> None:
     (Edicao(inicio_palavra=99), "palavra 99"),
     (Edicao(inicio_palavra=3, fim_palavra=3), "duração"),
     (Edicao(titulo="  "), "título"),
-    (Edicao(formato="f9"), "formato 'f9'"),
+    (Edicao(formato="f9"), "o formato f9 virou o f4 B-roll"),
+    (Edicao(formato="f3"), "formato 'f3' ainda não renderiza"),
     (Edicao(rosto=(0, 2)), "pessoa 2"),
     (Edicao(rosto=(3, 0)), "plano 3"),
 ])

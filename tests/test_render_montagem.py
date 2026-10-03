@@ -1,11 +1,21 @@
+import re
 from pathlib import Path
 
 import pytest
 
+from cortes.producao.estado import ErroProducao
 from cortes.render.ilustracao import Deixa
 from cortes.render.ilustracao_cache import Fonte, Ilustracao, Midia
 from cortes.render.legenda import Grupo
-from cortes.render.montagem import F9_SAIU, FORMATOS, broll_html, caminho_template, montar_html, valores
+from cortes.render.montagem import (
+    F9_SAIU,
+    FORMATOS,
+    broll_html,
+    caminho_template,
+    montar_html,
+    validar_formato,
+    valores,
+)
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import Amostra, Face, Rosto
 
@@ -32,6 +42,13 @@ def test_f9_virou_f4_com_erro_claro() -> None:
     with pytest.raises(ErroRender, match="o formato f9 virou o f4 B-roll; renderize de novo em f4"):
         caminho_template(REPO, "f9")
     assert "f9" in F9_SAIU and not (REPO / "render" / "formatos" / "ilustrado.tpl").exists()
+
+
+@pytest.mark.parametrize("formato, erro", [("f9", F9_SAIU), ("f3", "formato 'f3' ainda não renderiza")])
+def test_validar_formato_diz_que_o_f9_saiu(formato: str, erro: str) -> None:
+    with pytest.raises(ErroProducao, match=re.escape(erro)):
+        validar_formato(formato)
+    validar_formato("f4")
 
 
 G = [Grupo(0.0, 1.0, ("Oi",), (0.0,))]

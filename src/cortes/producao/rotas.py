@@ -20,7 +20,7 @@ from cortes.producao.estado import ErroProducao, etapa_com_erro, gravar, ler, no
 from cortes.producao.fila import Fila
 from cortes.producao.previas import Previas
 from cortes.render.corte import cortes_do_episodio
-from cortes.render.montagem import FORMATOS
+from cortes.render.montagem import FORMATOS, validar_formato
 from cortes.render.processo import Rodar, rodar_processo
 
 FORMATOS_RENDER = FORMATOS   # render/montagem.py; planos D e E acrescentam f4 e f3
@@ -93,8 +93,7 @@ def _validar(raiz: Path, pedido: NovoEpisodio) -> str:
         raise ErroProducao(str(ex)) from ex
     if pedido.nicho not in _nichos(raiz):
         raise ErroProducao(f"nicho '{pedido.nicho}' não existe em {raiz / 'nichos'}")
-    if pedido.formato not in FORMATOS_RENDER:
-        raise ErroProducao(f"formato '{pedido.formato}' ainda não renderiza; use um de {FORMATOS_RENDER}")
+    validar_formato(pedido.formato)
     if (raiz / "episodios" / id / "estado.json").exists():
         raise ErroProducao(f"episódio {id} já está na produção")
     return id

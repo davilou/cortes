@@ -27,7 +27,7 @@ from cortes.render.corte import (
     reenfileirar,
     video,
 )
-from cortes.render.montagem import FORMATOS
+from cortes.render.montagem import validar_formato
 
 
 class PedidoRender(BaseModel):
@@ -59,8 +59,8 @@ def pedir_render(pasta: Path, indice: int, formato: str | None, preparando: bool
     cands = curadoria.candidatos(pasta)
     if not 0 <= indice < len(cands):
         raise ErroProducao(f"candidato {indice} não existe (o episódio tem {len(cands)})")
-    if formato is not None and formato not in FORMATOS:
-        raise ErroProducao(f"formato '{formato}' ainda não renderiza; use um de {FORMATOS}")
+    if formato is not None:
+        validar_formato(formato)
     d = pasta_corte(pasta, indice)
     if (d / ARQUIVO).exists():
         atual = ler_corte(d)
