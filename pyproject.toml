@@ -14,6 +14,7 @@ dependencies = [
   "nvidia-cublas-cu12",          # CTranslate2 (faster-whisper) precisa do cuBLAS do CUDA 12; o torch é cu130
   "nvidia-cudnn-cu12>=9,<10",    # CTranslate2 precisa do cuDNN 9
   "curl_cffi",        # yt-dlp: personificação de navegador no download do vídeo
+  "ddgs",             # f9 Ilustrado: única busca de imagem sem chave testada (sem chave de Pexels/Bing/Serp no ambiente)
 ]
 
 [project.optional-dependencies]

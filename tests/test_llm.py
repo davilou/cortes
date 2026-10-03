@@ -1,5 +1,6 @@
 import json
 import subprocess
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -73,3 +74,23 @@ def test_comando_isola_contexto_e_nao_usa_bare() -> None:
     assert cmd[cmd.index("--tools") + 1] == ""
     assert cmd[cmd.index("--setting-sources") + 1] == "project"
     assert json.loads(cmd[cmd.index("--json-schema") + 1]) == SCHEMA
+
+
+def test_comando_com_read_libera_so_a_pasta_dada(tmp_path: Path) -> None:
+    cmd = montar_comando("sis", SCHEMA, "sonnet", ferramentas="Read", pastas=[tmp_path])
+    assert cmd[cmd.index("--tools") + 1] == "Read"
+    assert cmd[cmd.index("--allowedTools") + 1] == "Read"
+    assert cmd[cmd.index("--add-dir") + 1] == str(tmp_path)
+    assert cmd.index("--add-dir") < cmd.index("--no-session-persistence")   # a lista variádica fecha
+
+
+def test_comando_sem_ferramenta_nao_aceita_pasta(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="sem ferramenta"):
+        montar_comando("sis", SCHEMA, "sonnet", pastas=[tmp_path])
+
+
+def test_chamar_repassa_ferramenta_e_pasta(tmp_path: Path) -> None:
+    ex = executor_que_devolve({"is_error": False, "structured_output": {"nota": 3}})
+    chamar("p", SCHEMA, "s", executar=ex, ferramentas="Read", pastas=[tmp_path])
+    args, _ = ex.chamadas[0]
+    assert args[args.index("--add-dir") + 1] == str(tmp_path)

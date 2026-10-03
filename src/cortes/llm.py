@@ -6,7 +6,8 @@ custo fixo para ~3,7 mil tokens por chamada (medido em 2026-09-30).
 """
 import json
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
 import jsonschema
@@ -19,7 +20,22 @@ class ErroLLM(RuntimeError):
     pass
 
 
-def montar_comando(sistema: str, schema: dict[str, Any], modelo: str) -> list[str]:
+def _flags_ferramentas(ferramentas: str, pastas: Sequence[Path]) -> list[str]:
+    """Sem ferramenta, `--tools ""` desliga todas. Com ferramenta (ex.: "Read" na conferência
+    visual do Ilustrado), `--tools` limita o conjunto, `--allowedTools` a libera sem pedir
+    permissão e `--add-dir` abre só as pastas dadas (flags conferidas no `claude --help`)."""
+    if not ferramentas:
+        if pastas:
+            raise ValueError("pasta liberada sem ferramenta que a use")
+        return ["--tools", ""]
+    flags = ["--tools", ferramentas, "--allowedTools", ferramentas]
+    for pasta in pastas:
+        flags += ["--add-dir", str(pasta)]
+    return flags
+
+
+def montar_comando(sistema: str, schema: dict[str, Any], modelo: str, ferramentas: str = "",
+                   pastas: Sequence[Path] = ()) -> list[str]:
     return [
         "claude", "-p",
         "--output-format", "json",
@@ -27,7 +43,7 @@ def montar_comando(sistema: str, schema: dict[str, Any], modelo: str) -> list[st
         "--system-prompt", sistema,
         "--setting-sources", "project",
         "--strict-mcp-config",
-        "--tools", "",
+        *_flags_ferramentas(ferramentas, pastas),
         "--no-session-persistence",
         "--model", modelo,
     ]
@@ -45,8 +61,9 @@ def _executar(args: list[str], entrada: str) -> str:
 
 
 def chamar(prompt: str, schema: dict[str, Any], sistema: str, modelo: str = "sonnet",
-           executar: Executor = _executar) -> dict[str, Any]:
-    saida = executar(montar_comando(sistema, schema, modelo), prompt)
+           executar: Executor = _executar, ferramentas: str = "",
+           pastas: Sequence[Path] = ()) -> dict[str, Any]:
+    saida = executar(montar_comando(sistema, schema, modelo, ferramentas, pastas), prompt)
     try:
         resposta = json.loads(saida)
     except json.JSONDecodeError as e:
