@@ -22,12 +22,17 @@ YT = [sys.executable, "-m", "yt_dlp", "--ignore-config", "--no-warnings"]
 N_RESULTADOS = 8            # resultados pedidos à busca; o filtro de duração descarta parte
 DUR_MIN_VIDEO_S = 20.0      # menos que isso é Short ou vinheta
 DUR_MAX_VIDEO_S = 20 * 60.0  # mais que isso é live, aula ou compilação
-MAX_CANDIDATOS = 3          # por deixa: cada candidato é uma requisição a mais ao YouTube
+MAX_CANDIDATOS = 2          # por deixa: cada candidato custa ~45 s de download (medido em 2026-10-03)
 TRECHO_S = 3.0
+# O yt-dlp baixa uma seção maior, sem `--force-keyframes-at-cuts`: a seção começa no keyframe antes
+# do início pedido, e o ffmpeg de `args_cheio` (que recodifica de qualquer jeito) corta os TRECHO_S.
+# Medido em 2026-10-03: ~43 s no yt-dlp com ou sem a recodificação e com 1080p ou 720p — o tempo é da
+# leitura HTTP da seção, não do tamanho; o 720p sai visivelmente mais mole no 1080×1920, então fica 1080p.
+SECAO_S = 5.0
 POSICAO_TRECHO = 0.25       # o trecho começa a 25% do vídeo: passa da vinheta e da apresentação
 FORMATO = "bv*[height<=1080][ext=mp4]/bv*[height<=1080]"   # só vídeo, sem áudio, até 1080p
 PRAZO_BUSCA_S = 30
-PRAZO_TRECHO_S = 60
+PRAZO_TRECHO_S = 90         # ~45 s medidos (yt-dlp + ffmpeg); 60 s deixava folga de 25%
 LARGURA, ALTURA = 1080, 1920
 QUADROS_S = (0.1, TRECHO_S / 2, TRECHO_S - 0.2)   # início, meio e fim do trecho, para a folha
 ALTURA_QUADRO = 640
@@ -133,10 +138,11 @@ def inicio_trecho(c: VideoCandidato) -> int:
 
 
 def args_trecho(c: VideoCandidato, molde: Path) -> list[str]:
-    """yt-dlp baixa só a seção do trecho, só vídeo. `molde` leva `%(ext)s`: o contêiner vem do formato."""
+    """yt-dlp baixa só a seção (SECAO_S), só vídeo, sem recodificar. `molde` leva `%(ext)s`: o
+    contêiner vem do formato."""
     ini = inicio_trecho(c)
     return [*YT, "--no-playlist", "--no-progress", "-f", FORMATO, "--download-sections",
-            f"*{ini}-{ini + TRECHO_S:.0f}", "--force-keyframes-at-cuts", "-o", str(molde),
+            f"*{ini}-{ini + SECAO_S:.0f}", "-o", str(molde),
             "--", f"https://www.youtube.com/watch?v={validar_id(c.id)}"]
 
 

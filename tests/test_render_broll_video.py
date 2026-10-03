@@ -105,12 +105,17 @@ def test_titulo_com_not_a_bot_numa_busca_que_deu_certo_nao_e_bloqueio() -> None:
     assert len(buscar_videos("x", 3, rodar)) == 1
 
 
-def test_args_do_trecho_3s_a_partir_de_25_por_cento_so_video_ate_1080p() -> None:
+def test_args_da_secao_de_5s_a_partir_de_25_por_cento_so_video_ate_1080p_sem_recodificar() -> None:
     args = args_trecho(VANS, Path("p/D1-v1.bruto.%(ext)s"))
-    assert args[args.index("--download-sections") + 1] == "*25-28"
+    assert args[args.index("--download-sections") + 1] == "*25-30"
     assert args[args.index("-f") + 1] == "bv*[height<=1080][ext=mp4]/bv*[height<=1080]"
     assert args[-2:] == ["--", "https://www.youtube.com/watch?v=abcDEF_12-x"]
-    assert "--force-keyframes-at-cuts" in args
+    assert "--force-keyframes-at-cuts" not in args   # o ffmpeg de args_cheio já corta os 3 s
+
+
+def test_dois_candidatos_por_deixa_por_padrao() -> None:
+    saida = "\n".join(_linha(c * 11, "60") for c in "fghij")
+    assert len(buscar_videos("x", rodar=Rodar((0, saida), cria=False))) == 2
 
 
 @pytest.mark.parametrize("vid", ["curto", "abcDEF_12-x&list=1", "../../etc/pw", "-abcdefghij "])
