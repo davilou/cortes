@@ -14,6 +14,7 @@ from cortes.render.ilustracao_imagens import (
     baixar,
     baixar_candidatas,
     buscar,
+    dividir_folhas,
     folha_args,
     gerar_folha,
 )
@@ -129,8 +130,17 @@ def test_folha_uma_linha_por_deixa_com_numero_em_cada_tile() -> None:
     assert "text='D1-1'" in grafo and "text='D1-2'" in grafo and "text='D3-1'" in grafo
     assert "D2-" not in grafo   # deixa sem candidata não entra
     assert "scale=320:320" in grafo and "arial.ttf" in grafo
-    assert "xstack=inputs=3:layout=0_0|320_0|0_320:fill=white" in grafo
+    # rótulo numa faixa branca de 48 px acima da foto, não por cima dela
+    assert "pad=320:368:0:48:white" in grafo and "fontcolor=black" in grafo and "boxcolor" not in grafo
+    assert "xstack=inputs=3:layout=0_0|320_0|0_368:fill=white" in grafo
     assert args[-1] == "folha.jpg"
+
+
+def test_dividir_folhas_de_6_em_6_deixas_com_imagem() -> None:
+    linhas = [LinhaFolha(k, DEIXA, (Path(f"{k}.jpg"),) if k != 3 else ()) for k in range(1, 15)]
+    folhas = dividir_folhas(linhas)
+    assert [[ln.k for ln in f] for f in folhas] == [[1, 2, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13], [14]]
+    assert dividir_folhas([LinhaFolha(1, DEIXA, ())]) == []
 
 
 def test_folha_de_uma_imagem_so_nao_usa_xstack() -> None:

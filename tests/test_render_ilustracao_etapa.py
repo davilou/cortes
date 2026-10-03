@@ -82,7 +82,7 @@ def test_f9_ilustra_uma_vez_e_reaproveita_o_cache(tmp_path: Path) -> None:
     assert il.downloads == ["http://img/tênis Vans Old Skool/1.jpg", "http://img/tênis Vans Old Skool/2.jpg"]
     assert (il.llm, il.conferencias, il.buscas) == (1, 1, ["tênis Vans Old Skool"])
     d = pasta / "cortes" / "0"
-    assert il.pasta_read == d / "ilustracao" and (d / "ilustracao" / "folha.jpg").exists()
+    assert il.pasta_read == d / "ilustracao" and (d / "ilustracao" / "folha-1.jpg").exists()
     lido = ler_ilustracoes(d)
     assert lido is not None
     [i] = lido[2]

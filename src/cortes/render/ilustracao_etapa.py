@@ -16,7 +16,7 @@ from cortes.detector import ChamarLLM
 from cortes.episodio import ler_json, salvar_json
 from cortes.llm import ErroLLM
 from cortes.render.ilustracao import Deixa, deixas_do_corte
-from cortes.render.ilustracao_conferencia import ChamarComRead, conferir
+from cortes.render.ilustracao_conferencia import ChamarComRead, Escolha, conferir
 from cortes.render.ilustracao_imagens import (
     ERRO_BUSCA,
     BuscaImagens,
@@ -25,6 +25,7 @@ from cortes.render.ilustracao_imagens import (
     LinhaFolha,
     baixar_candidatas,
     buscar,
+    dividir_folhas,
     gerar_folha,
 )
 from cortes.render.processo import ErroRender, Rodar
@@ -32,7 +33,6 @@ from cortes.tipos import Palavra
 
 PASTA = "ilustracao"
 ARQUIVO = "ilustracao.json"
-FOLHA = "folha.jpg"
 N_CANDIDATAS = 4
 NENHUMA = "nenhuma coisa concreta ilustrável neste corte — use outro formato"
 BUSCA_FORA = "a busca de imagens falhou em todas as deixas — tente de novo mais tarde"
@@ -122,10 +122,7 @@ def _escolher(pasta: Path, deixas: list[Deixa], dep: DepIlustracao) -> list[Ilus
             continue
         baixadas_por_k[k] = baixadas
         linhas.append(LinhaFolha(k, deixa, tuple(p for _, p in baixadas)))
-    escolhas = {}
-    if linhas:
-        gerar_folha(linhas, pasta / FOLHA, dep.rodar)
-        escolhas = conferir(pasta / FOLHA, linhas, dep.chamar_com_read)
+    escolhas = _conferir(pasta, linhas, dep) if linhas else {}
     res = []
     for k, deixa in enumerate(deixas, start=1):
         if k in sem:
@@ -136,6 +133,15 @@ def _escolher(pasta: Path, deixas: list[Deixa], dep: DepIlustracao) -> list[Ilus
         fonte = (cand.origem or cand.url) if cand else None
         res.append(Ilustracao(k, deixa, img, fonte, e.motivo, falhas_por_k[k]))
     return res
+
+
+def _conferir(pasta: Path, linhas: list[LinhaFolha], dep: DepIlustracao) -> dict[int, Escolha]:
+    """Uma folha a cada DEIXAS_POR_FOLHA deixas (`folha-1.jpg`, ...), conferidas numa chamada só."""
+    folhas = []
+    for i, grupo in enumerate(dividir_folhas(linhas), start=1):
+        folhas.append(pasta / f"folha-{i}.jpg")
+        gerar_folha(grupo, folhas[-1], dep.rodar)
+    return conferir(folhas, linhas, dep.chamar_com_read)
 
 
 def _calcular(pasta: Path, ini: float, fim: float, palavras: list[Palavra],

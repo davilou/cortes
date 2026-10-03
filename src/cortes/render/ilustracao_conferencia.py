@@ -61,13 +61,16 @@ def chamar_com_read_real(prompt: str, schema: dict[str, Any], sistema: str, mode
     return llm.chamar(prompt, schema, sistema, modelo, ferramentas="Read", pasta=pasta)
 
 
-def prompt_conferencia(folha: Path, linhas: Sequence[LinhaFolha]) -> str:
+def prompt_conferencia(folhas: Sequence[Path], linhas: Sequence[LinhaFolha]) -> str:
     itens = "\n".join(
         f"- D{ln.k}: \"{ln.deixa.coisa}\" (busca: {ln.deixa.busca}) — candidatas "
         f"D{ln.k}-1 a D{ln.k}-{len(ln.imagens)}"
         for ln in linhas if ln.imagens)
-    return f"""Leia a imagem {folha} com a ferramenta Read. É uma folha com fotos numeradas: cada \
-linha é uma deixa e cada foto tem o rótulo D<deixa>-<número> no canto.
+    arquivos = "\n".join(f"- {f}" for f in folhas)
+    return f"""Leia com a ferramenta Read cada uma destas folhas de fotos, e só elas:
+{arquivos}
+
+Em cada folha, cada linha é uma deixa e cada foto tem o rótulo D<deixa>-<número> acima dela.
 
 Deixas:
 {itens}
@@ -88,13 +91,16 @@ def _validar(e: dict[str, Any], por_k: dict[int, LinhaFolha], vistas: dict[int, 
     return Escolha(k, img, e["motivo"].strip())
 
 
-def conferir(folha: Path, linhas: Sequence[LinhaFolha], chamar: ChamarComRead = chamar_com_read_real,
-             modelo: str = "sonnet") -> dict[int, Escolha]:
-    """Uma escolha por deixa da folha. Imagem ou deixa inexistente é resposta errada: ErroLLM.
-    Deixa que sumiu da resposta fica sem imagem, com o motivo dizendo isso."""
+def conferir(folhas: Sequence[Path], linhas: Sequence[LinhaFolha],
+             chamar: ChamarComRead = chamar_com_read_real, modelo: str = "sonnet") -> dict[int, Escolha]:
+    """Uma escolha por deixa das folhas, numa chamada só. Imagem ou deixa inexistente é resposta
+    errada: ErroLLM. Deixa que sumiu da resposta fica sem imagem, com o motivo dizendo isso."""
+    pastas = {f.parent for f in folhas}
+    if len(pastas) != 1:
+        raise ValueError(f"as folhas da conferência têm de estar na mesma pasta: {sorted(pastas)}")
     por_k = {ln.k: ln for ln in linhas if ln.imagens}
-    bruto = chamar(prompt_conferencia(folha, linhas), SCHEMA_CONFERENCIA, SISTEMA_CONFERENCIA,
-                   modelo, folha.parent)
+    bruto = chamar(prompt_conferencia(folhas, linhas), SCHEMA_CONFERENCIA, SISTEMA_CONFERENCIA,
+                   modelo, pastas.pop())
     vistas: dict[int, Escolha] = {}
     for e in bruto["escolhas"]:
         vistas[e["deixa"]] = _validar(e, por_k, vistas)

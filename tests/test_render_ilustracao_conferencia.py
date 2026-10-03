@@ -17,7 +17,8 @@ from cortes.render.ilustracao_conferencia import (
 )
 from cortes.render.ilustracao_imagens import LinhaFolha
 
-FOLHA = Path("C:/tmp/ilus/folha.jpg")
+FOLHA = Path("C:/tmp/ilus/folha-1.jpg")
+FOLHAS = [FOLHA]
 LINHAS = [LinhaFolha(1, Deixa(2.0, 3.5, "tênis", "tênis Vans Old Skool"), (Path("a"), Path("b"))),
           LinhaFolha(2, Deixa(6.0, 7.5, "camisa", "camisa do Corinthians"), (Path("c"),)),
           LinhaFolha(3, Deixa(9.0, 10.5, "bota", "bota de couro"), ())]
@@ -39,22 +40,37 @@ def _e(k: int, img: int | None, motivo: str = "ok") -> dict[str, Any]:
 
 
 def test_prompt_cita_a_folha_e_so_as_deixas_com_candidata() -> None:
-    p = prompt_conferencia(FOLHA, LINHAS)
+    p = prompt_conferencia(FOLHAS, LINHAS)
     assert str(FOLHA) in p
     assert "D1" in p and "tênis Vans Old Skool" in p and "D1-1 a D1-2" in p
     assert "D2-1" in p and "D3" not in p
 
 
+def test_prompt_lista_todas_as_folhas_numa_chamada_so() -> None:
+    folhas = [FOLHA, FOLHA.with_name("folha-2.jpg")]
+    chamar = _chamar_que_devolve([_e(1, 1), _e(2, 1)])
+    conferir(folhas, LINHAS, chamar)
+    assert len(chamar.chamadas) == 1
+    prompt = chamar.chamadas[0][0]
+    assert str(folhas[0]) in prompt and str(folhas[1]) in prompt
+    assert "rótulo D<deixa>-<número> acima" in prompt
+
+
+def test_folhas_em_pastas_diferentes_e_erro() -> None:
+    with pytest.raises(ValueError, match="mesma pasta"):
+        conferir([FOLHA, Path("C:/outra/folha-2.jpg")], LINHAS, _chamar_que_devolve([]))
+
+
 def test_conferir_devolve_a_escolha_de_cada_deixa_e_libera_a_pasta_da_folha() -> None:
     chamar = _chamar_que_devolve([_e(2, None, "é uma camisa do Palmeiras"), _e(1, 2)])
-    assert conferir(FOLHA, LINHAS, chamar) == {
+    assert conferir(FOLHAS, LINHAS, chamar) == {
         1: Escolha(1, 2, "ok"), 2: Escolha(2, None, "é uma camisa do Palmeiras")}
     _, schema, sistema, _, pasta = chamar.chamadas[0]
     assert schema is SCHEMA_CONFERENCIA and sistema == SISTEMA_CONFERENCIA and pasta == FOLHA.parent
 
 
 def test_deixa_ausente_da_resposta_fica_sem_imagem_com_o_motivo() -> None:
-    escolhas = conferir(FOLHA, LINHAS, _chamar_que_devolve([_e(1, 1)]))
+    escolhas = conferir(FOLHAS, LINHAS, _chamar_que_devolve([_e(1, 1)]))
     assert escolhas[2].imagem is None and "não respondeu" in escolhas[2].motivo
 
 
@@ -66,12 +82,12 @@ def test_deixa_ausente_da_resposta_fica_sem_imagem_com_o_motivo() -> None:
 ])
 def test_conferir_recusa_imagem_ou_deixa_inexistente(escolha: dict[str, Any], causa: str) -> None:
     with pytest.raises(ErroLLM, match=causa):
-        conferir(FOLHA, LINHAS, _chamar_que_devolve([escolha]))
+        conferir(FOLHAS, LINHAS, _chamar_que_devolve([escolha]))
 
 
 def test_conferir_recusa_deixa_repetida() -> None:
     with pytest.raises(ErroLLM, match="deixa 1.*duas vezes"):
-        conferir(FOLHA, LINHAS, _chamar_que_devolve([_e(1, 1), _e(1, 2)]))
+        conferir(FOLHAS, LINHAS, _chamar_que_devolve([_e(1, 1), _e(1, 2)]))
 
 
 def test_schema_recusa_motivo_so_com_espaco() -> None:
@@ -93,5 +109,5 @@ def test_chamada_real_usa_read_com_a_pasta_da_folha(monkeypatch: pytest.MonkeyPa
         return {"escolhas": [_e(1, 1)]}
 
     monkeypatch.setattr(llm, "chamar", chamar_falso)
-    conferir(FOLHA, LINHAS[:1], chamar_com_read_real)
+    conferir(FOLHAS, LINHAS[:1], chamar_com_read_real)
     assert vistos == [{"ferramentas": "Read", "pasta": FOLHA.parent}]

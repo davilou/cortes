@@ -25,6 +25,10 @@ TAM_MIN_PX = 400        # imagem menor que isso estoura no cartão de 860 px
 FOLGA_BUSCA = 3         # pede n × isso à busca: o filtro de tamanho e as repetidas descartam parte
 REGIAO = "br-pt"
 LADO_TILE = 320
+FAIXA_ROTULO = 48       # px acima de cada foto para o rótulo D<k>-<j>, sem cobrir a foto
+# o modelo reduz a folha para ~1568 px no lado maior: 6 linhas de 368 px (2208) ainda deixam a foto
+# com ~230 px; com 12 linhas ela caía para ~130 px e marca/modelo deixavam de ser legíveis
+DEIXAS_POR_FOLHA = 6
 FONTE = Path("C:/Windows/Fonts/arial.ttf")
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
               "Chrome/129.0 Safari/537.36")   # loja que recusa o agente do ffmpeg aceita o de navegador
@@ -149,16 +153,23 @@ def _fonte_ffmpeg() -> str:
 
 
 def _tile(i: int, rotulo: str) -> str:
-    lado = LADO_TILE
+    lado, faixa = LADO_TILE, FAIXA_ROTULO
     return (f"[{i}:v]scale={lado}:{lado}:force_original_aspect_ratio=decrease,"
             f"pad={lado}:{lado}:(ow-iw)/2:(oh-ih)/2:white,"
-            f"drawtext=fontfile='{_fonte_ffmpeg()}':text='{rotulo}':x=8:y=8:fontsize=34:"
-            f"fontcolor=white:box=1:boxcolor=black@0.75:boxborderw=6[t{i}]")
+            f"pad={lado}:{lado + faixa}:0:{faixa}:white,"
+            f"drawtext=fontfile='{_fonte_ffmpeg()}':text='{rotulo}':x=8:y=7:fontsize=34:"
+            f"fontcolor=black[t{i}]")
+
+
+def dividir_folhas(linhas: Sequence[LinhaFolha]) -> list[list[LinhaFolha]]:
+    """Puro. As deixas com candidata baixada, em grupos de até DEIXAS_POR_FOLHA (uma folha cada)."""
+    com = [ln for ln in linhas if ln.imagens]
+    return [com[i:i + DEIXAS_POR_FOLHA] for i in range(0, len(com), DEIXAS_POR_FOLHA)]
 
 
 def folha_args(linhas: Sequence[LinhaFolha], destino: Path) -> list[str]:
-    """Puro. Mosaico com uma linha por deixa e uma coluna por candidata, cada tile com `D<k>-<j>`.
-    Deixa sem candidata baixada não entra."""
+    """Puro. Mosaico com uma linha por deixa e uma coluna por candidata, cada foto com `D<k>-<j>`
+    numa faixa acima dela. Deixa sem candidata baixada não entra."""
     entradas: list[str] = []
     tiles: list[str] = []
     posicoes: list[str] = []
@@ -167,7 +178,7 @@ def folha_args(linhas: Sequence[LinhaFolha], destino: Path) -> list[str]:
             i = len(posicoes)
             entradas += ["-i", str(img)]
             tiles.append(_tile(i, f"D{linha.k}-{j + 1}"))
-            posicoes.append(f"{j * LADO_TILE}_{r * LADO_TILE}")
+            posicoes.append(f"{j * LADO_TILE}_{r * (LADO_TILE + FAIXA_ROTULO)}")
     if not posicoes:
         raise ErroRender("folha de conferência sem nenhuma imagem baixada")
     if len(posicoes) == 1:
