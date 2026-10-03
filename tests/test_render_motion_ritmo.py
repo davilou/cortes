@@ -98,3 +98,18 @@ def test_nao_apara_abaixo_do_minimo_nem_a_capa_nem_as_fixas() -> None:
     assert [b.componente for b in ficam] == ["capa"] and len(fora) == 1
     ficam, fora = ritmo([_b(7.0, 9.0)], 40, [_b(3.0, 8.0)])
     assert [(b.inicio, b.fim) for b in ficam] == [(3.0, 8.0)] and len(fora) == 1
+
+
+def test_nova_que_invade_uma_fixa_seguinte_e_encurtada() -> None:
+    # render real (Uber): a lista da 2ª chamada invadia o valor cheio aceito na 1ª e saía
+    lista = Bruta("lista", 11.49, 15.49, P, (12.0, 15.2))
+    valor = _b(15.23, 17.39, "valor_cheio")
+    ficam, fora = ritmo([lista], 27.0, [valor])
+    assert [(b.componente, b.inicio, b.fim) for b in ficam] == [
+        ("lista", 11.49, 15.23), ("valor_cheio", 15.23, 17.39)] and fora == []
+    assert ficam[0].batidas == (12.0, 14.83)
+
+
+def test_sobreposicao_nomeia_a_cena_que_ja_estava() -> None:
+    _, fora = ritmo([_b(14.5, 17.0)], 27.0, [_b(15.5, 18.0, "valor_cheio")])
+    assert fora[0].motivo.startswith("ritmo: sobrepõe a cena valor_cheio (15.50")

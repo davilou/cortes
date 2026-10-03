@@ -8,7 +8,8 @@ painel sem o rosto voltar, ou motion tapando quase todo o Short, estraga o corte
 - cenas não se sobrepõem; entre duas cenas "cheio" (cartão ou capa na tela inteira), pelo menos
   ROSTO_MIN_S de rosto. Cena "div" pode colar na vizinha: o rosto já está na janela de baixo, e o
   manual (testes/short-400mil-dinamica) cola chat → "PERDI DINHEIRO" e contador → valor cheio;
-- cena que invade a seguinte é aparada (acaba antes dela) se ainda dura DUR_MIN_S; senão a
+- cena que invade a vizinha acaba antes dela (a nova ou a anterior, nunca a capa nem as fixas) se
+  ainda dura DUR_MIN_S; senão a nova
   seguinte sai. O LLM costuma esticar o fim até a próxima cena;
 - motion somado ≤ FRACAO_MAX da duração do Short: passou, saem as últimas (nunca as `fixas`, as
   cenas já aceitas antes da segunda chamada ao LLM; render/motion.py).
@@ -60,30 +61,37 @@ def _vizinhos(b: Bruta, ficam: list[Bruta]) -> tuple[Bruta | None, Bruta | None]
     return (antes[-1] if antes else None), (depois[0] if depois else None)
 
 
-def _rosto_entre(a: Bruta, b: Bruta) -> str | None:
-    """Por que `b` não pode vir logo depois de `a` (None = pode)."""
+def _rosto_entre(a: Bruta, b: Bruta, outra: Bruta) -> str | None:
+    """Por que `b` não pode vir logo depois de `a` (None = pode); `outra` é a que já ficou."""
     vao = b.inicio - a.fim
     if vao < -_EPS:
-        return f"ritmo: sobrepõe a cena {a.componente} ({a.inicio:.2f}–{a.fim:.2f} s)"
+        return f"ritmo: sobrepõe a cena {outra.componente} ({outra.inicio:.2f}–{outra.fim:.2f} s)"
     if ESTADO[a.componente] == ESTADO[b.componente] == "cheio" and vao < ROSTO_MIN_S - _EPS:
         return (f"ritmo: menos de {ROSTO_MIN_S:.1f} s de rosto entre {a.componente} "
                 f"({a.inicio:.2f}–{a.fim:.2f} s) e {b.componente} ({b.inicio:.2f}–{b.fim:.2f} s)")
     return None
 
 
-def _aparar(b: Bruta, ficam: list[Bruta], fixas: list[Bruta]) -> list[Bruta] | None:
-    """A cena anterior acabando antes de `b` (com o rosto entre dois cheios), se ainda dura o
-    mínimo; None se não dá. O LLM costuma esticar o fim_palavra até a próxima cena. A capa e as
-    `fixas` não mudam."""
-    antes, _ = _vizinhos(b, ficam)
-    if antes is None or antes.componente == "capa" or antes in fixas:
+def _ate(c: Bruta, seguinte: Bruta) -> Bruta | None:
+    """`c` acabando antes de `seguinte` (com o rosto entre dois cheios), se ainda dura o mínimo e
+    precisa mudar; None se não. O LLM costuma esticar o fim_palavra até a próxima cena."""
+    gap = ROSTO_MIN_S if ESTADO[c.componente] == ESTADO[seguinte.componente] == "cheio" else 0.0
+    fim = round(seguinte.inicio - gap, 2)
+    if c.componente == "capa" or fim >= c.fim or fim - c.inicio < DUR_MIN_S - _EPS:
         return None
-    gap = ROSTO_MIN_S if ESTADO[antes.componente] == ESTADO[b.componente] == "cheio" else 0.0
-    fim = round(b.inicio - gap, 2)
-    if fim >= antes.fim or fim - antes.inicio < DUR_MIN_S - _EPS:
+    return replace(c, fim=fim, batidas=tuple(min(t, round(fim - FOLGA_FIM_S, 2)) for t in c.batidas))
+
+
+def _aparar(b: Bruta, ficam: list[Bruta], fixas: list[Bruta]) -> tuple[Bruta, list[Bruta]] | None:
+    """`b` e as que ficaram, com `b` acabando antes da seguinte e a anterior antes de `b` (as
+    `fixas` e a capa não mudam); None se nada mudou."""
+    antes, depois = _vizinhos(b, ficam)
+    nova = _ate(b, depois) if depois is not None else None
+    b2 = nova or b
+    velha = _ate(antes, b2) if antes is not None and antes not in fixas else None
+    if nova is None and velha is None:
         return None
-    batidas = tuple(min(t, round(fim - FOLGA_FIM_S, 2)) for t in antes.batidas)
-    return [replace(antes, fim=fim, batidas=batidas) if f is antes else f for f in ficam]
+    return b2, [velha if velha is not None and f is antes else f for f in ficam]
 
 
 def _motivo(b: Bruta, ficam: list[Bruta]) -> str | None:
@@ -95,9 +103,9 @@ def _motivo(b: Bruta, ficam: list[Bruta]) -> str | None:
     if b.fim - b.inicio < DUR_MIN_S - _EPS and b.componente != "capa":
         return f"ritmo: só {b.fim - b.inicio:.1f} s até o fim da fala (mínimo {DUR_MIN_S:.1f} s)"
     antes, depois = _vizinhos(b, ficam)
-    if antes is not None and (m := _rosto_entre(antes, b)):
+    if antes is not None and (m := _rosto_entre(antes, b, antes)):
         return m
-    return _rosto_entre(b, depois) if depois is not None else None
+    return _rosto_entre(b, depois, depois) if depois is not None else None
 
 
 def ritmo(cenas: list[Bruta], dur: float,
@@ -108,7 +116,9 @@ def ritmo(cenas: list[Bruta], dur: float,
     for b in sorted(cenas, key=lambda b: (b.inicio, b.componente != "capa")):
         motivo = _motivo(b, ficam)
         if motivo is not None and (aparadas := _aparar(b, ficam, fixas or [])) is not None:
-            ficam, motivo = aparadas, _motivo(b, aparadas)
+            b2, ficam2 = aparadas
+            if _motivo(b2, ficam2) is None:
+                b, ficam, motivo = b2, ficam2, None
         if motivo is None:
             ficam = sorted([*ficam, b], key=lambda x: x.inicio)
         else:
