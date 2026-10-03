@@ -6,6 +6,7 @@ A transcrição é local, com faster-whisper (`transcricao_local`); o `cortes de
 terminal segue com o openai-whisper. A etapa mantém o nome "legenda" porque é a chave dela nos
 `estado.json` já gravados.
 """
+import threading
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -30,6 +31,7 @@ class Dependencias:
     chamar_llm: ChamarLLM = chamar_llm_real
     modelo: str = "sonnet"
     render: DepRender | None = None   # o servidor monta com a configuração verificada na subida
+    escrita: threading.Lock | None = None   # a trava das rotas do servidor (render × Cancelar)
 
 
 def _video(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> None:
@@ -72,7 +74,9 @@ def _momentos(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> 
 def _render(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: Dependencias) -> None:
     if dep.render is None:
         raise ErroProducao("render sem configuração: o servidor não montou Dependencias.render")
-    rodar_render(pasta, e, raiz, dep.render)
+    if dep.escrita is None:
+        raise ErroProducao("render sem a trava das rotas: o servidor não montou Dependencias.escrita")
+    rodar_render(pasta, e, raiz, dep.render, dep.escrita)
 
 
 _ETAPAS = {"video": _video, "legenda": _legenda, "sinais": _sinais, "momentos": _momentos, "render": _render}

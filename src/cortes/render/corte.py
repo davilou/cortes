@@ -77,6 +77,8 @@ def cancelar(c: Corte) -> Corte | None:
     'pronto' no formato dela, que "Renderizar de novo" pode ter trocado); sem versão e sem edição,
     devolve None e quem chama apaga a pasta do corte; sem versão mas com edição, fica em erro para as
     edições não se perderem."""
+    if c.status == "renderizando":
+        raise ErroProducao(f"o Short {c.indice} já começou a renderizar; não dá mais para cancelar")
     if c.status != "na_fila":
         raise ErroProducao("só dá para cancelar um Short que está na fila e ainda não começou")
     if c.versao > 0:
@@ -204,7 +206,18 @@ def _indice_da_pasta(arq: Path) -> int:
         raise ErroProducao(f"{arq.parent}: nome de pasta não é um índice numérico ({ex})") from ex
 
 
+def _ler_se_existe(d: Path) -> Corte | None:
+    """corte.json apagado entre o glob e a leitura (um Cancelar) é corte que não existe mais, não
+    corte inválido; qualquer outro problema de leitura continua sendo erro."""
+    try:
+        return ler_corte(d)
+    except ErroProducao as ex:
+        if isinstance(ex.__cause__, FileNotFoundError):
+            return None
+        raise
+
+
 def cortes_do_episodio(pasta_ep: Path) -> list[Corte]:
     arqs = sorted((pasta_ep / "cortes").glob(f"*/{ARQUIVO}"), key=_indice_da_pasta)
-    return [ler_corte(a.parent) for a in arqs]
+    return [c for a in arqs if (c := _ler_se_existe(a.parent)) is not None]
 

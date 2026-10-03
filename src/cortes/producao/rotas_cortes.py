@@ -70,8 +70,8 @@ def pedir_render(pasta: Path, indice: int, formato: str | None, preparando: bool
 
 
 def cancelar_render(pasta: Path, indice: int) -> None:
-    """Corrida conhecida: a fila pode pegar o corte entre a leitura daqui e a gravação (ela não usa a
-    trava `escrita`). Nesse caso o render segue e a gravação dela, no fim, vence: o Short renderiza."""
+    """Chamar sob a trava `escrita`: a fila pega o próximo corte sob a mesma trava, então daqui ou
+    se vê o corte na fila (e ela não o pega mais) ou já `renderizando` (e o cancelar é recusado)."""
     d = pasta_corte(pasta, indice)
     if not (d / ARQUIVO).exists():
         raise ErroProducao(f"corte {indice} não existe")

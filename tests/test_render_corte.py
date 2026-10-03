@@ -138,7 +138,12 @@ def test_cancelar_sem_versao_com_edicao_fica_em_erro(muda: dict[str, object]) ->
     assert c.edicoes == na_fila.edicoes and c.versao == 0
 
 
-@pytest.mark.parametrize("status", ["renderizando", "pronto", "erro"])
+def test_cancelar_recusa_quem_ja_comecou() -> None:
+    with pytest.raises(ErroProducao, match="já começou"):
+        cancelar(iniciar(novo_corte(0, CANDS[0], "f7")))
+
+
+@pytest.mark.parametrize("status", ["pronto", "erro"])
 def test_cancelar_so_quem_esta_na_fila(status: str) -> None:
     c = iniciar(novo_corte(0, CANDS[0], "f7"))
     c = concluir(c) if status == "pronto" else falhar(c, "x") if status == "erro" else c
@@ -223,3 +228,19 @@ def test_formato_pronto_incoerente_e_erro(tmp_path: Path, versao: int, status: s
     (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
     with pytest.raises(ErroProducao, match="formato_pronto"):
         ler_corte(d)
+
+
+def test_cortes_do_episodio_ignora_corte_apagado_depois_do_glob(tmp_path: Path,
+                                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    import cortes.render.corte as modulo
+    for i in (0, 2):
+        gravar_corte(pasta_corte(tmp_path, i), novo_corte(i, CANDS[i], "f7"))
+    real = modulo.ler_corte
+
+    def ler_depois_de_cancelar(d: Path) -> Corte:
+        if d.name == "0":
+            (d / "corte.json").unlink()   # o cancelar apagou entre o glob e a leitura
+        return real(d)
+
+    monkeypatch.setattr(modulo, "ler_corte", ler_depois_de_cancelar)
+    assert [c.indice for c in cortes_do_episodio(tmp_path)] == [2]

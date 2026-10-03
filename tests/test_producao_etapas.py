@@ -8,6 +8,7 @@ import pytest
 
 from cortes.producao.estado import ErroProducao, novo
 from cortes.producao.etapas import Dependencias, rodar_etapa
+from cortes.render.pipeline import DepRender
 from cortes.tipos import Palavra
 
 AGORA = datetime(2026, 10, 2, 9)
@@ -178,3 +179,10 @@ def test_transcricao_que_falha_nao_grava_palavras(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="sem memória"):
         rodar_etapa("legenda", pasta, e, tmp_path, dep)
     assert not (pasta / "palavras.json").exists()
+
+
+def test_etapa_render_sem_a_trava_das_rotas_e_erro(tmp_path: Path) -> None:
+    e = novo("abcdefghijk", "https://youtu.be/abcdefghijk", "financas", "f7", AGORA)
+    dep = Dependencias(render=DepRender(Path("py"), Path("m.onnx"), "npx"))
+    with pytest.raises(ErroProducao, match="trava das rotas"):
+        rodar_etapa("render", tmp_path, e, tmp_path, dep)

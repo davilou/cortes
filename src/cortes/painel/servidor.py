@@ -97,7 +97,10 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     coleta.verificar_skill(cfg.skill_dir)
     npx = verificar_render(cfg)
     dep = DepRender(cfg.py_visao, cfg.modelo_rosto, npx, rodar=rodar)
-    fila = fila if fila is not None else _fila_real(cfg, agora, dep)
+    # ler-validar-gravar de contas.yaml, publicados.jsonl, curadoria e corte.json; a fila do render
+    # também a usa para pegar o próximo corte (producao/render.py)
+    escrita = threading.Lock()
+    fila = fila if fila is not None else _fila_real(cfg, agora, dep, escrita)
     previas = previas if previas is not None else Previas(
         cfg.raiz, lambda pasta, c: montar_projeto(pasta, c, cfg.raiz, dep))
 
@@ -115,7 +118,6 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     estado = EstadoColeta()
     app.state.coleta = estado
     app.state.fila = fila
-    escrita = threading.Lock()   # ler-validar-gravar de contas.yaml, publicados.jsonl e curadoria
 
     _handlers(app)
     _rotas_leitura(app, cfg, estado)
@@ -164,8 +166,9 @@ def verificar_render(cfg: Config) -> str:
     return npx
 
 
-def _fila_real(cfg: Config, agora: Callable[[], datetime], dep_render: DepRender) -> Fila:
-    dep = Dependencias(render=dep_render)
+def _fila_real(cfg: Config, agora: Callable[[], datetime], dep_render: DepRender,
+               escrita: threading.Lock) -> Fila:
+    dep = Dependencias(render=dep_render, escrita=escrita)
     return Fila(cfg.raiz, lambda nome, pasta, e: rodar_etapa(nome, pasta, e, cfg.raiz, dep), agora,
                antes=lambda pasta: reabrir_render(pasta, agora()))
 

@@ -122,7 +122,7 @@ def test_cancelar_recusa_corte_renderizando_ou_inexistente(cfg: Config) -> None:
     gravar_corte(pasta_corte(pasta, 0), iniciar(novo_corte(0, CAND, "f7")))
     c, _ = montar(cfg)
     r = c.post(f"{EP}/cortes/0/cancelar")
-    assert r.status_code == 422 and "só dá para cancelar" in r.json()["detail"]
+    assert r.status_code == 422 and "já começou" in r.json()["detail"]
     assert ler_corte(pasta_corte(pasta, 0)).status == "renderizando"
     r = c.post(f"{EP}/cortes/3/cancelar")
     assert r.status_code == 422 and "não existe" in r.json()["detail"]
