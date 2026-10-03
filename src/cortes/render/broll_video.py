@@ -1,5 +1,5 @@
-"""f4 B-roll, passo 2 — vídeo do YouTube: busca, trecho de 3 s em tela cheia e os quadros da folha
-(plano 2026-10-03-broll-automatico, Task 2). Protótipo: `testes/comum/buscar_broll.py`.
+"""f4 B-roll, passo 2 — vídeo do YouTube: busca, vídeo inteiro baixado e cortado em 3 s de tela cheia
+e os quadros da folha (plano 2026-10-03-broll-automatico, Task 2). Protótipo: `testes/comum/buscar_broll.py`.
 
 Tudo passa pelo executor injetável (`processo.Rodar`), com prazo próprio: nada de rede no check. O
 YouTube já bloqueou este IP uma vez (spec §8): 429 ou "confirme que não é um robô" vira `ErroBusca`,
@@ -19,23 +19,20 @@ from cortes.render.processo import CAUDA, ErroRender, Rodar, exigir, rodar_com_p
 from cortes.render.recorte import gerar_por_parcial
 
 YT = [sys.executable, "-m", "yt_dlp", "--ignore-config", "--no-warnings"]
-N_RESULTADOS = 8            # resultados pedidos à busca; o filtro de duração descarta parte
-DUR_MIN_VIDEO_S = 20.0      # menos que isso é Short ou vinheta
-DUR_MAX_VIDEO_S = 20 * 60.0  # mais que isso é live, aula ou compilação
-MAX_CANDIDATOS = 2          # por deixa: cada candidato custa ~45 s de download (medido em 2026-10-03)
+N_RESULTADOS = 15           # resultados pedidos à busca (uma página só); o filtro de duração descarta parte
+DUR_MIN_VIDEO_S = 15.0      # menos que isso é Short ou vinheta
+DUR_MAX_VIDEO_S = 3 * 60.0  # o vídeo é baixado inteiro: acima disso o download passa do prazo
+MAX_CANDIDATOS = 2          # por deixa
 TRECHO_S = 3.0
-# O yt-dlp baixa uma seção maior, sem `--force-keyframes-at-cuts`: a seção começa no keyframe antes
-# do início pedido, e o ffmpeg de `args_cheio` (que recodifica de qualquer jeito) corta os TRECHO_S.
-# Medido em 2026-10-03: ~43 s no yt-dlp com ou sem a recodificação e com 1080p ou 720p — o tempo é da
-# leitura HTTP da seção, não do tamanho; o 720p sai visivelmente mais mole no 1080×1920, então fica 1080p.
-# URL direta (`yt-dlp -g`) + `ffmpeg -ss <ini> -i <url>` não acelera: é o mesmo caminho que o yt-dlp usa
-# na seção, e com ou sem os cabeçalhos dele passou de 90 s sem gravar nada (2026-10-03). Suspeita: sem runtime
-# JS o yt-dlp não resolve o desafio "n" e a URL vem estrangulada (spec §11, tempo do trecho).
-SECAO_S = 5.0
+# O vídeo inteiro pelo downloader nativo do yt-dlp, só vídeo, e o ffmpeg corta os TRECHO_S local. Medido
+# em 2026-10-03: `--download-sections` (o ffmpeg lendo a seção por HTTP) levava ~45 s por 5 s de vídeo e
+# estourava o prazo em metade dos casos; o vídeo inteiro de 71 s/1080p/38 MB veio em 9 s (spec §11).
+# O 720p sai visivelmente mais mole no 1080×1920, então fica 1080p.
 POSICAO_TRECHO = 0.25       # o trecho começa a 25% do vídeo: passa da vinheta e da apresentação
 FORMATO = "bv*[height<=1080][ext=mp4]/bv*[height<=1080]"   # só vídeo, sem áudio, até 1080p
+MAX_TAMANHO = "120M"        # 3 min de 1080p só-vídeo ficam bem abaixo; acima é bitrate de 4K disfarçado
 PRAZO_BUSCA_S = 30
-PRAZO_TRECHO_S = 90         # ~45 s medidos (yt-dlp + ffmpeg); 60 s deixava folga de 25%
+PRAZO_VIDEO_S = 45          # download (~9 s medidos para 38 MB) e, à parte, o ffmpeg dos 3 s
 LARGURA, ALTURA = 1080, 1920
 QUADROS_S = (0.1, TRECHO_S / 2, TRECHO_S - 0.2)   # início, meio e fim do trecho, para a folha
 ALTURA_QUADRO = 640
@@ -43,8 +40,17 @@ ID_VIDEO = re.compile(r"^[A-Za-z0-9_-]{11}$")
 CAMPOS_BUSCA = "%(id)s|%(duration)s|%(channel)s|%(title)s"
 LICENCA = "desconhecida (YouTube)"
 RISCO = "alto"
-# Saídas do yt-dlp quando o YouTube limita ou bloqueia o IP (o 429 do bloqueio de 2026-09, spec §8)
-SINAIS_BLOQUEIO = ("HTTP Error 429", "Too Many Requests", "not a bot", "rate-limited", "rate limited")
+# Saídas do yt-dlp quando o YouTube limita ou bloqueia o IP (o 429 do bloqueio de 2026-09, spec §8). No
+# download o downloader nativo diz "unable to download video data: HTTP Error 403: Forbidden" (ou 429):
+# o 403 da googlevideo vale para a sessão inteira (URL estrangulada ou sem PO Token), não para um vídeo.
+SINAIS_BLOQUEIO = ("HTTP Error 429", "Too Many Requests", "not a bot", "rate-limited", "rate limited",
+                   "HTTP Error 403")
+# Saídas de rede do yt-dlp: a busca que falha assim é transitória. Outra falha (módulo ausente, extractor
+# quebrado) é o yt-dlp quebrado, e derruba o corte com a mensagem dele.
+SINAIS_REDE = ("Unable to download", "urlopen error", "getaddrinfo failed", "Failed to resolve",
+               "timed out", "Connection reset", "Connection refused", "Connection aborted",
+               "Network is unreachable", "Temporary failure", "Remote end closed", "HTTP Error 5")
+MAIOR_QUE_O_TETO = "larger than max-filesize"
 # cover: preenche o 9:16 cortando o centro do 16:9 (o #box-cheio do protótipo)
 _VF_CHEIO = (f"scale={LARGURA}:{ALTURA}:force_original_aspect_ratio=increase,"
              f"crop={LARGURA}:{ALTURA},setsar=1")
@@ -52,7 +58,7 @@ _SAIDA = ["-an", "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt",
           "-movflags", "+faststart"]
 
 rodar_busca_real: Rodar = rodar_com_prazo(PRAZO_BUSCA_S)
-rodar_trecho_real: Rodar = rodar_com_prazo(PRAZO_TRECHO_S)
+rodar_trecho_real: Rodar = rodar_com_prazo(PRAZO_VIDEO_S)
 
 
 @dataclass(frozen=True)
@@ -105,7 +111,7 @@ def _candidato(linha: str) -> VideoCandidato | None:
 
 
 def ler_busca(saida: str, n: int) -> list[VideoCandidato]:
-    """Puro. Até `n` candidatos de 20 s a 20 min, sem id repetido, na ordem da busca."""
+    """Puro. Até `n` candidatos de 15 s a 3 min, sem id repetido, na ordem da busca."""
     cands: list[VideoCandidato] = []
     for linha in saida.splitlines():
         c = _candidato(linha.strip())
@@ -122,9 +128,15 @@ def _falha_yt(codigo: int, saida: str, passo: str) -> ErroRender:
     return ErroRender(f"{passo} falhou (código {codigo}): {saida[-CAUDA:]}")
 
 
+def falha_de_rede(saida: str) -> bool:
+    """Puro. A saída do yt-dlp que falhou é de rede (sem conexão, DNS, tempo, servidor 5xx)."""
+    return any(s.lower() in saida.lower() for s in SINAIS_REDE)
+
+
 def buscar_videos(busca: str, n: int = MAX_CANDIDATOS,
                   rodar: Rodar = rodar_busca_real) -> list[VideoCandidato]:
-    """Nada achado é lista vazia; busca que falha (prazo, rede, bloqueio) é ErroBusca."""
+    """Nada achado é lista vazia. Prazo, bloqueio e rede são ErroBusca (transitório); outra falha
+    (módulo ausente, extractor quebrado) é o yt-dlp quebrado: ErroRender, que derruba o corte."""
     passo = f"busca de vídeo '{busca}'"
     try:
         codigo, saida = rodar(args_busca(busca), None)
@@ -132,51 +144,78 @@ def buscar_videos(busca: str, n: int = MAX_CANDIDATOS,
         raise ErroBusca(f"{passo}: {e}") from e
     if codigo != 0:
         erro = _falha_yt(codigo, saida, passo)
-        raise erro if isinstance(erro, ErroBusca) else ErroBusca(str(erro))
+        if isinstance(erro, ErroBusca) or not falha_de_rede(saida):
+            raise erro
+        raise ErroBusca(str(erro))
     return ler_busca(saida, n)
 
 
-def inicio_trecho(c: VideoCandidato) -> int:
-    return int(c.dur * POSICAO_TRECHO)
+def inicio_trecho(c: VideoCandidato) -> float:
+    return c.dur * POSICAO_TRECHO
 
 
-def args_trecho(c: VideoCandidato, molde: Path) -> list[str]:
-    """yt-dlp baixa só a seção (SECAO_S), só vídeo, sem recodificar. `molde` leva `%(ext)s`: o
-    contêiner vem do formato."""
-    ini = inicio_trecho(c)
-    return [*YT, "--no-playlist", "--no-progress", "-f", FORMATO, "--download-sections",
-            f"*{ini}-{ini + SECAO_S:.0f}", "-o", str(molde),
-            "--", f"https://www.youtube.com/watch?v={validar_id(c.id)}"]
+def args_video(c: VideoCandidato, molde: Path) -> list[str]:
+    """yt-dlp baixa o vídeo inteiro pelo downloader nativo, só vídeo, até MAX_TAMANHO. `molde` leva
+    `%(ext)s`: o contêiner vem do formato."""
+    return [*YT, "--no-playlist", "--no-progress", "-f", FORMATO, "--max-filesize", MAX_TAMANHO,
+            "-o", str(molde), "--", f"https://www.youtube.com/watch?v={validar_id(c.id)}"]
 
 
-def args_cheio(bruto: Path, destino: Path) -> list[str]:
-    return ["ffmpeg", "-v", "error", "-y", "-i", str(bruto), "-t", f"{TRECHO_S:.3f}", "-vf", _VF_CHEIO,
-            *_SAIDA, str(destino)]
+def args_cheio(bruto: Path, destino: Path, c: VideoCandidato) -> list[str]:
+    """Puro. Os TRECHO_S a partir de POSICAO_TRECHO do vídeo, em cover 1080×1920, sem áudio."""
+    return ["ffmpeg", "-v", "error", "-y", "-ss", f"{inicio_trecho(c):.3f}", "-i", str(bruto),
+            "-t", f"{TRECHO_S:.3f}", "-vf", _VF_CHEIO, *_SAIDA, str(destino)]
 
 
 def _bruto(pasta: Path, stem: str) -> Path:
     achados = [p for p in pasta.glob(f"{stem}.*") if not p.name.endswith(".part")]
     if len(achados) != 1:
-        raise ErroRender(f"yt-dlp não deixou um trecho só em {pasta} ({[p.name for p in achados]})")
+        raise ErroRender(f"yt-dlp não deixou um vídeo só em {pasta} ({[p.name for p in achados]})")
     return achados[0]
+
+
+def _apagar_brutos(pasta: Path, stem: str) -> list[str]:
+    """Apaga o vídeo baixado (e o `.part`); devolve os que o sistema não deixou apagar."""
+    presos = []
+    for resto in pasta.glob(f"{stem}.*"):
+        try:
+            resto.unlink(missing_ok=True)
+        except OSError as e:   # Windows: antivírus ou indexador com o arquivo aberto
+            presos.append(f"{resto} ({e})")
+    return presos
+
+
+def _exigir_apagados(pasta: Path, stem: str) -> None:
+    presos = _apagar_brutos(pasta, stem)
+    if presos:
+        raise ErroRender(f"não consegui apagar o vídeo baixado: {'; '.join(presos)}")
+
+
+def _baixar_e_cortar(c: VideoCandidato, destino: Path, stem: str, rodar: Rodar) -> None:
+    codigo, saida = rodar(args_video(c, destino.parent / f"{stem}.%(ext)s"), None)
+    if MAIOR_QUE_O_TETO in saida:
+        raise ErroRender(f"vídeo de {c.url} passa de {MAX_TAMANHO}: {saida[-CAUDA:]}")
+    if codigo != 0:
+        raise _falha_yt(codigo, saida, f"vídeo de {c.url}")
+    bruto = _bruto(destino.parent, stem)
+    gerar_por_parcial(destino, lambda p: args_cheio(bruto, p, c), rodar, f"tela cheia de {c.url}")
 
 
 def baixar_trecho(c: VideoCandidato, destino: Path, rodar: Rodar = rodar_trecho_real) -> None:
     """`destino` (.mp4): o trecho de TRECHO_S em 1080×1920, cover com corte central, sem áudio. O
-    bruto do yt-dlp é apagado no fim, com ou sem erro; o MP4 só aparece inteiro (`.parcial`)."""
+    vídeo baixado é apagado no fim, com ou sem erro; o MP4 só aparece inteiro (`.parcial`). Vídeo
+    que não se deixa apagar não esconde o erro original (vira nota nele)."""
     destino.parent.mkdir(parents=True, exist_ok=True)
     stem = f"{destino.stem}.bruto"
-    for velho in destino.parent.glob(f"{stem}.*"):
-        velho.unlink()
+    _exigir_apagados(destino.parent, stem)
     try:
-        codigo, saida = rodar(args_trecho(c, destino.parent / f"{stem}.%(ext)s"), None)
-        if codigo != 0:
-            raise _falha_yt(codigo, saida, f"trecho de {c.url}")
-        bruto = _bruto(destino.parent, stem)
-        gerar_por_parcial(destino, lambda p: args_cheio(bruto, p), rodar, f"tela cheia de {c.url}")
-    finally:
-        for resto in destino.parent.glob(f"{stem}.*"):
-            resto.unlink()
+        _baixar_e_cortar(c, destino, stem, rodar)
+    except BaseException as e:
+        presos = _apagar_brutos(destino.parent, stem)
+        if presos:
+            e.add_note(f"vídeo baixado não apagado: {'; '.join(presos)}")
+        raise
+    _exigir_apagados(destino.parent, stem)
 
 
 def quadros_args(trecho: Path, destinos: tuple[Path, Path, Path]) -> list[str]:

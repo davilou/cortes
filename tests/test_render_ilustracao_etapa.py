@@ -268,3 +268,15 @@ def test_corte_antigo_em_f9_da_erro_claro_sem_converter(tmp_path: Path) -> None:
     with pytest.raises(ErroRender, match=F9_SAIU):
         renderizar_corte(pasta, replace(C4, formato="f9"), tmp_path, il.dep(f))
     assert il.llm == 0 and f.chamadas == []
+
+
+def test_ytdlp_quebrado_na_busca_derruba_o_corte_com_a_mensagem(tmp_path: Path) -> None:
+    pasta, f = ep4(tmp_path), Falso()
+    il = Ilustra([VANS], [_e(1, "F1")])
+
+    def quebrado(args: list[str], cwd: Path | None) -> tuple[int, str]:
+        return 1, "No module named yt_dlp"
+
+    with pytest.raises(ErroRender, match="No module named yt_dlp") as ex:
+        montar_projeto(pasta, C4, tmp_path, replace(il.dep(f), rodar_busca_video=quebrado))
+    assert TEMPORARIA not in str(ex.value) and il.conferencias == 0

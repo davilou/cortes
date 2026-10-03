@@ -6,11 +6,12 @@ import pytest
 from cortes.render.broll_video import (
     CAMPOS_BUSCA,
     DUR_MAX_VIDEO_S,
+    DUR_MIN_VIDEO_S,
     VideoCandidato,
     args_busca,
     args_cheio,
     args_foto_cheia,
-    args_trecho,
+    args_video,
     baixar_trecho,
     buscar_videos,
     extrair_quadros,
@@ -55,18 +56,19 @@ def _linha(vid: str, dur: str, titulo: str = "t") -> str:
     return f"{vid}|{dur}|Canal {vid}|{titulo}"
 
 
-def test_args_da_busca_pedem_8_resultados_sem_baixar() -> None:
+def test_args_da_busca_pedem_15_resultados_sem_baixar() -> None:
     args = args_busca("tênis Vans Old Skool")
-    assert args[-1] == "ytsearch8:tênis Vans Old Skool" and "--flat-playlist" in args
+    assert args[-1] == "ytsearch15:tênis Vans Old Skool" and "--flat-playlist" in args
     assert args[args.index("--print") + 1] == CAMPOS_BUSCA and "--ignore-config" in args
 
 
-def test_busca_filtra_20s_a_20min_ignora_aviso_e_sem_duracao() -> None:
-    saida = "\n".join(["WARNING: algo", _linha("aaaaaaaaaaa", "19.0"), _linha("bbbbbbbbbbb", "20"),
-                       _linha("ccccccccccc", "NA"), _linha("ddddddddddd", str(DUR_MAX_VIDEO_S + 1)),
-                       _linha("eeeeeeeeeee", "1200", "título | com barra"), _linha("bbbbbbbbbbb", "20")])
-    assert ler_busca(saida, 3) == [VideoCandidato("bbbbbbbbbbb", 20.0, "Canal bbbbbbbbbbb", "t"),
-                                   VideoCandidato("eeeeeeeeeee", 1200.0, "Canal eeeeeeeeeee",
+def test_busca_filtra_15s_a_3min_ignora_aviso_e_sem_duracao() -> None:
+    assert (DUR_MIN_VIDEO_S, DUR_MAX_VIDEO_S) == (15.0, 180.0)
+    saida = "\n".join(["WARNING: algo", _linha("aaaaaaaaaaa", "14.0"), _linha("bbbbbbbbbbb", "15"),
+                       _linha("ccccccccccc", "NA"), _linha("ddddddddddd", "181"),
+                       _linha("eeeeeeeeeee", "180", "título | com barra"), _linha("bbbbbbbbbbb", "15")])
+    assert ler_busca(saida, 3) == [VideoCandidato("bbbbbbbbbbb", 15.0, "Canal bbbbbbbbbbb", "t"),
+                                   VideoCandidato("eeeeeeeeeee", 180.0, "Canal eeeeeeeeeee",
                                                   "título | com barra")]
 
 
@@ -89,9 +91,12 @@ def test_busca_bloqueada_e_errobusca(saida: str) -> None:
         buscar_videos("Vans", 3, Rodar((1, saida), cria=False))
 
 
-def test_busca_que_falha_por_rede_ou_prazo_e_errobusca() -> None:
+@pytest.mark.parametrize("saida", ["ERROR: Unable to download API page: <urlopen error [Errno 11001] "
+                                   "getaddrinfo failed>", "ERROR: Unable to download webpage: The read "
+                                   "operation timed out"])
+def test_busca_que_falha_por_rede_ou_prazo_e_errobusca(saida: str) -> None:
     with pytest.raises(ErroBusca, match="código 1.*Unable to download"):
-        buscar_videos("Vans", 3, Rodar((1, "ERROR: Unable to download API page"), cria=False))
+        buscar_videos("Vans", 3, Rodar((1, saida), cria=False))
 
     def estoura(args: list[str], cwd: Path | None) -> tuple[int, str]:
         raise ErroRender("python passou de 30 s e foi interrompido")
@@ -100,17 +105,26 @@ def test_busca_que_falha_por_rede_ou_prazo_e_errobusca() -> None:
         buscar_videos("Vans", 3, estoura)
 
 
+@pytest.mark.parametrize("saida", ["No module named yt_dlp",
+                                   "ERROR: [youtube:search] x: KeyError('contents') ... report this issue"])
+def test_ytdlp_quebrado_na_busca_e_errorender_nao_temporario(saida: str) -> None:
+    with pytest.raises(ErroRender, match="código 1") as ex:
+        buscar_videos("Vans", 3, Rodar((1, saida), cria=False))
+    assert not isinstance(ex.value, ErroBusca) and saida[:20] in str(ex.value)
+
+
 def test_titulo_com_not_a_bot_numa_busca_que_deu_certo_nao_e_bloqueio() -> None:
     rodar = Rodar((0, _linha("ggggggggggg", "90", "I'm not a bot")), cria=False)
     assert len(buscar_videos("x", 3, rodar)) == 1
 
 
-def test_args_da_secao_de_5s_a_partir_de_25_por_cento_so_video_ate_1080p_sem_recodificar() -> None:
-    args = args_trecho(VANS, Path("p/D1-v1.bruto.%(ext)s"))
-    assert args[args.index("--download-sections") + 1] == "*25-30"
+def test_args_baixam_o_video_inteiro_so_video_ate_1080p_com_teto_de_tamanho() -> None:
+    args = args_video(VANS, Path("p/D1-v1.bruto.%(ext)s"))
+    assert "--download-sections" not in args and "--downloader" not in args
     assert args[args.index("-f") + 1] == "bv*[height<=1080][ext=mp4]/bv*[height<=1080]"
+    assert args[args.index("--max-filesize") + 1] == "120M"
+    assert args[args.index("-o") + 1] == str(Path("p/D1-v1.bruto.%(ext)s"))
     assert args[-2:] == ["--", "https://www.youtube.com/watch?v=abcDEF_12-x"]
-    assert "--force-keyframes-at-cuts" not in args   # o ffmpeg de args_cheio já corta os 3 s
 
 
 def test_dois_candidatos_por_deixa_por_padrao() -> None:
@@ -121,14 +135,15 @@ def test_dois_candidatos_por_deixa_por_padrao() -> None:
 @pytest.mark.parametrize("vid", ["curto", "abcDEF_12-x&list=1", "../../etc/pw", "-abcdefghij "])
 def test_id_invalido_e_recusado(vid: str) -> None:
     with pytest.raises(ErroRender, match="id de vídeo"):
-        args_trecho(VideoCandidato(vid, 100.0, "c", "t"), Path("x.%(ext)s"))
+        args_video(VideoCandidato(vid, 100.0, "c", "t"), Path("x.%(ext)s"))
 
 
-def test_args_tela_cheia_cover_sem_audio() -> None:
-    args = args_cheio(Path("b.mp4"), Path("d.mp4"))
+def test_args_tela_cheia_cortam_3s_a_partir_de_25_por_cento_em_cover_sem_audio() -> None:
+    args = args_cheio(Path("b.mp4"), Path("d.mp4"), VANS)
     vf = args[args.index("-vf") + 1]
     assert "scale=1080:1920:force_original_aspect_ratio=increase" in vf and "crop=1080:1920" in vf
     assert "-an" in args and args[args.index("-t") + 1] == "3.000"
+    assert args[args.index("-ss") + 1] == "25.000" and args.index("-ss") < args.index("-i")
 
 
 def test_baixar_trecho_gera_o_mp4_e_apaga_o_bruto(tmp_path: Path) -> None:
@@ -139,11 +154,48 @@ def test_baixar_trecho_gera_o_mp4_e_apaga_o_bruto(tmp_path: Path) -> None:
     assert "yt_dlp" in rodar.chamadas[0] and rodar.chamadas[1][0] == "ffmpeg"
 
 
-def test_trecho_com_429_e_errobusca_sem_tentar_de_novo(tmp_path: Path) -> None:
-    rodar = Rodar((1, "ERROR: [youtube] abc: HTTP Error 429: Too Many Requests"))
+# a mensagem do downloader nativo (YoutubeDL.process_info: "unable to download video data: <HTTPError>")
+@pytest.mark.parametrize("saida", ["ERROR: [youtube] abc: HTTP Error 429: Too Many Requests",
+                                   "ERROR: unable to download video data: HTTP Error 429: Too Many Requests",
+                                   "ERROR: unable to download video data: HTTP Error 403: Forbidden"])
+def test_trecho_com_429_ou_403_e_errobusca_sem_tentar_de_novo(tmp_path: Path, saida: str) -> None:
+    rodar = Rodar((1, saida))
     with pytest.raises(ErroBusca, match="limitou ou bloqueou"):
         baixar_trecho(VANS, tmp_path / "D1-v1.mp4", rodar)
     assert len(rodar.chamadas) == 1 and list(tmp_path.iterdir()) == []
+
+
+def test_video_maior_que_o_teto_e_erro_claro(tmp_path: Path) -> None:
+    saida = "[download] File is larger than max-filesize (200000000 bytes > 125829120 bytes). Aborting."
+    with pytest.raises(ErroRender, match="passa de 120M") as ex:
+        baixar_trecho(VANS, tmp_path / "D1-v1.mp4", Rodar((0, saida), cria=False))
+    assert not isinstance(ex.value, ErroBusca)
+
+
+def _trava_unlink(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O Windows não deixa apagar o bruto (antivírus ou indexador com o arquivo aberto)."""
+    original = Path.unlink
+
+    def unlink(self: Path, missing_ok: bool = False) -> None:
+        if ".bruto." in self.name:
+            raise PermissionError(13, "acesso negado", str(self))
+        original(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+
+
+def test_bruto_preso_nao_mascara_o_erro_original(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _trava_unlink(monkeypatch)
+    with pytest.raises(ErroRender, match="Invalid data") as ex:
+        baixar_trecho(VANS, tmp_path / "D1-v1.mp4", Rodar((0, ""), (1, "Invalid data")))
+    assert any("D1-v1.bruto.mp4" in n for n in getattr(ex.value, "__notes__", []))
+
+
+def test_bruto_preso_sem_erro_original_e_errorender_com_o_caminho(tmp_path: Path,
+                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+    _trava_unlink(monkeypatch)
+    with pytest.raises(ErroRender, match=r"não consegui apagar .*D1-v1\.bruto\.mp4"):
+        baixar_trecho(VANS, tmp_path / "D1-v1.mp4", Rodar())
 
 
 def test_trecho_indisponivel_e_errorender_comum(tmp_path: Path) -> None:

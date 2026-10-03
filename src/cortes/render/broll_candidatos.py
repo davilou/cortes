@@ -85,7 +85,7 @@ def _videos(k: int, deixa: Deixa, pasta: Path, dep: DepCandidatos,
         yt.fora = str(e)
         return [], [f"vídeo: {e}"], True
     if not cands:
-        return [], [f"vídeo: a busca '{deixa.busca}' não achou vídeo de 20 s a 20 min"], False
+        return [], [f"vídeo: a busca '{deixa.busca}' não achou vídeo de 15 s a 3 min"], False
     baixados: list[VideoBaixado] = []
     falhas: list[str] = []
     temporaria = False
