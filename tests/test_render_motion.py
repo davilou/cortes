@@ -140,3 +140,39 @@ def test_sem_palavras_ou_duracao_e_erro() -> None:
 def test_schema_aceita_so_componente_conhecido() -> None:
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({"cenas": [_cena("grafico", 0, 1)]}, SCHEMA_CENAS)
+
+
+def _chat(ini: int, fim: int) -> dict[str, Any]:
+    return _cena("chat", ini, fim, app="APP", pergunta="Uma pergunta")
+
+
+def test_cobertura_baixa_faz_a_segunda_chamada_com_os_vaos_e_as_aceitas() -> None:
+    comparacao = _cena("comparacao", _i("merda,"), _i("dinheiro."), carimbo="PERDI DINHEIRO", colunas=[
+        {"rotulo": "IMÓVEL", "valor_texto": "R$ 550 mil", "altura_rel": 0.6},
+        {"rotulo": "RENDA FIXA", "valor_texto": "mais", "altura_rel": 1.0}])
+    llm = LLM([_cena("chat", _i("chat"), _i("fixa?"), app="CHATGPT", pergunta="Quanto renderia?")],
+              [comparacao, _chat(_i("chat"), _i("fixa?"))],    # a 2ª repete a aceita: sai pelo ritmo
+              [_chat(3, 8)])                                    # terceira chamada não há
+    r = cenas_do_corte(PALAVRAS, DUR, llm, EP)
+    assert len(llm.prompts) == 2 and llm.prompts[1].startswith(llm.prompts[0])
+    feedback = llm.prompts[1][len(llm.prompts[0]):]
+    assert '{"app": "CHATGPT", "pergunta": "Quanto renderia?"}' in feedback
+    assert f'palavras [{_i("merda,")}' not in feedback and "merda, perdi um dinheiro." in feedback
+    assert [c.componente for c in r.cenas] == ["chat", "comparacao"] and [c.k for c in r.cenas] == [1, 2]
+    assert r.cenas[1].inicio == PALAVRAS[_i("merda,")].inicio   # colada no chat (div), sem rosto
+    (d,) = r.descartadas
+    assert d.componente == "chat" and d.motivo.startswith("ritmo: sobrepõe")
+
+
+def test_cobertura_boa_sem_vao_longo_fica_numa_chamada() -> None:
+    llm = LLM([_chat(3, 12), _chat(18, 27), _chat(33, 42), _chat(48, 57)])   # 16 s de 28,4 s
+    r = cenas_do_corte(PALAVRAS, DUR, llm, EP)
+    assert len(llm.prompts) == 1 and len(r.cenas) == 4
+
+
+def test_vao_longo_com_algo_mostravel_chama_de_novo_mesmo_com_cobertura_boa() -> None:
+    # 4 cenas de 4 s até "oportunidade" e nada depois; o vão final tem "localização", mas é curto;
+    # deixar o "perdi dinheiro" (11–20 s) de fora abre um vão longo e mostrável
+    llm = LLM([_chat(3, 12), _chat(15, 24), _chat(50, 59), _chat(62, 70)])
+    cenas_do_corte(PALAVRAS, DUR, llm, EP)
+    assert len(llm.prompts) == 2

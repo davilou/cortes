@@ -5,7 +5,8 @@ por schema, nunca HTML. Daqui para a frente tudo é código: parâmetros conferi
 
 Cena recusada (parâmetro inválido, número não dito, ritmo) fica em `descartadas`, com o motivo,
 visível no editor. Índice de palavra inválido é a resposta errada inteira: erro, como nas deixas
-do f4.
+do f4. Cobertura baixa ou vão longo com algo mostrável depois da primeira resposta: uma segunda
+chamada, com as aceitas fixas e os vãos (render/motion_cobertura.py, plano 2026-10-03-melhora-f3).
 """
 from dataclasses import dataclass
 from typing import Any
@@ -13,6 +14,7 @@ from typing import Any
 from cortes.detector import ChamarLLM
 from cortes.llm import ErroLLM
 from cortes.render.ilustracao import fala_numerada
+from cortes.render.motion_cobertura import feedback, precisa_segunda, vaos
 from cortes.render.motion_numeros import nao_ditos, numeros_da_fala
 from cortes.render.motion_params import ErroParams, Params, ler_params, textos_da_tela
 from cortes.render.motion_prompt import (
@@ -86,10 +88,21 @@ def cenas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM, conte
         raise ErroRender("corte sem palavras: não há fala para virar painel")
     if dur <= 0:
         raise ErroRender(f"duração do corte inválida para o motion: {dur}")
-    bruto = chamar(prompt_cenas(palavras, contexto), SCHEMA_CENAS, SISTEMA_CENAS, modelo)
-    lidas = [_bruta(item, palavras, dur) for item in bruto["cenas"]]
-    descartadas = [x for x in lidas if isinstance(x, Descartada)]
-    ficam, fora = ritmo([x for x in lidas if isinstance(x, Bruta)], dur)
+    prompt = prompt_cenas(palavras, contexto)
+    ficam, fora = _rodada(chamar(prompt, SCHEMA_CENAS, SISTEMA_CENAS, modelo), palavras, dur, [])
+    vs = vaos(ficam, palavras, dur)
+    if precisa_segunda(ficam, vs, dur):   # a segunda e última chamada (cota)
+        pedido = f"{prompt}\n\n{feedback(ficam, fora, vs, dur)}"
+        ficam, fora2 = _rodada(chamar(pedido, SCHEMA_CENAS, SISTEMA_CENAS, modelo), palavras, dur, ficam)
+        fora += fora2
     cenas = [Cena(k, b.componente, b.inicio, b.fim, b.params, b.batidas) for k, b in enumerate(ficam, 1)]
-    return Resultado(cenas, sorted(descartadas + fora, key=lambda d: d.inicio))
+    return Resultado(cenas, sorted(fora, key=lambda d: d.inicio))
+
+
+def _rodada(bruto: dict[str, Any], palavras: list[Palavra], dur: float,
+            fixas: list[Bruta]) -> tuple[list[Bruta], list[Descartada]]:
+    """Uma resposta do LLM conferida: as cenas que ficam (com as `fixas`) e as descartadas."""
+    lidas = [_bruta(item, palavras, dur) for item in bruto["cenas"]]
+    ficam, fora = ritmo([x for x in lidas if isinstance(x, Bruta)], dur, fixas)
+    return ficam, [x for x in lidas if isinstance(x, Descartada)] + fora
 

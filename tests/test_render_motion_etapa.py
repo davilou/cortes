@@ -54,17 +54,17 @@ def test_f3_monta_as_cenas_e_reaproveita_o_cache(tmp_path: Path) -> None:
     lido = ler_cenas(pasta / "cortes" / "0")
     assert lido is not None and lido.resultado.cenas[0].params == Contador("PAGOU", 400.0, "R$", "mil")
     _montar(pasta, tmp_path, llm)
-    assert len(llm.prompts) == 1
+    assert len(llm.prompts) == 2   # cobertura baixa: a segunda chamada; o cache não chama mais
 
 
 def test_corrigir_a_legenda_ou_mudar_o_trecho_chama_o_llm_de_novo(tmp_path: Path) -> None:
     pasta, llm = _episodio(tmp_path), LLM()
     _montar(pasta, tmp_path, llm)
     _montar(pasta, tmp_path, llm, replace(C3, edicoes=Edicoes({1: "Comprei,"}, (), {})))
-    assert len(llm.prompts) == 2
+    assert len(llm.prompts) == 4
     (pasta / "cortes" / "0" / "motion" / "lixo.txt").write_text("x", encoding="utf-8")
     _montar(pasta, tmp_path, llm, replace(C3, inicio=10.2))
-    assert len(llm.prompts) == 3 and not (pasta / "cortes" / "0" / "motion" / "lixo.txt").exists()
+    assert len(llm.prompts) == 6 and not (pasta / "cortes" / "0" / "motion" / "lixo.txt").exists()
 
 
 def test_sem_cena_valida_e_erro_claro_e_fica_no_cache(tmp_path: Path) -> None:
@@ -73,7 +73,7 @@ def test_sem_cena_valida_e_erro_claro_e_fica_no_cache(tmp_path: Path) -> None:
         _montar(pasta, tmp_path, llm)
     with pytest.raises(ErroRender, match=NENHUMA):
         _montar(pasta, tmp_path, llm)
-    assert len(llm.prompts) == 1
+    assert len(llm.prompts) == 2
 
 
 def test_erro_do_llm_vira_erro_do_render(tmp_path: Path) -> None:
