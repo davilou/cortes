@@ -12,10 +12,10 @@ def test_tira_o_que_cai_no_gancho_e_o_que_nao_deixa_o_rosto_voltar() -> None:
     v = "valor_cheio"
     cenas = [_b(0.5, 2.5), _b(3.0, 5.0, v), _b(5.5, 7.5, v), _b(6.5, 9.0, v), _b(9.0, 11.0, v)]
     ficam, fora = ritmo(cenas, 40)
-    assert [(b.inicio, b.fim) for b in ficam] == [(3.0, 5.0), (6.5, 9.0)]
+    # a de 3,0 s é aparada para o rosto voltar antes da de 5,5 s; a de 6,5 s não cabe
+    assert [(b.inicio, b.fim) for b in ficam] == [(3.0, 4.5), (5.5, 7.5), (9.0, 11.0)]
     assert [d.motivo.split(" (")[0] for d in fora] == [
-        "ritmo: começa no gancho", "ritmo: menos de 1.0 s de rosto entre valor_cheio",
-        "ritmo: menos de 1.0 s de rosto entre valor_cheio"]
+        "ritmo: começa no gancho", "ritmo: sobrepõe a cena valor_cheio"]
 
 
 def test_capa_so_uma_e_conta_para_o_rosto() -> None:
@@ -45,7 +45,7 @@ def test_div_cola_no_vizinho_mas_cheio_atras_de_cheio_precisa_de_rosto() -> None
 
 
 def test_cenas_nao_se_sobrepoem() -> None:
-    ficam, fora = ritmo([_b(3.0, 6.0), _b(5.0, 8.0)], 40)
+    ficam, fora = ritmo([_b(3.0, 5.0), _b(4.0, 6.0)], 40)
     assert len(ficam) == 1 and fora[0].motivo.startswith("ritmo: sobrepõe")
 
 
@@ -75,3 +75,26 @@ def test_trocas_contam_entrada_e_saida_e_colagem_vale_uma() -> None:
     # capa sai (1), chat entra (1), chat → comparação (1), comparação sai (1), chat entra (1);
     # a última vai até o fim do Short e não sai
     assert trocas_por_10s(cenas, 20.0) == 2.5
+
+
+def test_cena_que_invade_a_seguinte_e_aparada_se_ainda_dura_o_minimo() -> None:
+    # teste cego: valor cheio 4,12–8,00 e o chat em 7,64 — o chat saía; agora o valor acaba em 7,64
+    valor = Bruta("valor_cheio", 4.12, 8.0, P, (5.5, 7.9))
+    ficam, fora = ritmo([valor, _b(7.64, 11.12)], 40)
+    assert [(b.componente, b.inicio, b.fim) for b in ficam] == [
+        ("valor_cheio", 4.12, 7.64), ("chat", 7.64, 11.12)] and fora == []
+    assert ficam[0].batidas == (5.5, 7.24)   # a batida não entra depois do fim, com folga para ler
+
+
+def test_aparar_entre_dois_cheios_deixa_o_segundo_de_rosto() -> None:
+    ficam, _ = ritmo([_b(3.0, 7.0, "valor_cheio"), _b(6.0, 8.0, "comparacao")], 40)
+    assert [(b.inicio, b.fim) for b in ficam] == [(3.0, 5.0), (6.0, 8.0)]
+
+
+def test_nao_apara_abaixo_do_minimo_nem_a_capa_nem_as_fixas() -> None:
+    ficam, fora = ritmo([_b(3.0, 6.0), _b(4.0, 6.0)], 40)
+    assert [(b.inicio, b.fim) for b in ficam] == [(3.0, 6.0)] and len(fora) == 1
+    ficam, fora = ritmo([_b(0.0, 2.2, "capa"), _b(2.0, 4.0)], 40)
+    assert [b.componente for b in ficam] == ["capa"] and len(fora) == 1
+    ficam, fora = ritmo([_b(7.0, 9.0)], 40, [_b(3.0, 8.0)])
+    assert [(b.inicio, b.fim) for b in ficam] == [(3.0, 8.0)] and len(fora) == 1

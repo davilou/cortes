@@ -73,7 +73,8 @@ def _bruta(item: dict[str, Any], palavras: list[Palavra], dur: float) -> Bruta |
         p = ler_params(comp, cru)
     except ErroParams as e:
         return Descartada(comp, ini, fim, cru, f"parâmetro inválido: {e}")
-    ditas = [w.texto for w in palavras if w.inicio < fim]   # dito até o fim da cena
+    # dito até o fim da cena; a capa é a promessa do corte e vale com o que o corte inteiro diz
+    ditas = [w.texto for w in palavras if w.inicio < fim or comp == "capa"]
     faltam = nao_ditos(textos_da_tela(p), numeros_da_fala(ditas))
     if faltam:
         return Descartada(comp, ini, fim, cru, f"número que a fala não disse: {', '.join(faltam)}")

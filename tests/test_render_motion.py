@@ -176,3 +176,14 @@ def test_vao_longo_com_algo_mostravel_chama_de_novo_mesmo_com_cobertura_boa() ->
     llm = LLM([_chat(3, 12), _chat(15, 24), _chat(50, 59), _chat(62, 70)])
     cenas_do_corte(PALAVRAS, DUR, llm, EP)
     assert len(llm.prompts) == 2
+
+
+def test_capa_pode_citar_numero_dito_depois_no_corte() -> None:
+    # a capa promete o que o corte mostra: "400 mil" é dito aos 7,6 s, a capa vai até 2,2 s
+    r = cenas_do_corte(PALAVRAS, DUR, _chamar(_cena(
+        "capa", 0, 3, rotulo="MAURÍCIO MEIRELLES", titulo="Comprei por 400 mil, perdi dinheiro",
+        destaque="perdi")), EP)
+    assert [c.componente for c in r.cenas] == ["capa"]
+    r = cenas_do_corte(PALAVRAS, DUR, _chamar(_cena(
+        "capa", 0, 3, rotulo="MAURÍCIO", titulo="Comprei por 300 mil", destaque="Comprei")), EP)
+    assert r.cenas == [] and "300 mil" in r.descartadas[0].motivo
