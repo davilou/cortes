@@ -10,6 +10,8 @@ bytes baixados; MAX_PIXELS na decodificação, o que limita a memória. Não há
 arquivo gravado: ele já sai normalizado a no máximo 1080 px em JPEG q3 (~100-200 KB), então um
 teto ali nunca dispararia e não protegeria nada.
 """
+import ipaddress
+import socket
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +36,9 @@ USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHT
               "Chrome/129.0 Safari/537.36")   # loja que recusa o agente do ffmpeg aceita o de navegador
 TIMEOUT_REDE_US = 15_000_000   # 15 s sem resposta do servidor da imagem: desiste dessa candidata
 ESQUEMAS = frozenset({"http", "https"})   # a URL vem da web: nada de file:, data:, concat: etc.
+# nomes que apontam para esta máquina ou para a rede local; IP literal é conferido por ipaddress
+NOMES_LOCAIS = frozenset({"localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback"})
+SUFIXOS_LOCAIS = (".localhost", ".local", ".internal", ".lan", ".home.arpa")
 PROTOCOLOS = "http,https,tls,tcp"        # o que o ffmpeg pode abrir (redirecionamento incluído)
 # demuxers de imagem: detecção por extensão (image2) e por conteúdo (*_pipe). Sem hls/concat/mov, que
 # abririam outras URLs ou vídeo. Conferido com jpg, png e webp reais em 2026-10-02; avif (mov) fica fora.
@@ -89,10 +94,36 @@ def _pequena(c: Candidata) -> bool:
     return any(m is not None and m < TAM_MIN_PX for m in (c.largura, c.altura))
 
 
+def _ip_literal(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """IP escrito na URL, inclusive nas formas que o resolvedor aceita (2130706433, 0x7f.1, 127.1).
+    `inet_aton` só interpreta o texto: não consulta DNS."""
+    try:
+        return ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    try:
+        return ipaddress.IPv4Address(socket.inet_aton(host))
+    except OSError:
+        return None
+
+
+def host_proibido(url: str) -> bool:
+    """Puro (sem DNS). Sem host, nome local ou IP que não é público (loopback, privado, link-local,
+    0.0.0.0, IPv4 dentro de IPv6): o ffmpeg abriria daqui o painel, o roteador ou os metadados da
+    nuvem. Nome público que resolve para IP privado não é pego aqui."""
+    host = (urlparse(url).hostname or "").rstrip(".").lower()
+    if not host or host in NOMES_LOCAIS or host.endswith(SUFIXOS_LOCAIS):
+        return True
+    ip = _ip_literal(host)
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip is not None and not ip.is_global
+
+
 def buscar(busca: str, n: int, ddgs: BuscaImagens) -> list[Candidata]:
-    """Até `n` candidatas http(s) sem URL repetida, descartando as menores que TAM_MIN_PX quando o tamanho
-    vem informado. Nenhum resultado é lista vazia; falha da busca (limite de uso, tempo, rede) é
-    ErroBusca com a busca e a causa."""
+    """Até `n` candidatas http(s) de host público sem URL repetida, descartando as menores que
+    TAM_MIN_PX quando o tamanho vem informado. Nenhum resultado é lista vazia; falha da busca
+    (limite de uso, tempo, rede) é ErroBusca com a busca e a causa."""
     try:
         brutos = ddgs.images(busca, max_results=n * FOLGA_BUSCA, region=REGIAO, safesearch="moderate")
     except DDGSException as e:
@@ -102,7 +133,9 @@ def buscar(busca: str, n: int, ddgs: BuscaImagens) -> list[Candidata]:
     cands: list[Candidata] = []
     for r in brutos:
         url = str(r.get("image") or "")
-        if urlparse(url).scheme.lower() not in ESQUEMAS or any(c.url == url for c in cands):
+        if urlparse(url).scheme.lower() not in ESQUEMAS or host_proibido(url):
+            continue
+        if any(c.url == url for c in cands):
             continue
         c = Candidata(url, str(r.get("url") or ""), _medida(r.get("width")), _medida(r.get("height")))
         if not _pequena(c):

@@ -62,6 +62,23 @@ def test_busca_so_aceita_http_e_https() -> None:
         "HTTPS://x/b.jpg", "http://x/c.jpg"]
 
 
+@pytest.mark.parametrize("url", [
+    "http://127.0.0.1/a.jpg", "http://localhost:8790/api", "http://LOCALHOST/a.jpg", "http://x.localhost/a.jpg",
+    "http://10.0.0.5/a.jpg", "http://192.168.0.1/a.jpg", "http://172.16.3.4/a.jpg", "http://169.254.169.254/x",
+    "http://[::1]/a.jpg", "http://[fe80::1]/a.jpg", "http://[::ffff:127.0.0.1]/a.jpg", "http://0.0.0.0/a.jpg",
+    "http://2130706433/a.jpg", "http://0x7f.1/a.jpg", "http://127.1/a.jpg", "http:///a.jpg", "https://:80/a.jpg",
+    "http://impressora.local/a.jpg", "http://user@127.0.0.1/a.jpg"])
+def test_busca_recusa_host_local_ou_privado(url: str) -> None:
+    """A URL vem da web e o ffmpeg a abre daqui: nada de painel local, roteador ou metadados de nuvem."""
+    assert buscar("x", 9, DdgsFalso([_r(url), _r("http://8.8.8.8/ok.jpg")])) == [
+        Candidata("http://8.8.8.8/ok.jpg", "pagina-de-http://8.8.8.8/ok.jpg", 1200, 1200)]
+
+
+def test_host_publico_por_nome_passa_sem_resolver_dns() -> None:
+    urls = ["https://cdn.loja.com.br/a.jpg", "http://[2606:4700::1111]/b.jpg"]
+    assert [c.url for c in buscar("x", 9, DdgsFalso([_r(u) for u in urls]))] == urls
+
+
 def test_busca_sem_resultado_e_lista_vazia_nao_erro() -> None:
     """O ddgs 9.16 sinaliza "nada achado" com DDGSException("No results found.") (ddgs.py)."""
     assert buscar("x", 4, DdgsFalso(DDGSException("No results found."))) == []
