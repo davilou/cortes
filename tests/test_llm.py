@@ -121,3 +121,11 @@ def test_executar_roda_no_cwd_dado(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setattr(subprocess, "run", _run)
     llm._executar(["claude"], "x", tmp_path)
     assert visto["cwd"] == tmp_path
+
+
+@pytest.mark.parametrize("negada", [["Read"], [None], [["Read", "x"]], "Read fora da pasta"])
+def test_negacao_que_nao_e_dict_tambem_e_erro_llm(negada: Any) -> None:
+    ex = executor_que_devolve({"is_error": False, "structured_output": {"nota": 3},
+                               "permission_denials": negada})
+    with pytest.raises(ErroLLM, match="fora do permitido"):
+        chamar("p", SCHEMA, "s", executar=ex)

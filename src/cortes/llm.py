@@ -60,6 +60,14 @@ def _executar(args: list[str], entrada: str, cwd: Path | None) -> str:
     return r.stdout
 
 
+def _negadas(negacoes: Any) -> str:
+    """O que foi negado, para a mensagem. Formato inesperado (não lista, item que não é dict) também
+    é negação: vira texto como veio, nunca AttributeError."""
+    if not isinstance(negacoes, list):
+        return repr(negacoes)
+    return str([d.get("tool_input") if isinstance(d, dict) else d for d in negacoes])
+
+
 def chamar(prompt: str, schema: dict[str, Any], sistema: str, modelo: str = "sonnet",
            executar: Executor = _executar, ferramentas: str = "",
            pasta: Path | None = None) -> dict[str, Any]:
@@ -75,8 +83,8 @@ def chamar(prompt: str, schema: dict[str, Any], sistema: str, modelo: str = "son
     if resposta.get("is_error"):
         raise ErroLLM(f"CLI reportou erro: {str(resposta.get('result', ''))[:500]}")
     if resposta.get("permission_denials"):
-        negadas = [d.get("tool_input") for d in resposta["permission_denials"]]
-        raise ErroLLM(f"o modelo tentou usar ferramenta fora do permitido: {str(negadas)[:500]}")
+        negadas = _negadas(resposta["permission_denials"])
+        raise ErroLLM(f"o modelo tentou usar ferramenta fora do permitido: {negadas[:500]}")
     dados = resposta.get("structured_output")
     if not isinstance(dados, dict):
         raise ErroLLM("resposta sem structured_output")
