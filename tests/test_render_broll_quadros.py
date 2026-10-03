@@ -57,6 +57,9 @@ def test_quadros_em_cover_9_16_num_ffmpeg_so() -> None:
     assert _ss(args) == ["0.10", "2.00", "3.80"]
     assert [args[i + 1] for i, a in enumerate(args) if a == "-map"] == ["0:v", "1:v", "2:v"]
     assert "crop=360:640" in args[args.index("-vf") + 1] and args[-1] == "q3.jpg"
+    # sem encoder com threads de quadro (ff_frame_thread_encoder_init) e JPEG em faixa cheia
+    assert args.count("-threads") == 3 and args[args.index("-threads") + 1] == "1"
+    assert args[args.index("-vf") + 1].endswith("format=yuvj420p")
 
 
 def test_extrair_quadros_do_trecho_inicio_meio_e_fim(tmp_path: Path) -> None:
@@ -66,14 +69,15 @@ def test_extrair_quadros_do_trecho_inicio_meio_e_fim(tmp_path: Path) -> None:
     assert _ss(rodar.chamadas[0]) == ["0.10", "2.00", "3.80"]
 
 
-def test_extrair_momentos_tira_3_quadros_de_cada_num_ffmpeg_so(tmp_path: Path) -> None:
+def test_extrair_momentos_tira_3_quadros_de_cada_um_ffmpeg_por_momento(tmp_path: Path) -> None:
+    # real (2026-10-03, bota): um ffmpeg só com 12 entradas de 1080p e 12 saídas JPEG falhou em 2 de 8
+    # vídeos com "ff_frame_thread_encoder_init failed" em parte das saídas; 3 por vez é o que já rodava
     rodar = Rodar()
     ms = extrair_momentos(tmp_path / "D1-v1.bruto.mp4", (15.0, 35.0), tmp_path / "D1-v1", rodar)
     assert [[q.name for q in m] for m in ms] == [
         ["D1-v1-m1-q1.jpg", "D1-v1-m1-q2.jpg", "D1-v1-m1-q3.jpg"],
         ["D1-v1-m2-q1.jpg", "D1-v1-m2-q2.jpg", "D1-v1-m2-q3.jpg"]]
-    [args] = rodar.chamadas
-    assert _ss(args) == ["15.10", "17.00", "18.80", "35.10", "37.00", "38.80"]
+    assert [_ss(a) for a in rodar.chamadas] == [["15.10", "17.00", "18.80"], ["35.10", "37.00", "38.80"]]
 
 
 def test_quadro_que_nao_saiu_e_erro(tmp_path: Path) -> None:
