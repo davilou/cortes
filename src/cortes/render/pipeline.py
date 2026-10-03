@@ -16,7 +16,7 @@ from cortes.render.corte import Corte, pasta_corte
 from cortes.render.edicao import palavras_editadas
 from cortes.render.hyperframes import criar_projeto, renderizar
 from cortes.render.legenda import grupos, palavras_do_corte
-from cortes.render.montagem import caminho_template, montar_html, valores
+from cortes.render.montagem import caminho_template, montar_html, usa_rosto, valores
 from cortes.render.processo import ErroRender, Rodar, rodar_processo
 from cortes.render.recorte import (
     LerAudio,
@@ -83,9 +83,22 @@ def preparar_trecho(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> lis
         shutil.rmtree(mini)
     apagar_assets(trecho.parent)   # fundo e gameplay saem do trecho (e da duração) anterior
     recortar(pasta_ep / "video.mp4", trecho, ini, segs, dep.rodar)
-    medir_rosto(trecho, d / "rosto.json", raiz / SCRIPT_ROSTO, dep.py_visao, dep.modelo_rosto, dep.rodar)
+    _medir_rosto_se_possivel(trecho, d / "rosto.json", raiz, c.formato, dep)
     salvar_json(marca, {"inicio": ini, "fim": fim, "segmentos": segs})
     return segs
+
+
+def _medir_rosto_se_possivel(trecho: Path, destino: Path, raiz: Path, formato: str, dep: DepRender) -> None:
+    """Mede sempre que der: o editor deixa trocar de formato depois, e o rosto já medido evita
+    remedir nessa troca. Só quando o formato atual não depende de rosto (hoje, f8) é que uma
+    falha na medição não impede o Short de render — sem `rosto.json`, o próximo render tenta medir
+    de novo (o cache em `_cache_valido` exige o arquivo)."""
+    tpl = caminho_template(raiz, formato).read_text(encoding="utf-8")
+    try:
+        medir_rosto(trecho, destino, raiz / SCRIPT_ROSTO, dep.py_visao, dep.modelo_rosto, dep.rodar)
+    except ErroRender:
+        if usa_rosto(tpl):
+            raise
 
 
 def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento]) -> str:
@@ -93,9 +106,9 @@ def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento]) -> str:
     todas = palavras_editadas([Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")], c.edicoes)
     ws = palavras_sem_pausa(palavras_do_corte(todas, ini, fim), segs)
     dur = duracao(segs)
-    rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json")
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
-    return montar_html(tpl, valores(dur, rosto, grupos(ws, dur), c.edicoes.rostos, c.formato, c.titulo))
+    rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json") if usa_rosto(tpl) else None
+    return montar_html(tpl, valores(tpl, dur, rosto, grupos(ws, dur), c.edicoes.rostos, c.formato, c.titulo))
 
 
 def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:

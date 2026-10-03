@@ -146,3 +146,31 @@ def test_f5_sem_gameplay_na_biblioteca_e_erro(tmp_path: Path) -> None:
     with pytest.raises(ErroRender, match="sem gameplay"):
         renderizar_corte(pasta, replace(C, formato="f5"), tmp_path, f.dep())
     assert "npx" not in f.chamadas
+
+
+class FalsoSemRosto(Falso):
+    """`py-visao` sempre falha: simula detecção de rosto indisponível."""
+
+    def rodar(self, args: list[str], cwd: Path | None) -> tuple[int, str]:
+        if args[0] == "py-visao":
+            return 1, "modelo não carregou"
+        return super().rodar(args, cwd)
+
+
+def test_f8_renderiza_mesmo_com_falha_na_deteccao_de_rosto(tmp_path: Path) -> None:
+    """f8 (desfoque) não usa câmera nem metade: falha ao medir rosto não deve derrubar o render
+    (revisão formatos novos, item 1). Sem `rosto.json`, o cache fica inválido — o próximo render
+    tenta medir de novo."""
+    pasta, f = episodio(tmp_path), FalsoSemRosto()
+    c = replace(C, formato="f8")
+    renderizar_corte(pasta, c, tmp_path, f.dep())
+    d = pasta / "cortes" / "0"
+    assert (d / "short-v1.mp4").exists() and not (d / "rosto.json").exists()
+
+
+def test_falante_falha_na_deteccao_de_rosto_e_erro(tmp_path: Path) -> None:
+    """f1 usa câmera (QW/TRILHA_CHEIO): a mesma falha de detecção, nesse formato, continua
+    derrubando o render com uma causa clara."""
+    pasta, f = episodio(tmp_path), FalsoSemRosto()
+    with pytest.raises(ErroRender, match="detecção de rosto"):
+        renderizar_corte(pasta, replace(C, formato="f1"), tmp_path, f.dep())

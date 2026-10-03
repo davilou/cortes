@@ -20,12 +20,23 @@ FORMATOS = ("f7", "f1", "f6", "f5", "f8")   # ordem da tela; planos D e E acresc
 _TEMPLATES = {"f7": "conversa", "f1": "falante", "f6": "hormozi", "f5": "gameplay", "f8": "desfoque"}
 _POR_PALAVRA = ("f6",)
 _PLACEHOLDER = re.compile(r"\{\{[A-Z_]+\}\}")
+_PLACEHOLDERS_ROSTO = {"QW", "TRILHA_CHEIO", "QM_W", "QM_H", "TRILHA_METADE"}
 
 
 def caminho_template(raiz: Path, formato: str) -> Path:
     if formato not in _TEMPLATES:
         raise ErroRender(f"formato '{formato}' sem template; use um de {FORMATOS}")
     return raiz / "render" / "formatos" / f"{_TEMPLATES[formato]}.tpl"
+
+
+def _placeholders(tpl: str) -> set[str]:
+    return {m[2:-2] for m in _PLACEHOLDER.findall(tpl)}
+
+
+def usa_rosto(tpl: str) -> bool:
+    """Se o template usa algum placeholder de câmera ou metade — os únicos que dependem de rosto
+    medido. f8 (desfoque) não usa nenhum: medir rosto para ele é custo (e risco de falha) à toa."""
+    return bool(_placeholders(tpl) & _PLACEHOLDERS_ROSTO)
 
 
 def montar_html(tpl: str, valores: dict[str, str]) -> str:
@@ -46,13 +57,26 @@ def montar_html(tpl: str, valores: dict[str, str]) -> str:
     return saida
 
 
-def valores(dur: float, rosto: Rosto, grupos: list[Grupo], escolhas: dict[int, int], formato: str,
-            titulo: str) -> dict[str, str]:
-    """Superconjunto dos placeholders de todos os templates: valor sobrando não é erro, só o que
-    falta (`montar_html`)."""
-    qm_w, qm_h = quadro_metade(rosto)
-    metade = trilha_fixa(rosto, escolhas, JANELA_METADE, ALVO_METADE, escala_metade(rosto))
-    return {"DUR": str(round(dur, 2)), "QW": str(largura_quadro(rosto)),
-            "LEGENDAS": legenda_html(grupos, por_palavra=formato in _POR_PALAVRA),
-            "TRILHA_CHEIO": json.dumps(trilha_fixa(rosto, escolhas)), "TRILHA_METADE": json.dumps(metade),
-            "QM_W": str(qm_w), "QM_H": str(qm_h), "TITULO": html.escape(titulo)}
+def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], escolhas: dict[int, int],
+            formato: str, titulo: str) -> dict[str, str]:
+    """Só os placeholders que `tpl` realmente usa: f8 (desfoque) não tem câmera nem metade, e
+    calcular `TRILHA_CHEIO`/`TRILHA_METADE` ali exigiria rosto e escolhas válidas à toa — custo e
+    chance de erro que o template nunca usa (revisão formatos novos, item 1). `rosto=None` só vale
+    quando `usa_rosto(tpl)` é falso — o chamador (pipeline._html) garante isso."""
+    usa = _placeholders(tpl)
+    out = {"DUR": str(round(dur, 2)), "LEGENDAS": legenda_html(grupos, por_palavra=formato in _POR_PALAVRA),
+           "TITULO": html.escape(titulo)}
+    if usa & _PLACEHOLDERS_ROSTO:
+        if rosto is None:
+            raise ErroRender(f"formato '{formato}' usa rosto no template mas nenhum foi medido")
+        if "QW" in usa:
+            out["QW"] = str(largura_quadro(rosto))
+        if "TRILHA_CHEIO" in usa:
+            out["TRILHA_CHEIO"] = json.dumps(trilha_fixa(rosto, escolhas))
+        if "QM_W" in usa or "QM_H" in usa:
+            qm_w, qm_h = quadro_metade(rosto)
+            out["QM_W"], out["QM_H"] = str(qm_w), str(qm_h)
+        if "TRILHA_METADE" in usa:
+            metade = trilha_fixa(rosto, escolhas, JANELA_METADE, ALVO_METADE, escala_metade(rosto))
+            out["TRILHA_METADE"] = json.dumps(metade)
+    return out
