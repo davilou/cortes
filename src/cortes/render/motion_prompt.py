@@ -77,8 +77,9 @@ O valor_texto pode ser uma palavra ("mais", "menos") quando a fala não deu o n�
 ({_L['pergunta']}).
 - "lista": título e {ITENS_MIN} a {ITENS_MAX} itens curtos numerados, que entram quando são \
 ditos. params: titulo ({_L['titulo_lista']}), itens ({_L['item']} cada).
-- "rota": de um lugar a outro num mapa. params: origem e destino ({_L['lugar']} cada), selo \
-opcional ({_L['selo']})."""
+- "rota": de um lugar a outro num mapa — ida, viagem, mudança, "ficar indo em X". params: origem \
+e destino ({_L['lugar']} cada), selo opcional ({_L['selo']}). A origem pode ser um lugar dito antes \
+na fala (onde a pessoa mora ou tem o imóvel)."""
 
 
 @dataclass(frozen=True)

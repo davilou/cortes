@@ -65,3 +65,11 @@ def test_feedback_lista_aceitas_recusadas_e_vaos_com_as_palavras() -> None:
     assert "- [6.50–9.00 s] valor_cheio: número que a fala não disse: 37,5%" in f
     assert '- [7.00–15.00 s] palavras [14] a [29]: "e aí eu vi"' in f
     assert "Devolva SÓ as cenas novas" in f
+
+
+def test_feedback_insiste_nos_vaos_e_lembra_da_capa_que_falta() -> None:
+    vs = [Vao(7.0, 15.0, 14, 29, "indo em saco arema")]
+    f = feedback([_b(3.0, 6.0)], [], vs, 20.0)
+    assert "ponha uma cena em cada trecho" in f and "nome deformado pela transcrição também é lugar" in f
+    assert "Sem capa: se o começo da fala promete algo" in f
+    assert "Sem capa" not in feedback([_b(0.0, 2.2, "capa")], [], vs, 20.0)

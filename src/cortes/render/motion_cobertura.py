@@ -91,9 +91,13 @@ def feedback(aceitas: Sequence[Bruta], recusadas: Sequence[Descartada], vs: Sequ
         partes += ["Recusadas (não repita o erro):",
                    *(f"- [{d.inicio:.2f}–{d.fim:.2f} s] {d.componente}: {d.motivo}" for d in recusadas)]
     partes += [f"A cobertura ficou em {cobertura(aceitas, dur):.0%} (alvo de {COBERTURA_MIN:.0%} a "
-               f"{FRACAO_MAX:.0%}). Trechos só com o rosto — ponha cenas APENAS dentro deles, para o "
-               "que neles é mostrável (valor, comparação, lista, lugar, pergunta a um app):",
-               *(f'- [{v.inicio:.2f}–{v.fim:.2f} s] palavras [{v.i}] a [{v.j}]: "{v.texto}"' for v in vs),
-               "Devolva SÓ as cenas novas, com as mesmas regras. Se nada nesses trechos vira painel, "
-               "devolva a lista vazia."]
+               f"{FRACAO_MAX:.0%}): o Short está com rosto demais. Leia de novo os trechos só com o "
+               "rosto e ponha uma cena em cada trecho que tenha um valor, uma comparação, uma lista "
+               "(passos, horários, condições), um lugar (rota; nome deformado pela transcrição também "
+               "é lugar) ou uma pergunta a um app — só dentro deles:",
+               *(f'- [{v.inicio:.2f}–{v.fim:.2f} s] palavras [{v.i}] a [{v.j}]: "{v.texto}"' for v in vs)]
+    if not any(c.componente == "capa" for c in aceitas):
+        partes.append("Sem capa: se o começo da fala promete algo, mande também a capa (0 a 2,2 s).")
+    partes.append("Devolva SÓ as cenas novas, com as mesmas regras. Lista vazia só se esses trechos "
+                  "forem opinião sem nada para mostrar.")
     return "\n".join(partes)

@@ -187,3 +187,7 @@ def test_capa_pode_citar_numero_dito_depois_no_corte() -> None:
     r = cenas_do_corte(PALAVRAS, DUR, _chamar(_cena(
         "capa", 0, 3, rotulo="MAURÍCIO", titulo="Comprei por 300 mil", destaque="Comprei")), EP)
     assert r.cenas == [] and "300 mil" in r.descartadas[0].motivo
+
+
+def test_prompt_rota_aceita_origem_dita_antes() -> None:
+    assert "A origem pode ser um lugar dito antes na fala" in prompt_cenas(PALAVRAS, EP)
