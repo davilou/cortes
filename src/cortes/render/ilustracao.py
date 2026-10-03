@@ -84,11 +84,15 @@ class Deixa:
     tipo: TipoDeixa   # "literal" pode cair para foto; "acontecimento" só vídeo
 
 
+def fala_numerada(palavras: list[Palavra]) -> str:
+    """Puro. As palavras numeradas, com o tempo a cada 10 para o LLM ter noção dos segundos (também
+    nas cenas do f3, render/motion.py)."""
+    return " ".join(f"[{i}] {p.texto}" if i % 10 else f"[{i}] ({p.inicio:.1f}s) {p.texto}"
+                    for i, p in enumerate(palavras))
+
+
 def prompt_deixas(palavras: list[Palavra]) -> str:
-    """Puro. As palavras vão numeradas, com o tempo a cada 10 para o LLM ter noção dos segundos."""
-    partes = [f"[{i}] {p.texto}" if i % 10 else f"[{i}] ({p.inicio:.1f}s) {p.texto}"
-              for i, p in enumerate(palavras)]
-    return f"{_REGRAS}\n\nFala do Short (palavras numeradas):\n{' '.join(partes)}"
+    return f"{_REGRAS}\n\nFala do Short (palavras numeradas):\n{fala_numerada(palavras)}"
 
 
 def _tempos(item: dict[str, Any], palavras: list[Palavra]) -> tuple[float, float]:
