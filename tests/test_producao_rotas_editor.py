@@ -13,6 +13,8 @@ from cortes.producao.estado import EstadoEpisodio
 from cortes.producao.fila import Fila
 from cortes.producao.previas import Previas
 from cortes.render.corte import Corte, Edicoes, concluir, gravar_corte, ler_corte, novo_corte, pasta_corte
+from cortes.render.ilustracao import Deixa
+from cortes.render.ilustracao_cache import Chave, Ilustracao, gravar_ilustracoes
 from cortes.render.previa import RUNTIME
 from tests.test_producao_rotas import preparar_concluido
 
@@ -202,13 +204,10 @@ def ambiente_f9(cfg: Config) -> Ambiente:
     pasta = a.d / "ilustracao"
     pasta.mkdir()
     (pasta / "D1-c2.jpg").write_bytes(b"vans")
-    base = {"busca": "b", "licenca": None, "falhas": []}
-    ilus = [{**base, "k": 1, "inicio": 1.2, "fim": 2.6, "coisa": "Vans", "imagem": "D1-c2.jpg",
-             "fonte_url": "http://loja/vans", "motivo": "é o tênis"},
-            {**base, "k": 2, "inicio": 4.5, "fim": 5.7, "coisa": "bota", "imagem": None,
-             "fonte_url": None, "motivo": "nenhuma é a bota"}]
-    (pasta / "ilustracao.json").write_text(json.dumps({"inicio": 0.7, "fim": 7.8, "ilustracoes": ilus}),
-                                           encoding="utf-8")
+    ilus = [Ilustracao(1, Deixa(1.2, 2.6, "Vans", "b"), pasta / "D1-c2.jpg", "http://loja/vans", "é o tênis",
+                       (), False),
+            Ilustracao(2, Deixa(4.5, 5.7, "bota", "b"), None, None, "nenhuma é a bota", (), False)]
+    gravar_ilustracoes(pasta, Chave(0.7, 7.8, "h"), ilus, None)
     (a.d / "projeto" / "assets" / "ilus-1.jpg").write_bytes(b"vans")
     return a
 
@@ -225,6 +224,11 @@ def test_editor_lista_as_ilustracoes_do_f9(cfg: Config) -> None:
     assert r.status_code == 422 and "sem imagem" in r.json()["detail"]
 
 
+def test_imagem_da_ilustracao_caminho_feliz(cfg: Config) -> None:
+    r = ambiente_f9(cfg).c.get(f"{EP}/cortes/0/ilustracao/1")
+    assert r.status_code == 200 and r.content == b"vans" and r.headers["content-type"] == "image/jpeg"
+
+
 def test_editor_sem_ilustracoes_fora_do_f9(cfg: Config) -> None:
     d = Ambiente(cfg).c.get(f"{EP}/cortes/0/editor").json()
     assert d["ilustracoes"] == [] and d["ilustracao_erro"] is None
@@ -232,7 +236,7 @@ def test_editor_sem_ilustracoes_fora_do_f9(cfg: Config) -> None:
 
 def test_cache_da_ilustracao_invalido_nao_derruba_o_editor(cfg: Config) -> None:
     a = ambiente_f9(cfg)
-    (a.d / "ilustracao" / "ilustracao.json").write_text("{}", encoding="utf-8")
+    (a.d / "ilustracao" / "ilustracao.json").write_text('{"formato": 2}', encoding="utf-8")
     d = a.c.get(f"{EP}/cortes/0/editor").json()
     assert d["ilustracoes"] == [] and "cache da ilustração inválido" in d["ilustracao_erro"]
 

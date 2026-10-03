@@ -20,9 +20,9 @@ from cortes.regra_inicio import comeca_no_meio
 from cortes.render.assets import FUNDO, GAMEPLAY
 from cortes.render.corte import ARQUIVO, Corte, gravar_corte, ler_corte, pasta_corte
 from cortes.render.edicao import Edicao, aplicar, indices_do_corte, mascarar
-from cortes.render.ilustracao_etapa import ARQUIVO as ARQUIVO_ILUSTRACAO
-from cortes.render.ilustracao_etapa import PASTA as PASTA_ILUSTRACAO
-from cortes.render.ilustracao_etapa import ler_ilustracoes
+from cortes.render.ilustracao_cache import ARQUIVO as ARQUIVO_ILUSTRACAO
+from cortes.render.ilustracao_cache import PASTA as PASTA_ILUSTRACAO
+from cortes.render.ilustracao_cache import ler_ilustracoes
 from cortes.render.miniatura import gerar_miniatura
 from cortes.render.montagem import FORMATOS
 from cortes.render.previa import com_runtime
@@ -34,7 +34,7 @@ JANELA_S = 30.0                 # transcrição mostrada em volta do corte, para
 PALAVRAS_AVISO = 8              # quantas palavras do início a regra de início lê
 SEM_CACHE = {"Cache-Control": "no-store"}
 _VERSAO = re.compile(r"short-v(\d+)\.mp4$")
-_IMAGEM_PREVIA = re.compile(r"assets/ilus-\d+\.jpg")   # cartões do f9 (render/ilustracao_etapa.py)
+_IMAGEM_PREVIA = re.compile(r"assets/ilus-\d+\.jpg")   # cartões do f9 (render/ilustracao_cache.py)
 # lista fechada: trecho de todos, fundo desfocado do f8 e gameplay do f5 (render/assets.py)
 _VIDEOS_PREVIA = frozenset(f"assets/{v}" for v in ("trecho.mp4", FUNDO, GAMEPLAY))
 
@@ -116,7 +116,7 @@ def _ilustracoes_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]],
     return [{"k": i.k, "inicio": i.deixa.inicio, "fim": i.deixa.fim, "coisa": i.deixa.coisa,
              "busca": i.deixa.busca, "fonte_url": i.fonte_url, "motivo": i.motivo,
              "imagem": f"{_url(id, c.indice)}/ilustracao/{i.k}?v={v}" if i.imagem else None}
-            for i in lido[2]], None
+            for i in lido.ilustracoes], None
 
 
 def situacao_previa(previas: Previas, d: Path, id: str, c: Corte) -> dict[str, Any]:
@@ -253,7 +253,7 @@ def imagem_ilustracao(pasta: Path, n: int, k: int, previas: Previas) -> Path:
     if not editavel(previas, pasta.name, c):
         raise ErroProducao(f"corte {n} está sendo preparado; espere terminar para ver as ilustrações")
     lido = ler_ilustracoes(pasta_corte(pasta, n))
-    img = next((i.imagem for i in lido[2] if i.k == k), None) if lido else None
+    img = next((i.imagem for i in lido.ilustracoes if i.k == k), None) if lido else None
     if img is None or not img.exists():
         raise ErroProducao(f"ilustração {k} do corte {n} não existe ou ficou sem imagem")
     return img

@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 
 from cortes.render.ilustracao import Deixa
-from cortes.render.ilustracao_etapa import Ilustracao
+from cortes.render.ilustracao_cache import Ilustracao
 from cortes.render.legenda import Grupo
-from cortes.render.montagem import FORMATOS, caminho_template, montar_html, valores
+from cortes.render.montagem import FORMATOS, caminho_template, imagens_html, montar_html, valores
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import Amostra, Face, Rosto
 
@@ -86,7 +86,7 @@ def test_falante_com_rosto_vazio_continua_com_erro_claro() -> None:
 
 def _ilus(k: int, coisa: str, imagem: bool = True) -> Ilustracao:
     img = Path(f"D{k}-c1.jpg") if imagem else None
-    return Ilustracao(k, Deixa(2.0 * k, 2.0 * k + 1.5, coisa, coisa), img, "http://loja", "ok", ())
+    return Ilustracao(k, Deixa(2.0 * k, 2.0 * k + 1.5, coisa, coisa), img, "http://loja", "ok", (), False)
 
 
 def test_ilustrado_poe_um_cartao_por_imagem_escapado() -> None:
@@ -104,3 +104,8 @@ def test_ilustrado_poe_um_cartao_por_imagem_escapado() -> None:
 def test_imagens_vazio_fora_do_f9() -> None:
     tpl = caminho_template(REPO, "f7").read_text(encoding="utf-8")
     assert "IMAGENS" not in valores(tpl, 6.0, R, G, {}, "f7", "T", ilustracoes=[_ilus(1, "x")])
+
+
+def test_cartao_que_passa_do_fim_do_short_e_cortado_no_fim() -> None:
+    ilus = Ilustracao(1, Deixa(5.0, 6.5, "Vans", "Vans"), Path("D1-c1.jpg"), "http://loja", "ok", (), False)
+    assert 'data-start="5.0" data-duration="1.0"' in imagens_html([ilus], 6.0)

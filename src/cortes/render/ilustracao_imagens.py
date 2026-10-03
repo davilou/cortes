@@ -52,7 +52,18 @@ PRAZO_DOWNLOAD_S = 30     # por candidata; o -rw_timeout só pega servidor parad
 SEM_RESULTADO_DDGS = "No results found."   # o ddgs 9.16 diz "nada achado" assim (ddgs.py, _search_sync)
 ERRO_BUSCA = "erro na busca de imagens"
 
+# falha de download que outra tentativa pode resolver: prazo (processo.py), rede ou servidor 5xx.
+# 404/403 e imagem que não decodifica não estão aqui: tentar de novo dá o mesmo.
+SINAIS_TEMPORARIOS = ("foi interrompido", "não morreu", "timed out", "Connection refused",
+                      "Connection reset", "Failed to resolve", "Network is unreachable",
+                      "Temporary failure", "Server returned 5")
+
 rodar_download_real: Rodar = rodar_com_prazo(PRAZO_DOWNLOAD_S)
+
+
+def falha_temporaria(falha: str) -> bool:
+    """Puro. A falha de download (a linha de `baixar_candidatas`) é de prazo, rede ou servidor 5xx."""
+    return any(s.lower() in falha.lower() for s in SINAIS_TEMPORARIOS)
 
 
 class ErroBusca(ErroRender):

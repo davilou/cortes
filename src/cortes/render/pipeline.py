@@ -19,9 +19,10 @@ from cortes.render.assets import apagar_assets, preparar_assets
 from cortes.render.corte import Corte, pasta_corte
 from cortes.render.edicao import palavras_editadas
 from cortes.render.hyperframes import criar_projeto, renderizar
+from cortes.render.ilustracao_cache import PASTA as PASTA_ILUSTRACAO
+from cortes.render.ilustracao_cache import Ilustracao
 from cortes.render.ilustracao_conferencia import ChamarComRead, chamar_com_read_real
-from cortes.render.ilustracao_etapa import PASTA as PASTA_ILUSTRACAO
-from cortes.render.ilustracao_etapa import DepIlustracao, Ilustracao, ilustrar
+from cortes.render.ilustracao_etapa import DepIlustracao, ilustrar
 from cortes.render.ilustracao_imagens import BuscaImagens, ddgs_real, rodar_download_real
 from cortes.render.legenda import grupos, palavras_do_corte
 from cortes.render.montagem import caminho_template, montar_html, usa_rosto, valores
@@ -114,15 +115,17 @@ def _medir_rosto_se_possivel(trecho: Path, destino: Path, raiz: Path, formato: s
             raise
 
 
-def _palavras_trecho(pasta_ep: Path, c: Corte, segs: list[Segmento]) -> list[Palavra]:
-    """As palavras do corte, com as edições, no tempo do trecho sem pausas (legenda e deixas)."""
+def _palavras_trecho(pasta_ep: Path, c: Corte, segs: list[Segmento], *, com_mascara: bool) -> list[Palavra]:
+    """As palavras do corte, com as edições, no tempo do trecho sem pausas: com máscara para a
+    legenda, sem máscara para as deixas do f9 (o LLM precisa ler a palavra)."""
     ini, fim = janela(c)
-    todas = palavras_editadas([Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")], c.edicoes)
+    todas = palavras_editadas([Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")], c.edicoes,
+                              com_mascara=com_mascara)
     return palavras_sem_pausa(palavras_do_corte(todas, ini, fim), segs)
 
 
 def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento], ilus: list[Ilustracao]) -> str:
-    ws = _palavras_trecho(pasta_ep, c, segs)
+    ws = _palavras_trecho(pasta_ep, c, segs, com_mascara=True)
     dur = duracao(segs)
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
     rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json") if usa_rosto(tpl) else None
@@ -138,7 +141,8 @@ def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) ->
     ini, fim = janela(c)
     deps = DepIlustracao(dep.chamar_llm, dep.chamar_llm_com_read, dep.ddgs, dep.rodar,
                          dep.rodar_download)
-    return ilustrar(d, ini, fim, _palavras_trecho(pasta_ep, c, segs), d / "projeto" / "assets", deps)
+    palavras = _palavras_trecho(pasta_ep, c, segs, com_mascara=False)
+    return ilustrar(d, ini, fim, palavras, d / "projeto" / "assets", deps)
 
 
 def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:

@@ -1,21 +1,30 @@
 """f9 Ilustrado, a etapa inteira (plano 2026-10-02-ilustrado, Task 3): deixas → busca e download
-→ folha → conferência, com cache em `cortes/<n>/ilustracao/`.
+→ folha → conferência, com cache em `cortes/<n>/ilustracao/` (render/ilustracao_cache.py).
 
-O cache (`ilustracao.json`) vale enquanto o início e o fim do corte não mudarem; o pipeline apaga a
-pasta quando refaz o trecho, como `miniaturas/`. Falha de busca ou de download numa deixa não
-derruba o corte: a deixa fica "sem imagem" com o motivo, visível no editor. Mas um f9 sem imagem
-nenhuma é erro — nunca um Ilustrado que não ilustra nada, em silêncio.
+O pipeline apaga a pasta quando refaz o trecho, como `miniaturas/`. Falha de busca ou de download
+numa deixa não derruba o corte: a deixa fica "sem imagem" com o motivo, visível no editor, e a
+temporária é refeita no próximo render. Mas um f9 sem imagem nenhuma é erro — nunca um Ilustrado
+que não ilustra nada, em silêncio.
 """
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from cortes.detector import ChamarLLM
-from cortes.episodio import ler_json, salvar_json
 from cortes.llm import ErroLLM
 from cortes.render.ilustracao import Deixa, deixas_do_corte
+from cortes.render.ilustracao_cache import (
+    PASTA,
+    Chave,
+    Ilustracao,
+    chave_de,
+    gravar_deixas,
+    gravar_ilustracoes,
+    ler_deixas,
+    ler_ilustracoes,
+    nome_asset,
+)
 from cortes.render.ilustracao_conferencia import ChamarComRead, Escolha, conferir
 from cortes.render.ilustracao_imagens import (
     ERRO_BUSCA,
@@ -26,17 +35,16 @@ from cortes.render.ilustracao_imagens import (
     baixar_candidatas,
     buscar,
     dividir_folhas,
+    falha_temporaria,
     gerar_folha,
 )
 from cortes.render.processo import ErroRender, Rodar
 from cortes.tipos import Palavra
 
-PASTA = "ilustracao"
-ARQUIVO = "ilustracao.json"
 N_CANDIDATAS = 4
 NENHUMA = "nenhuma coisa concreta ilustrável neste corte — use outro formato"
 BUSCA_FORA = "a busca de imagens falhou em todas as deixas — tente de novo mais tarde"
-LICENCA = "desconhecida"   # foto de terceiros achada na busca (risco como o do B-roll, spec §10)
+TEMPORARIA = "nenhuma imagem por falha temporária de busca ou download — tente de novo mais tarde"
 
 
 @dataclass(frozen=True)
@@ -49,90 +57,45 @@ class DepIlustracao:
 
 
 @dataclass(frozen=True)
-class Ilustracao:
-    k: int                    # número da deixa no corte (D<k> da folha; assets/ilus-<k>.jpg)
-    deixa: Deixa
-    imagem: Path | None       # a candidata escolhida, em `ilustracao/`; None = sem imagem
-    fonte_url: str | None     # página de origem da imagem (licença desconhecida)
-    motivo: str
-    falhas: tuple[str, ...]   # downloads de candidatas que falharam (relatório da deixa)
+class Achadas:
+    """O que a busca e o download deram para uma deixa."""
+    baixadas: list[tuple[Candidata, Path]]
+    falhas: list[str]
+    motivo: str          # por que ficou sem candidata ("" se alguma baixou)
+    transitorio: bool    # sem candidata por falha que outra tentativa pode resolver
 
 
-def _para_json(i: Ilustracao) -> dict[str, Any]:
-    d = i.deixa
-    return {"k": i.k, "inicio": d.inicio, "fim": d.fim, "coisa": d.coisa, "busca": d.busca,
-            "imagem": i.imagem.name if i.imagem else None, "fonte_url": i.fonte_url,
-            "licenca": LICENCA if i.imagem else None, "motivo": i.motivo, "falhas": list(i.falhas)}
-
-
-def _de_json(pasta: Path, b: dict[str, Any]) -> Ilustracao:
-    deixa = Deixa(float(b["inicio"]), float(b["fim"]), str(b["coisa"]), str(b["busca"]))
-    imagem = pasta / str(b["imagem"]) if b["imagem"] else None
-    return Ilustracao(int(b["k"]), deixa, imagem, b["fonte_url"], str(b["motivo"]),
-                      tuple(str(f) for f in b["falhas"]))
-
-
-def ler_ilustracoes(d_corte: Path) -> tuple[float, float, list[Ilustracao]] | None:
-    """(início, fim, ilustrações) do cache, ou None se ainda não há. Cache malformado é erro claro."""
-    arq = d_corte / PASTA / ARQUIVO
-    if not arq.exists():
-        return None
-    try:
-        bruto = ler_json(arq)
-        return (float(bruto["inicio"]), float(bruto["fim"]),
-                [_de_json(arq.parent, b) for b in bruto["ilustracoes"]])
-    except (KeyError, TypeError, ValueError) as e:
-        raise ErroRender(f"{arq}: cache da ilustração inválido ({e!r}); refaça o trecho") from e
-
-
-def _cache(d_corte: Path, ini: float, fim: float) -> list[Ilustracao] | None:
-    lido = ler_ilustracoes(d_corte)
-    if lido is None or (lido[0], lido[1]) != (ini, fim):
-        return None
-    ilus = lido[2]
-    if any(i.imagem is not None and not i.imagem.exists() for i in ilus):
-        return None   # imagem apagada à mão: refaz tudo em vez de montar com cartão quebrado
-    return ilus
-
-
-def _candidatas(k: int, deixa: Deixa, pasta: Path,
-                dep: DepIlustracao) -> tuple[list[tuple[Candidata, Path]], list[str], str]:
-    """(baixadas, falhas, motivo se nenhuma baixou). Busca que falha é motivo, não exceção."""
+def _candidatas(k: int, deixa: Deixa, pasta: Path, dep: DepIlustracao) -> Achadas:
+    """Busca que falha é motivo, não exceção. Busca fora do ar e download que caiu por prazo ou rede
+    são temporários; nada achado ou só 404 não."""
     try:
         cands = buscar(deixa.busca, N_CANDIDATAS, dep.ddgs())
     except ErroBusca as e:
-        return [], [], str(e)
+        return Achadas([], [], str(e), True)
     if not cands:
-        return [], [], f"sem imagem: a busca '{deixa.busca}' não achou nada do tamanho mínimo"
+        return Achadas([], [], f"sem imagem: a busca '{deixa.busca}' não achou nada do tamanho mínimo", False)
     baixadas, falhas = baixar_candidatas(cands, pasta, f"D{k}", dep.rodar_download)
-    motivo = "" if baixadas else f"nenhuma candidata baixou: {'; '.join(falhas)}"
-    return baixadas, falhas, motivo
+    if baixadas:
+        return Achadas(baixadas, falhas, "", False)
+    return Achadas([], falhas, f"nenhuma candidata baixou: {'; '.join(falhas)}",
+                   any(falha_temporaria(f) for f in falhas))
 
 
-def _escolher(pasta: Path, deixas: list[Deixa], dep: DepIlustracao) -> list[Ilustracao]:
-    linhas: list[LinhaFolha] = []
-    baixadas_por_k: dict[int, list[tuple[Candidata, Path]]] = {}
-    sem: dict[int, Ilustracao] = {}
-    falhas_por_k: dict[int, tuple[str, ...]] = {}
-    for k, deixa in enumerate(deixas, start=1):
-        baixadas, falhas, motivo = _candidatas(k, deixa, pasta, dep)
-        falhas_por_k[k] = tuple(falhas)
-        if not baixadas:
-            sem[k] = Ilustracao(k, deixa, None, None, motivo, tuple(falhas))
-            continue
-        baixadas_por_k[k] = baixadas
-        linhas.append(LinhaFolha(k, deixa, tuple(p for _, p in baixadas)))
+def _ilustracao(k: int, deixa: Deixa, a: Achadas, e: Escolha | None) -> Ilustracao:
+    if e is None:   # nenhuma candidata baixou: não foi à conferência
+        return Ilustracao(k, deixa, None, None, a.motivo, tuple(a.falhas), a.transitorio)
+    cand, img = a.baixadas[e.imagem - 1] if e.imagem is not None else (None, None)
+    fonte = (cand.origem or cand.url) if cand else None
+    return Ilustracao(k, deixa, img, fonte, e.motivo, tuple(a.falhas), False)
+
+
+def _escolher(pasta: Path, numeradas: list[tuple[int, Deixa]], dep: DepIlustracao) -> list[Ilustracao]:
+    """Busca, baixa e confere as deixas dadas (k, deixa) — numa conferência só."""
+    achadas = {k: _candidatas(k, deixa, pasta, dep) for k, deixa in numeradas}
+    linhas = [LinhaFolha(k, deixa, tuple(p for _, p in achadas[k].baixadas))
+              for k, deixa in numeradas if achadas[k].baixadas]
     escolhas = _conferir(pasta, linhas, dep) if linhas else {}
-    res = []
-    for k, deixa in enumerate(deixas, start=1):
-        if k in sem:
-            res.append(sem[k])
-            continue
-        e = escolhas[k]
-        cand, img = baixadas_por_k[k][e.imagem - 1] if e.imagem is not None else (None, None)
-        fonte = (cand.origem or cand.url) if cand else None
-        res.append(Ilustracao(k, deixa, img, fonte, e.motivo, falhas_por_k[k]))
-    return res
+    return [_ilustracao(k, deixa, achadas[k], escolhas.get(k)) for k, deixa in numeradas]
 
 
 def _conferir(pasta: Path, linhas: list[LinhaFolha], dep: DepIlustracao) -> dict[int, Escolha]:
@@ -144,41 +107,78 @@ def _conferir(pasta: Path, linhas: list[LinhaFolha], dep: DepIlustracao) -> dict
     return conferir(folhas, linhas, dep.chamar_com_read)
 
 
-def _calcular(pasta: Path, ini: float, fim: float, palavras: list[Palavra],
-              dep: DepIlustracao) -> list[Ilustracao]:
+def _deixas(pasta: Path, chave: Chave, palavras: list[Palavra], dep: DepIlustracao) -> list[Deixa]:
+    """De `deixas.json` quando a chave bate; senão a pasta é refeita do zero e o LLM é chamado."""
+    deixas = ler_deixas(pasta, chave)
+    if deixas is not None:
+        return deixas
     if pasta.exists():
-        shutil.rmtree(pasta)   # restos de um cálculo anterior (outro início/fim ou falha no meio)
+        shutil.rmtree(pasta)   # restos de outro início/fim ou de outro texto
     pasta.mkdir(parents=True)
-    try:
-        deixas = deixas_do_corte(palavras, dep.chamar_llm)
-        ilus = _escolher(pasta, deixas, dep) if deixas else []
-    except ErroLLM as e:
-        raise ErroRender(f"ilustração: {e}") from e
-    if not any(i.imagem for i in ilus):
-        raise _sem_imagem(ilus)   # sem gravar o cache: busca fora do ar não fica guardada
-    salvar_json(pasta / ARQUIVO, {"inicio": ini, "fim": fim, "ilustracoes": [_para_json(i) for i in ilus]})
-    return ilus
+    deixas = deixas_do_corte(palavras, dep.chamar_llm)
+    gravar_deixas(pasta, chave, deixas)
+    return deixas
+
+
+def _refazer_temporarias(pasta: Path, ilus: list[Ilustracao], dep: DepIlustracao) -> list[Ilustracao]:
+    novas = {i.k: i for i in _escolher(pasta, [(i.k, i.deixa) for i in ilus if i.transitorio], dep)}
+    return [novas.get(i.k, i) for i in ilus]
 
 
 def _sem_imagem(ilus: list[Ilustracao]) -> ErroRender:
-    """Busca fora do ar em todas as deixas não é "nada ilustrável": a mensagem diz que foi a busca."""
+    """Busca fora do ar ou download caído não é "nada ilustrável": a mensagem diz o que foi."""
     motivos = "; ".join(f"D{i.k} '{i.deixa.coisa}': {i.motivo}" for i in ilus)
-    rede = bool(ilus) and all(i.motivo.startswith(ERRO_BUSCA) for i in ilus)
-    return ErroRender((BUSCA_FORA if rede else NENHUMA) + (f" ({motivos})" if motivos else ""))
+    if ilus and all(i.motivo.startswith(ERRO_BUSCA) for i in ilus):
+        base = BUSCA_FORA
+    else:
+        base = TEMPORARIA if any(i.transitorio for i in ilus) else NENHUMA
+    return ErroRender(base + (f" ({motivos})" if motivos else ""))
 
 
-def nome_asset(k: int) -> str:
-    return f"ilus-{k}.jpg"
+def _gravar(pasta: Path, chave: Chave, ilus: list[Ilustracao]) -> list[Ilustracao]:
+    """Sem imagem nenhuma é erro; e só fica guardado como `vazio` se nenhuma falha foi temporária."""
+    if any(i.imagem for i in ilus):
+        gravar_ilustracoes(pasta, chave, ilus, None)
+        return ilus
+    erro = _sem_imagem(ilus)
+    gravar_ilustracoes(pasta, chave, ilus, None if any(i.transitorio for i in ilus) else str(erro))
+    raise erro
+
+
+def _cache_vale(pasta: Path, chave: Chave) -> list[Ilustracao] | None:
+    """As ilustrações do cache desta chave, levantando o "nada ilustrável" guardado; None se o cache
+    não vale (outra chave, ou imagem apagada à mão: refaz a escolha em vez de montar cartão quebrado)."""
+    cache = ler_ilustracoes(pasta.parent)
+    if cache is None or cache.chave != chave:
+        return None
+    if any(i.imagem is not None and not i.imagem.exists() for i in cache.ilustracoes):
+        return None
+    if cache.vazio is not None:
+        raise ErroRender(cache.vazio)
+    return cache.ilustracoes
+
+
+def _resolver(pasta: Path, chave: Chave, palavras: list[Palavra], dep: DepIlustracao) -> list[Ilustracao]:
+    ilus = _cache_vale(pasta, chave)
+    if ilus is None:
+        deixas = _deixas(pasta, chave, palavras, dep)
+        return _gravar(pasta, chave, _escolher(pasta, list(enumerate(deixas, start=1)), dep))
+    if any(i.transitorio for i in ilus):
+        return _gravar(pasta, chave, _refazer_temporarias(pasta, ilus, dep))
+    return ilus
 
 
 def ilustrar(d_corte: Path, ini: float, fim: float, palavras: list[Palavra], assets: Path,
              dep: DepIlustracao) -> list[Ilustracao]:
-    """Ilustrações do corte (do cache quando início e fim não mudaram), com as imagens escolhidas
-    copiadas para `assets/ilus-<k>.jpg`. `palavras` no tempo do trecho sem pausas."""
-    pasta = d_corte / PASTA
-    ilus = _cache(d_corte, ini, fim)
-    if ilus is None:
-        ilus = _calcular(pasta, ini, fim, palavras, dep)
+    """Ilustrações do corte (do cache quando início, fim e texto não mudaram), com as imagens
+    escolhidas copiadas para `assets/ilus-<k>.jpg` — os cartões de antes são apagados primeiro.
+    `palavras` no tempo do trecho sem pausas, com as correções da legenda e sem máscara."""
+    for velho in assets.glob("ilus-*.jpg"):
+        velho.unlink()
+    try:
+        ilus = _resolver(d_corte / PASTA, chave_de(ini, fim, palavras), palavras, dep)
+    except ErroLLM as e:
+        raise ErroRender(f"ilustração: {e}") from e
     for i in ilus:
         if i.imagem is not None:
             shutil.copyfile(i.imagem, assets / nome_asset(i.k))

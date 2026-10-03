@@ -20,7 +20,7 @@ import pytest
 
 from cortes.cli import MODELO_ROSTO, PY_VISAO
 from cortes.render.corte import novo_corte
-from cortes.render.ilustracao_etapa import ler_ilustracoes
+from cortes.render.ilustracao_cache import ler_ilustracoes
 from cortes.render.pipeline import DepRender, renderizar_corte
 
 REPO = Path(__file__).resolve().parents[1]
@@ -89,7 +89,7 @@ def test_render_real_ilustrado(tmp_path: Path, titulo: str) -> None:
 
     lido = ler_ilustracoes(d)
     assert lido is not None
-    ilus = lido[2]
+    ilus = lido.ilustracoes
     com = [i for i in ilus if i.imagem is not None]
     assert com, "f9 renderizado sem nenhuma imagem"
     assets = d / "projeto" / "assets"

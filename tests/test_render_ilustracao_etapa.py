@@ -9,7 +9,8 @@ from ddgs.exceptions import DDGSException, RatelimitException
 
 from cortes.llm import ErroLLM
 from cortes.render.corte import concluir
-from cortes.render.ilustracao_etapa import NENHUMA, ler_ilustracoes
+from cortes.render.ilustracao_cache import ler_ilustracoes
+from cortes.render.ilustracao_etapa import NENHUMA
 from cortes.render.pipeline import DepRender, montar_projeto, renderizar_corte
 from cortes.render.processo import ErroRender
 from tests.test_render_pipeline import C, Falso, episodio
@@ -26,20 +27,26 @@ class Ilustra:
                  falha_busca: tuple[str, ...] = (), sem_resultado: tuple[str, ...] = ()) -> None:
         self.deixas, self.escolhas, self.falha_busca = deixas, escolhas, falha_busca
         self.sem_resultado = sem_resultado
+        self.falha_download: dict[str, str] = {}   # trecho da URL → saída do ffmpeg que falhou
         self.llm = self.conferencias = 0
         self.buscas: list[str] = []
         self.pasta_read: Path | None = None
         self.downloads: list[str] = []
+        self.prompts_llm: list[str] = []
+        self.prompts_conferencia: list[str] = []
 
     def chamar_llm(self, prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
         self.llm += 1
+        self.prompts_llm.append(prompt)
         return {"deixas": self.deixas}
 
     def chamar_com_read(self, prompt: str, schema: dict[str, Any], sistema: str, modelo: str,
                         pasta: Path) -> dict[str, Any]:
+        """Responde só sobre as deixas que a folha mostra, como o modelo de verdade."""
         self.conferencias += 1
         self.pasta_read = pasta
-        return {"escolhas": self.escolhas}
+        self.prompts_conferencia.append(prompt)
+        return {"escolhas": [e for e in self.escolhas if f"- D{e['deixa']}:" in prompt]}
 
     def images(self, query: str, **kwargs: Any) -> list[dict[str, Any]]:
         self.buscas.append(query)
@@ -51,7 +58,11 @@ class Ilustra:
                  "height": 1000} for j in (1, 2)]
 
     def baixar(self, args: list[str], cwd: Path | None) -> tuple[int, str]:
-        self.downloads.append(args[args.index("-i") + 1])
+        url = args[args.index("-i") + 1]
+        self.downloads.append(url)
+        for trecho, saida in self.falha_download.items():
+            if trecho in url:
+                return 1, saida
         Path(args[-1]).write_bytes(b"jpg")
         return 0, ""
 
@@ -85,7 +96,7 @@ def test_f9_ilustra_uma_vez_e_reaproveita_o_cache(tmp_path: Path) -> None:
     assert il.pasta_read == d / "ilustracao" and (d / "ilustracao" / "folha-1.jpg").exists()
     lido = ler_ilustracoes(d)
     assert lido is not None
-    [i] = lido[2]
+    [i] = lido.ilustracoes
     assert i.imagem == d / "ilustracao" / "D1-c2.jpg" and i.fonte_url == "http://loja/2"
     assert (d / "projeto" / "assets" / "ilus-1.jpg").exists()
     html = (d / "projeto" / "index.html").read_text(encoding="utf-8")
@@ -109,7 +120,7 @@ def test_f9_busca_que_falha_deixa_so_aquela_deixa_sem_imagem(tmp_path: Path) -> 
     montar_projeto(pasta, C9, tmp_path, il.dep(f))
     lido = ler_ilustracoes(pasta / "cortes" / "0")
     assert lido is not None
-    vans, camisa = lido[2]
+    vans, camisa = lido.ilustracoes
     assert vans.imagem is None and "Ratelimit" in vans.motivo
     assert camisa.imagem is not None and camisa.motivo == "é a camisa"
     html = (pasta / "cortes" / "0" / "projeto" / "index.html").read_text(encoding="utf-8")
@@ -123,7 +134,7 @@ def test_f9_busca_sem_resultado_fica_sem_imagem_com_o_motivo(tmp_path: Path) -> 
     montar_projeto(pasta, C9, tmp_path, il.dep(f))
     lido = ler_ilustracoes(pasta / "cortes" / "0")
     assert lido is not None
-    assert "sem imagem: a busca 'tênis Vans Old Skool' não achou nada" in lido[2][0].motivo
+    assert "sem imagem: a busca 'tênis Vans Old Skool' não achou nada" in lido.ilustracoes[0].motivo
 
 
 def test_f9_busca_falhando_em_todas_as_deixas_diz_que_foi_a_busca(tmp_path: Path) -> None:
@@ -134,12 +145,12 @@ def test_f9_busca_falhando_em_todas_as_deixas_diz_que_foi_a_busca(tmp_path: Path
     assert NENHUMA not in str(ex.value) and il.conferencias == 0
 
 
-def test_f9_sem_nenhuma_imagem_e_erro_e_nao_grava_cache(tmp_path: Path) -> None:
+def test_f9_sem_nenhuma_imagem_e_erro(tmp_path: Path) -> None:
     pasta, f = ep9(tmp_path), Falso()
     il = Ilustra([VANS], [{"deixa": 1, "imagem": None, "motivo": "nenhuma é Vans"}])
     with pytest.raises(ErroRender, match=NENHUMA + r".*nenhuma é Vans"):
         renderizar_corte(pasta, C9, tmp_path, il.dep(f))
-    assert "npx" not in f.chamadas and ler_ilustracoes(pasta / "cortes" / "0") is None
+    assert "npx" not in f.chamadas
 
 
 def test_f9_sem_deixa_nenhuma_e_erro(tmp_path: Path) -> None:

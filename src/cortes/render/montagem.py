@@ -5,7 +5,7 @@ import re
 from collections.abc import Sequence
 from pathlib import Path
 
-from cortes.render.ilustracao_etapa import Ilustracao, nome_asset
+from cortes.render.ilustracao_cache import Ilustracao, nome_asset
 from cortes.render.legenda import Grupo, legenda_html
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import (

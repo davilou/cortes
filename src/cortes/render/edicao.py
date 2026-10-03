@@ -55,12 +55,14 @@ def indices_do_corte(todas: list[Palavra], inicio: float, fim: float) -> tuple[i
     return dentro[0], dentro[-1]
 
 
-def palavras_editadas(todas: list[Palavra], ed: Edicoes) -> list[Palavra]:
-    """Texto da legenda com as edições: troca, mascara e tira as apagadas (texto vazio)."""
+def palavras_editadas(todas: list[Palavra], ed: Edicoes, *, com_mascara: bool = True) -> list[Palavra]:
+    """Texto da legenda com as edições: troca, mascara e tira as apagadas (texto vazio). Sem máscara
+    (`com_mascara=False`) é o texto que o LLM lê: "p*rra" não diz nada a ele, e a máscara não tira
+    nem põe palavra, então os índices são os mesmos da legenda."""
     res: list[Palavra] = []
     for i, p in enumerate(todas):
         texto = ed.legenda.get(i, p.texto)
-        if i in ed.mascaradas:
+        if com_mascara and i in ed.mascaradas:
             texto = mascarar(texto)
         if texto.strip():
             res.append(replace(p, texto=texto))

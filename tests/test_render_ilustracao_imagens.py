@@ -16,6 +16,7 @@ from cortes.render.ilustracao_imagens import (
     baixar_candidatas,
     buscar,
     dividir_folhas,
+    falha_temporaria,
     folha_args,
     gerar_folha,
 )
@@ -165,6 +166,18 @@ def test_baixa_ate_4_candidatas_ao_mesmo_tempo_e_devolve_na_ordem(tmp_path: Path
         ("u1", "D1-c1.jpg"), ("u2", "D1-c2.jpg"), ("u4", "D1-c4.jpg"), ("u5", "D1-c5.jpg")]
     assert (tmp_path / "D1-c4.jpg").read_bytes() == b"u4"
     assert len(falhas) == 1 and falhas[0].startswith("u3:") and max(simultaneos) == 4
+
+
+@pytest.mark.parametrize("falha,temporaria", [
+    ("u: ffmpeg passou de 30 s e foi interrompido", True),
+    ("u: download de u falhou (código 1): Connection timed out", True),
+    ("u: download de u falhou (código 1): Failed to resolve hostname x", True),
+    ("u: download de u falhou (código 1): Server returned 5XX Server Error reply", True),
+    ("u: download de u falhou (código 1): Server returned 404 Not Found", False),
+    ("u: download de u falhou (código 1): HTTP error 403 Forbidden", False),
+    ("u: download de u: ffmpeg não gerou a imagem", False)])
+def test_falha_temporaria_so_para_prazo_rede_e_5xx(falha: str, temporaria: bool) -> None:
+    assert falha_temporaria(falha) is temporaria
 
 
 def test_folha_uma_linha_por_deixa_com_numero_em_cada_tile() -> None:
