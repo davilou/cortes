@@ -1,5 +1,6 @@
-"""API dos Shorts de um episódio (plano B; spec produção §5): Renderizar, o MP4 do corte e o
+"""API dos Shorts de um episódio (plano B; spec produção §5): Renderizar, Cancelar, o MP4 do corte e o
 resumo do render para a barra de etapas. `pasta_de` vem de rotas.py (valida o id do episódio)."""
+import shutil
 import threading
 from collections.abc import Callable
 from dataclasses import asdict
@@ -17,6 +18,7 @@ from cortes.producao.previas import Previas
 from cortes.render.corte import (
     ARQUIVO,
     Corte,
+    cancelar,
     cortes_do_episodio,
     gravar_corte,
     ler_corte,
@@ -67,6 +69,19 @@ def pedir_render(pasta: Path, indice: int, formato: str | None, preparando: bool
         gravar_corte(d, novo_corte(indice, cands[indice], formato or e.formato))
 
 
+def cancelar_render(pasta: Path, indice: int) -> None:
+    """Corrida conhecida: a fila pode pegar o corte entre a leitura daqui e a gravação (ela não usa a
+    trava `escrita`). Nesse caso o render segue e a gravação dela, no fim, vence: o Short renderiza."""
+    d = pasta_corte(pasta, indice)
+    if not (d / ARQUIVO).exists():
+        raise ErroProducao(f"corte {indice} não existe")
+    c = cancelar(ler_corte(d))
+    if c is None:
+        shutil.rmtree(d)   # nunca renderizou nem foi editado: o candidato volta a ter "Renderizar"
+    else:
+        gravar_corte(d, c)
+
+
 def montar(app: FastAPI, pasta_de: Callable[[str], Path], fila: Fila, escrita: threading.Lock,
           previas: Previas) -> None:
     @app.post("/api/episodios/{id}/cortes/{indice}/renderizar", status_code=202)
@@ -76,6 +91,13 @@ def montar(app: FastAPI, pasta_de: Callable[[str], Path], fila: Fila, escrita: t
             pedir_render(pasta, indice, pedido.formato, previas.preparando(id, indice))
         fila.enfileirar(id)
         return {"enfileirado": True}
+
+    @app.post("/api/episodios/{id}/cortes/{indice}/cancelar")
+    def api_cancelar(id: str, indice: int) -> dict[str, bool]:
+        pasta = pasta_de(id)
+        with escrita:
+            cancelar_render(pasta, indice)
+        return {"cancelado": True}
 
     @app.get("/api/episodios/{id}/cortes/{indice}/video")
     def api_video_corte(

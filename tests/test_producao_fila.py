@@ -15,7 +15,7 @@ AGORA = datetime(2026, 10, 2, 9)
 def episodio(raiz: Path, id: str = "abcdefghijk") -> Path:
     pasta = raiz / "episodios" / id
     pasta.mkdir(parents=True)
-    gravar(pasta, novo(id, f"https://youtu.be/{id}", "financas", 5, "f7", AGORA))
+    gravar(pasta, novo(id, f"https://youtu.be/{id}", "financas", "f7", AGORA))
     return pasta
 
 

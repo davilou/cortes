@@ -6,19 +6,17 @@ import pytest
 
 from cortes.producao.estado import ErroProducao
 from cortes.render.corte import (
-    PLANEJADO,
     Corte,
     Edicoes,
+    cancelar,
     concluir,
     cortes_do_episodio,
     falhar,
     gravar_corte,
     iniciar,
     ler_corte,
-    melhores,
     novo_corte,
     pasta_corte,
-    planejar,
     proximo,
     reenfileirar,
     video,
@@ -27,10 +25,6 @@ from cortes.render.corte import (
 CANDS = [{"inicio": 10.0, "fim": 40.0, "titulo": "A", "nota_final": 50.0},
          {"inicio": 50.0, "fim": 80.0, "titulo": "B", "nota_final": 90.0},
          {"inicio": 90.0, "fim": 120.0, "titulo": "C", "nota_final": 70.0}]
-
-
-def test_melhores_pela_nota() -> None:
-    assert melhores(CANDS, 2) == [1, 2] and melhores(CANDS, 10) == [1, 2, 0]
 
 
 def test_transicoes() -> None:
@@ -126,11 +120,30 @@ def test_cortes_do_episodio_ordena_por_indice_numerico(tmp_path: Path) -> None:
     assert [c.indice for c in cortes_do_episodio(tmp_path)] == [2, 10]
 
 
-def test_planejar_uma_vez_sem_pisar_no_manual(tmp_path: Path) -> None:
-    gravar_corte(pasta_corte(tmp_path, 1), novo_corte(1, CANDS[1], "f1"))   # Renderizar manual antes
-    planejar(tmp_path, "f7", 2, CANDS)
-    assert [(c.indice, c.formato) for c in cortes_do_episodio(tmp_path)] == [(1, "f1"), (2, "f7")]
-    assert (tmp_path / "cortes" / PLANEJADO).exists()
+def test_cancelar_com_versao_volta_a_pronto() -> None:
+    pronto = concluir(iniciar(novo_corte(0, CANDS[0], "f7")))
+    c = cancelar(reenfileirar(pronto, "f1"))
+    assert c is not None and c.status == "pronto" and c.versao == 1 and c.erro is None
+
+
+def test_cancelar_sem_versao_nem_edicao_some() -> None:
+    assert cancelar(novo_corte(0, CANDS[0], "f7")) is None
+
+
+@pytest.mark.parametrize("muda", [{"edicoes": Edicoes({3: "x"})}, {"alterado": True}])
+def test_cancelar_sem_versao_com_edicao_fica_em_erro(muda: dict[str, object]) -> None:
+    na_fila = replace(novo_corte(0, CANDS[0], "f7"), **muda)
+    c = cancelar(na_fila)
+    assert c is not None and c.status == "erro" and c.erro == "render cancelado"
+    assert c.edicoes == na_fila.edicoes and c.versao == 0
+
+
+@pytest.mark.parametrize("status", ["renderizando", "pronto", "erro"])
+def test_cancelar_so_quem_esta_na_fila(status: str) -> None:
+    c = iniciar(novo_corte(0, CANDS[0], "f7"))
+    c = concluir(c) if status == "pronto" else falhar(c, "x") if status == "erro" else c
+    with pytest.raises(ErroProducao, match="só dá para cancelar"):
+        cancelar(c)
 
 
 def test_edicoes_vao_e_voltam_do_disco(tmp_path: Path) -> None:

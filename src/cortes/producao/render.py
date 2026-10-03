@@ -1,6 +1,8 @@
-"""Etapa `render` do episódio (spec produção §4.4): planeja os N melhores uma vez e renderiza, um
-por vez, os cortes na fila. Um corte que falha fica em erro com a causa no corte.json e os outros
-seguem; a etapa só fica em erro se nem o planejamento der certo.
+"""Etapa `render` do episódio (spec produção §4.4): renderiza, um por vez, só os cortes que foram
+pedidos (na fila ou que ficaram renderizando numa queda). Nada é escolhido sozinho: sem pedido, a
+etapa fecha ok sem corte nenhum. Um `cortes/planejado.json` antigo (do render automático dos N
+melhores, que saiu) é ignorado. Um corte que falha fica em erro com a causa no corte.json e os
+outros seguem.
 
 "Renderizar" manual grava um corte `na_fila` e enfileira o episódio; se a etapa já tinha fechado
 (ok), `reabrir_render` — o gancho `antes` da fila, que roda na thread da fila — reabre a etapa.
@@ -11,10 +13,8 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from cortes.producao import curadoria
 from cortes.producao.estado import EstadoEpisodio, gravar, ler, marcar
 from cortes.render.corte import (
-    PLANEJADO,
     Corte,
     concluir,
     cortes_do_episodio,
@@ -22,7 +22,6 @@ from cortes.render.corte import (
     gravar_corte,
     iniciar,
     pasta_corte,
-    planejar,
     proximo,
 )
 from cortes.render.pipeline import DepRender, renderizar_corte
@@ -32,8 +31,6 @@ Renderizar = Callable[[Path, Corte, Path, DepRender], None]
 
 def rodar_render(pasta: Path, e: EstadoEpisodio, raiz: Path, dep: DepRender,
                  renderizar: Renderizar = renderizar_corte) -> None:
-    if not (pasta / "cortes" / PLANEJADO).exists():
-        planejar(pasta, e.formato, e.n_shorts, curadoria.candidatos(pasta))
     while (c := proximo(cortes_do_episodio(pasta))) is not None:   # relê o disco: pega pedido novo
         _um(pasta, c, raiz, dep, renderizar)
 

@@ -31,14 +31,14 @@ class EstadoEpisodio:
     id: str
     url: str
     nicho: str
-    n_shorts: int
     formato: str
     criado_em: str
     etapas: dict[str, Etapa]
 
 
-def novo(id: str, url: str, nicho: str, n_shorts: int, formato: str, agora: datetime) -> EstadoEpisodio:
-    return EstadoEpisodio(id, url, nicho, n_shorts, formato, agora.isoformat(timespec="seconds"),
+def novo(id: str, url: str, nicho: str, formato: str, agora: datetime) -> EstadoEpisodio:
+    """`formato` é só o padrão pré-marcado no seletor de cada Short; nada renderiza sem pedido."""
+    return EstadoEpisodio(id, url, nicho, formato, agora.isoformat(timespec="seconds"),
                           {nome: Etapa() for nome in ETAPAS})
 
 
@@ -105,13 +105,6 @@ def _texto_ou_nulo(d: dict[str, Any], campo: str) -> str | None:
     return v
 
 
-def _n_shorts(d: dict[str, Any]) -> int:
-    v = d["n_shorts"]
-    if not isinstance(v, int) or isinstance(v, bool):
-        raise ValueError(f"campo 'n_shorts' deveria ser inteiro, veio {v!r}")
-    return v
-
-
 def _situacao(d: dict[str, Any]) -> Situacao:
     v = d["situacao"]
     if v not in SITUACOES:
@@ -130,8 +123,10 @@ def ler(pasta: Path) -> EstadoEpisodio:
         brutas = d["etapas"]
         # 'render' entrou no plano B: o estado.json do plano A não tem a chave e a etapa nasce
         # pendente. É migração explícita de uma etapa nova, não default para dado que falta.
+        # 'n_shorts' saiu com o render automático: um estado.json antigo ainda tem a chave, e ela é
+        # ignorada de propósito (migração explícita de campo removido).
         etapas = {n: Etapa() if n == "render" and n not in brutas else _etapa(brutas[n]) for n in ETAPAS}
-        return EstadoEpisodio(_texto(d, "id"), _texto(d, "url"), _texto(d, "nicho"), _n_shorts(d),
+        return EstadoEpisodio(_texto(d, "id"), _texto(d, "url"), _texto(d, "nicho"),
                               _texto(d, "formato"), _texto(d, "criado_em"), etapas)
     except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as ex:
         raise ErroProducao(f"{arquivo}: estado inválido ({ex!r})") from ex

@@ -15,10 +15,10 @@ CANDS = [{"inicio": 10.0, "fim": 40.0, "titulo": "A", "nota_final": 50.0},
          {"inicio": 90.0, "fim": 120.0, "titulo": "C", "nota_final": 70.0}]
 
 
-def episodio(tmp: Path, n: int = 2) -> Path:
+def episodio(tmp: Path) -> Path:
     pasta = tmp / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
-    e = novo("abcdefghijk", "https://youtu.be/abcdefghijk", "financas", n, "f7", AGORA)
+    e = novo("abcdefghijk", "https://youtu.be/abcdefghijk", "financas", "f7", AGORA)
     for nome in ("video", "legenda", "sinais", "momentos"):
         e = marcar(e, nome, "ok", AGORA)
     gravar(pasta, e)
@@ -26,20 +26,41 @@ def episodio(tmp: Path, n: int = 2) -> Path:
     return pasta
 
 
-def test_planeja_os_melhores_e_renderiza_um_por_vez(tmp_path: Path) -> None:
+def pedir(pasta: Path, *indices: int) -> None:
+    for i in indices:
+        gravar_corte(pasta_corte(pasta, i), novo_corte(i, CANDS[i], "f7"))
+
+
+def test_episodio_novo_nao_ganha_corte_sozinho(tmp_path: Path) -> None:
     pasta, feitos = episodio(tmp_path), []
+    rodar_render(pasta, ler(pasta), tmp_path, DEP, lambda p, c, r, d: feitos.append(c.indice))
+    assert feitos == [] and cortes_do_episodio(pasta) == []
+
+
+def test_planejado_json_antigo_e_ignorado(tmp_path: Path) -> None:
+    pasta, feitos = episodio(tmp_path), []
+    (pasta / "cortes").mkdir()
+    (pasta / "cortes" / "planejado.json").write_text('{"n": 5, "formato": "f7"}', encoding="utf-8")
+    rodar_render(pasta, ler(pasta), tmp_path, DEP, lambda p, c, r, d: feitos.append(c.indice))
+    assert feitos == [] and cortes_do_episodio(pasta) == []
+
+
+def test_renderiza_so_o_pedido_um_por_vez(tmp_path: Path) -> None:
+    pasta, feitos = episodio(tmp_path), []
+    pedir(pasta, 2, 0)
 
     def falso(p: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
         feitos.append((c.indice, c.status))
 
     rodar_render(pasta, ler(pasta), tmp_path, DEP, falso)
-    assert feitos == [(1, "na_fila"), (2, "na_fila")]
+    assert feitos == [(0, "na_fila"), (2, "na_fila")]
     cortes = [(c.indice, c.status, c.versao) for c in cortes_do_episodio(pasta)]
-    assert cortes == [(1, "pronto", 1), (2, "pronto", 1)]
+    assert cortes == [(0, "pronto", 1), (2, "pronto", 1)]
 
 
 def test_um_corte_que_falha_nao_para_os_outros(tmp_path: Path) -> None:
     pasta = episodio(tmp_path)
+    pedir(pasta, 1, 2)
 
     def falso(p: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
         if c.indice == 1:
@@ -48,13 +69,6 @@ def test_um_corte_que_falha_nao_para_os_outros(tmp_path: Path) -> None:
     rodar_render(pasta, ler(pasta), tmp_path, DEP, falso)
     um, dois = cortes_do_episodio(pasta)
     assert um.status == "erro" and um.erro == "RuntimeError: npx sumiu" and dois.status == "pronto"
-
-
-def test_nao_replaneja(tmp_path: Path) -> None:
-    pasta, feitos = episodio(tmp_path), []
-    rodar_render(pasta, ler(pasta), tmp_path, DEP, lambda p, c, r, d: None)
-    rodar_render(pasta, ler(pasta), tmp_path, DEP, lambda p, c, r, d: feitos.append(c.indice))
-    assert feitos == [] and len(cortes_do_episodio(pasta)) == 2
 
 
 def test_reabre_a_etapa_quando_um_render_foi_pedido_depois(tmp_path: Path) -> None:

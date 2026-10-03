@@ -67,7 +67,7 @@ def test_etapas_em_ordem_gravam_seus_arquivos(tmp_path: Path) -> None:
     raiz = raiz_com_nicho(tmp_path)
     pasta = raiz / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
-    e = novo("abcdefghijk", "https://youtu.be/abcdefghijk", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "https://youtu.be/abcdefghijk", "financas", "f7", AGORA)
     f = Falsas()
     for nome in ("video", "legenda", "sinais", "momentos"):
         rodar_etapa(nome, pasta, e, raiz, f.dep())
@@ -91,7 +91,7 @@ def test_etapa_pula_o_que_ja_existe(tmp_path: Path) -> None:
     (pasta / "meta.json").write_text('{"titulo": "T"}', encoding="utf-8")
     wav_silencio(pasta / "audio.wav")
     (pasta / "palavras.json").write_text(json.dumps([asdict_palavra("oi", 0, 1)]), encoding="utf-8")
-    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "u", "financas", "f7", AGORA)
     f = Falsas()
     rodar_etapa("video", pasta, e, raiz, f.dep())
     rodar_etapa("legenda", pasta, e, raiz, f.dep())
@@ -105,7 +105,7 @@ def test_etapa_video_refaz_download_se_so_video_mp4_sobreviveu(tmp_path: Path) -
     pasta = raiz / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
     (pasta / "video.mp4").write_bytes(b"lixo de uma queda anterior")
-    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "u", "financas", "f7", AGORA)
     f = Falsas()
     rodar_etapa("video", pasta, e, raiz, f.dep())
     assert f.chamadas == ["video", "audio"]
@@ -116,7 +116,7 @@ def test_etapa_sinais_pula_se_sinais_json_existe(tmp_path: Path) -> None:
     pasta = raiz / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
     (pasta / "sinais.json").write_text('{"janela_s": 0.5, "energia": [0.1]}', encoding="utf-8")
-    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "u", "financas", "f7", AGORA)
     f = Falsas()
     rodar_etapa("sinais", pasta, e, raiz, f.dep())
     assert f.chamadas == []
@@ -127,7 +127,7 @@ def test_etapa_momentos_pula_e_nao_chama_llm_se_candidatos_json_existe(tmp_path:
     pasta = raiz / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
     (pasta / "candidatos.json").write_text("[]", encoding="utf-8")
-    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "u", "financas", "f7", AGORA)
     f = Falsas()
     rodar_etapa("momentos", pasta, e, raiz, f.dep())
     assert f.chamadas == []
@@ -136,7 +136,7 @@ def test_etapa_momentos_pula_e_nao_chama_llm_se_candidatos_json_existe(tmp_path:
 def test_nicho_inexistente_falha_com_caminho(tmp_path: Path) -> None:
     pasta = tmp_path / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
-    e = novo("abcdefghijk", "u", "humor", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "u", "humor", "f7", AGORA)
     (pasta / "palavras.json").write_text(json.dumps([asdict_palavra("oi.", 0, 1)]), encoding="utf-8")
     (pasta / "sinais.json").write_text('{"janela_s": 0.5, "energia": [0.1, 0.1]}', encoding="utf-8")
     with pytest.raises(ErroProducao, match="humor") as exc:
@@ -145,7 +145,7 @@ def test_nicho_inexistente_falha_com_caminho(tmp_path: Path) -> None:
 
 
 def test_etapa_desconhecida(tmp_path: Path) -> None:
-    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "u", "financas", "f7", AGORA)
     with pytest.raises(ErroProducao, match="xyz"):
         rodar_etapa("xyz", tmp_path, e, tmp_path, Falsas().dep())
 
@@ -160,7 +160,7 @@ def test_etapas_do_estado_e_do_modulo_nao_divergem() -> None:
 def test_transcricao_grava_palavras_com_inicio_e_fim(tmp_path: Path) -> None:
     pasta = tmp_path / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
-    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "u", "financas", "f7", AGORA)
     rodar_etapa("legenda", pasta, e, tmp_path, Falsas().dep())
     palavras = json.loads((pasta / "palavras.json").read_text(encoding="utf-8"))
     assert palavras[1] == {"texto": "ganhei", "inicio": 0.3, "fim": 0.7}
@@ -169,7 +169,7 @@ def test_transcricao_grava_palavras_com_inicio_e_fim(tmp_path: Path) -> None:
 def test_transcricao_que_falha_nao_grava_palavras(tmp_path: Path) -> None:
     pasta = tmp_path / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
-    e = novo("abcdefghijk", "u", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "u", "financas", "f7", AGORA)
 
     def sem_memoria(audio: Path) -> list[Palavra]:
         raise RuntimeError("placa de vídeo sem memória")

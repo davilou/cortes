@@ -19,7 +19,7 @@ CAND = {"frase_inicio": 0, "frase_fim": 1, "inicio": 10.0, "fim": 40.0,
         "nota_final": 87.5}
 FRASES = [{"indice": 0, "texto": "Eu ganhei dez mil.", "inicio": 10.0, "fim": 20.0},
           {"indice": 1, "texto": "E perdi tudo.", "inicio": 20.0, "fim": 40.0}]
-NOVO = {"link": "https://youtu.be/abcdefghijk", "nicho": "financas", "n_shorts": 5, "formato": "f7"}
+NOVO = {"link": "https://youtu.be/abcdefghijk", "nicho": "financas", "formato": "f7"}
 
 
 def nada(nome: str, pasta: Path, e: EstadoEpisodio) -> None:
@@ -46,7 +46,6 @@ def test_novo_episodio_entra_na_fila(cfg: Config) -> None:
     ({**NOVO, "nicho": "humor"}, "nicho 'humor'"),
     ({**NOVO, "nicho": "../contas"}, "nicho '../contas'"),
     ({**NOVO, "formato": "f4"}, "formato 'f4'"),
-    ({**NOVO, "n_shorts": 0}, "n_shorts"),
 ])
 def test_novo_episodio_recusado(cfg: Config, corpo: dict[str, object], erro: str) -> None:
     c, fila = montar(cfg)
@@ -66,7 +65,7 @@ def test_episodio_repetido_recusado(cfg: Config) -> None:
 def preparar_concluido(cfg: Config) -> Path:
     pasta = cfg.raiz / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
-    e = novo("abcdefghijk", "https://youtu.be/abcdefghijk", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "https://youtu.be/abcdefghijk", "financas", "f7", AGORA)
     for n in e.etapas:
         e = marcar(e, n, "ok", AGORA)
     gravar(pasta, e)
@@ -163,7 +162,7 @@ def test_retomar_que_nao_reabre_mostra_o_erro_e_segue_pausada(cfg: Config) -> No
 def test_fila_sobe_com_o_servidor(cfg: Config) -> None:
     pasta = cfg.raiz / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
-    e = novo("abcdefghijk", "https://youtu.be/abcdefghijk", "financas", 5, "f7", AGORA)
+    e = novo("abcdefghijk", "https://youtu.be/abcdefghijk", "financas", "f7", AGORA)
     gravar(pasta, marcar(e, "video", "rodando", AGORA))   # o processo caiu no meio do download
     rodadas: list[str] = []
     c, fila = montar(cfg, lambda nome, p, e: rodadas.append(nome))

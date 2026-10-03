@@ -14,7 +14,6 @@ from cortes.producao.estado import ErroProducao
 Status = Literal["na_fila", "renderizando", "pronto", "erro"]
 STATUS = ("na_fila", "renderizando", "pronto", "erro")
 ARQUIVO = "corte.json"
-PLANEJADO = "planejado.json"   # marcador: os N melhores já foram postos na fila (uma vez por episódio)
 
 
 @dataclass(frozen=True)
@@ -52,10 +51,6 @@ def novo_corte(indice: int, cand: dict[str, Any], formato: str) -> Corte:
     return Corte(indice, float(cand["inicio"]), float(cand["fim"]), formato, str(cand["titulo"]), "na_fila")
 
 
-def melhores(cands: list[dict[str, Any]], n: int) -> list[int]:
-    return sorted(range(len(cands)), key=lambda i: (-float(cands[i]["nota_final"]), i))[:n]
-
-
 def iniciar(c: Corte) -> Corte:
     return replace(c, status="renderizando", erro=None)
 
@@ -73,6 +68,19 @@ def reenfileirar(c: Corte, formato: str) -> Corte:
     if c.status in ("na_fila", "renderizando"):
         raise ErroProducao(f"corte {c.indice} já está na fila do render")
     return replace(c, status="na_fila", formato=formato, erro=None)
+
+
+def cancelar(c: Corte) -> Corte | None:
+    """Tira da fila um Short que ainda não começou. Com versão pronta, ela continua valendo (volta a
+    'pronto'); sem versão e sem edição, devolve None e quem chama apaga a pasta do corte; sem versão
+    mas com edição, fica em erro para as edições não se perderem."""
+    if c.status != "na_fila":
+        raise ErroProducao("só dá para cancelar um Short que está na fila e ainda não começou")
+    if c.versao > 0:
+        return replace(c, status="pronto", erro=None)
+    if c.edicoes == Edicoes() and not c.alterado:
+        return None
+    return replace(c, status="erro", erro="render cancelado")
 
 
 def proximo(cortes: list[Corte]) -> Corte | None:
@@ -182,13 +190,3 @@ def cortes_do_episodio(pasta_ep: Path) -> list[Corte]:
     arqs = sorted((pasta_ep / "cortes").glob(f"*/{ARQUIVO}"), key=_indice_da_pasta)
     return [ler_corte(a.parent) for a in arqs]
 
-
-def planejar(pasta_ep: Path, formato: str, n: int, cands: list[dict[str, Any]]) -> None:
-    """Põe os N melhores na fila do render, uma vez por episódio. Um corte que já existe (Renderizar
-    manual antes do automático) fica como está."""
-    (pasta_ep / "cortes").mkdir(parents=True, exist_ok=True)
-    for i in melhores(cands, n):
-        d = pasta_corte(pasta_ep, i)
-        if not (d / ARQUIVO).exists():
-            gravar_corte(d, novo_corte(i, cands[i], formato))
-    salvar_json(pasta_ep / "cortes" / PLANEJADO, {"n": n, "formato": formato})

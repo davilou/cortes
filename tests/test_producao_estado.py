@@ -24,7 +24,7 @@ AGORA = datetime(2026, 10, 2, 9, 12)
 
 
 def ep() -> EstadoEpisodio:
-    return novo("c5xqNNWFT9w", "https://youtu.be/c5xqNNWFT9w", "financas", 5, "f7", AGORA)
+    return novo("c5xqNNWFT9w", "https://youtu.be/c5xqNNWFT9w", "financas", "f7", AGORA)
 
 
 def test_novo_comeca_tudo_pendente() -> None:
@@ -93,8 +93,8 @@ def test_estado_com_campo_de_tipo_errado_nao_aceita_coercao(tmp_path: Path) -> N
     e = ep()
     gravar(tmp_path, e)
     dados = (tmp_path / "estado.json").read_text(encoding="utf-8")
-    # n_shorts como texto numérico não deve ser aceito silenciosamente.
-    quebrado = dados.replace('"n_shorts": 5', '"n_shorts": "5"')
+    # nicho como número não deve ser aceito silenciosamente.
+    quebrado = dados.replace('"nicho": "financas"', '"nicho": 5')
     (tmp_path / "estado.json").write_text(quebrado, encoding="utf-8")
     with pytest.raises(ErroProducao, match="estado.json"):
         ler(tmp_path)
@@ -116,8 +116,14 @@ def test_estado_sem_arquivo_diz_o_caminho(tmp_path: Path) -> None:
 
 
 def test_estado_do_plano_a_sem_render_migra_para_pendente(tmp_path: Path) -> None:
-    e = novo("abcdefghijk", "u", "financas", 5, "f7", datetime(2026, 10, 2))
+    e = novo("abcdefghijk", "u", "financas", "f7", datetime(2026, 10, 2))
     d = asdict(e)
     del d["etapas"]["render"]
     (tmp_path / "estado.json").write_text(json.dumps(d), encoding="utf-8")
     assert ler(tmp_path).etapas["render"] == Etapa()
+
+
+def test_estado_antigo_com_n_shorts_le_sem_o_campo(tmp_path: Path) -> None:
+    e = ep()
+    (tmp_path / "estado.json").write_text(json.dumps({**asdict(e), "n_shorts": 5}), encoding="utf-8")
+    assert ler(tmp_path) == e and not hasattr(ler(tmp_path), "n_shorts")

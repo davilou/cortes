@@ -24,14 +24,12 @@ from cortes.render.montagem import FORMATOS
 from cortes.render.processo import Rodar, rodar_processo
 
 FORMATOS_RENDER = FORMATOS   # render/montagem.py; planos D e E acrescentam f4 e f3
-N_SHORTS_MAX = 10
 
 
 class NovoEpisodio(BaseModel):
     link: str
     nicho: str
-    n_shorts: int
-    formato: str
+    formato: str   # formato padrão: só o valor pré-marcado no seletor de cada Short
 
 
 class PedidoDecisao(BaseModel):
@@ -97,8 +95,6 @@ def _validar(raiz: Path, pedido: NovoEpisodio) -> str:
         raise ErroProducao(f"nicho '{pedido.nicho}' não existe em {raiz / 'nichos'}")
     if pedido.formato not in FORMATOS_RENDER:
         raise ErroProducao(f"formato '{pedido.formato}' ainda não renderiza; use um de {FORMATOS_RENDER}")
-    if not 1 <= pedido.n_shorts <= N_SHORTS_MAX:
-        raise ErroProducao(f"n_shorts deve ficar entre 1 e {N_SHORTS_MAX}")
     if (raiz / "episodios" / id / "estado.json").exists():
         raise ErroProducao(f"episódio {id} já está na produção")
     return id
@@ -148,7 +144,7 @@ def _rotas_acao(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock,
             pasta = raiz / "episodios" / id
             pasta.mkdir(parents=True, exist_ok=True)
             gravar(pasta, novo(id, f"https://www.youtube.com/watch?v={id}", pedido.nicho,
-                               pedido.n_shorts, pedido.formato, agora()))
+                               pedido.formato, agora()))
         fila.enfileirar(id)
         return {"id": id}
 
