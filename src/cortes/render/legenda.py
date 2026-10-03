@@ -82,6 +82,18 @@ def _funde_ultimo_se_vazio(gs: list[list[Palavra]], dur: float) -> list[list[Pal
     return gs
 
 
+def _tempos_crescentes(tempos: tuple[float, ...]) -> tuple[float, ...]:
+    """Tempos empatados (mesmo início arredondado) acendem a palavra junto com a anterior e nunca
+    apagam: no `hormozi.tpl`, `fim > t` falha quando `fim == t`, e a palavra anterior fica presa
+    em destaque. Crescimento estrito por +0,01 s resolve sem tocar o JS (f6, item 3)."""
+    res: list[float] = []
+    for t in tempos:
+        if res and t <= res[-1]:
+            t = round(res[-1] + 0.01, 2)
+        res.append(t)
+    return tuple(res)
+
+
 def grupos(ws: list[Palavra], dur: float) -> list[Grupo]:
     """Fecham em pontuação (2+ palavras) ou em 5 palavras; cada um fica até o próximo, no máx. 2,6 s."""
     gs = _funde_ultimo_se_vazio(_sem_duracao_zero(_fundir(_brutos(ws))), dur)
@@ -89,8 +101,8 @@ def grupos(ws: list[Palavra], dur: float) -> list[Grupo]:
     for k, g in enumerate(gs):
         a = g[0].inicio
         b = gs[k + 1][0].inicio if k + 1 < len(gs) else dur
-        res.append(Grupo(round(a, 2), round(min(b, a + DUR_MAX_S) - a, 2), tuple(p.texto for p in g),
-                         tuple(round(p.inicio, 2) for p in g)))
+        tempos = _tempos_crescentes(tuple(round(p.inicio, 2) for p in g))
+        res.append(Grupo(round(a, 2), round(min(b, a + DUR_MAX_S) - a, 2), tuple(p.texto for p in g), tempos))
     return res
 
 

@@ -83,3 +83,13 @@ def test_html_palavra_a_palavra_leva_o_inicio_de_cada_uma() -> None:
 def test_grupo_com_tempos_a_menos_e_erro() -> None:
     with pytest.raises(ValueError, match="tempos"):
         Grupo(0.0, 1.0, ("a", "b"), (0.0,))
+
+
+def test_tempos_duplicados_na_palavra_a_palavra_ficam_crescentes() -> None:
+    """Palavras com o mesmo início (ASR colapsa duas no mesmo instante) acendiam juntas e a
+    anterior nunca apagava no hormozi.tpl (`fim > t` falha quando empatado) — revisão formatos
+    novos, item 3."""
+    gs = grupos([P("Eu", 0.0), P("ganhei", 0.0), P("muito.", 0.6)], 3.0)
+    assert gs[0].tempos == (0.0, 0.01, 0.6)
+    html = legenda_html(gs, por_palavra=True)
+    assert '<i data-t="0.0">Eu</i> <i data-t="0.01">ganhei</i> <i data-t="0.6">muito.</i>' in html
