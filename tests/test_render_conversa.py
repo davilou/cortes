@@ -54,6 +54,20 @@ def test_parceira_e_a_mais_detectada_longe_da_padrao() -> None:
     assert parceira(Plano(0, 0.0, 30.0, (P(754),), 0), LARG) is None
 
 
+def test_parceira_nao_e_falso_positivo_do_detector() -> None:
+    """Render real (wxCto9WSZcI, plano solo do Henrique): um boneco na estante em x 1851 virou
+    "pessoa" com 49 detecções — rosto pequeno (r 55 × 223) e confiança baixa (0,69 × 0,90). Um
+    rosto meio cortado na borda (r 73 × 140) também não é a outra pessoa da conversa."""
+    boneco = Plano(0, 0.0, 38.0, (Pessoa(720, 251, 223, 130, 0.904), Pessoa(1851, 791, 55, 49, 0.686)), 0)
+    assert parceira(boneco, LARG) is None
+    pequeno = Plano(0, 0.0, 30.0, (Pessoa(500, 300, 200, 90, 0.9), Pessoa(1500, 300, 110, 80, 0.9)), 0)
+    assert parceira(pequeno, LARG) is None
+    duvida = Plano(0, 0.0, 30.0, (Pessoa(500, 300, 200, 90, 0.9), Pessoa(1500, 300, 190, 80, 0.74)), 0)
+    assert parceira(duvida, LARG) is None
+    certa = Plano(0, 0.0, 30.0, (Pessoa(500, 300, 200, 90, 0.9), Pessoa(1500, 300, 130, 80, 0.75)), 0)
+    assert parceira(certa, LARG) == 1
+
+
 def test_alterna_em_inicio_de_grupo_ate_o_alvo() -> None:
     gs = grupos_a_cada(1.0, 30.0)
     alts = alternancias([DOIS], {}, gs, 30.0, LARG)

@@ -25,6 +25,9 @@ RITMO_ALVO = (0.6, 0.8)  # trocas por 10 s (R2)
 RITMO_MIRA = 0.7        # o meio da faixa
 DISTINTA = 0.2          # parceira a pelo menos isso × a largura da padrão; mais perto é a mesma
 # pessoa partida em dois grupos pelo agrupamento por x, ou cabe na mesma janela
+RAIO_MIN = 0.6          # parceira com rosto ≥ isso × o raio da padrão: menor é boneco, foto ou
+# rosto cortado na borda (render real, wxCto9WSZcI: boneco na estante com r 55 × 223)
+CONF_MIN = 0.75         # confiança média mínima da parceira (o boneco: 0,69; rostos reais: ≥ 0,79)
 JANELA_FRASE_S = 1.5    # perto assim do ponto ideal, um início de frase ganha do ponto exato
 _FECHA_FRASE = re.compile(r"[.?!…]$")
 
@@ -62,11 +65,13 @@ def alvo_trocas(dur: float) -> int:
 
 def parceira(p: Plano, largura: int) -> int | None:
     """A pessoa com quem a padrão alterna: a mais detectada entre as que ficam a pelo menos
-    DISTINTA × largura da padrão. None se não houver."""
+    DISTINTA × largura da padrão, com rosto de tamanho parecido (RAIO_MIN) e confiança ≥ CONF_MIN.
+    None se não houver."""
     if p.padrao is None:
         return None
     base = p.pessoas[p.padrao]
-    longe = [j for j, s in enumerate(p.pessoas) if abs(s.x - base.x) >= DISTINTA * largura]
+    longe = [j for j, s in enumerate(p.pessoas) if abs(s.x - base.x) >= DISTINTA * largura
+             and s.r >= RAIO_MIN * base.r and s.conf >= CONF_MIN]
     if not longe:
         return None
     return max(longe, key=lambda j: (p.pessoas[j].n, p.pessoas[j].conf))
