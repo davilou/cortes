@@ -38,7 +38,14 @@ MAX_PIXELS = 50_000_000   # ~7000×7000: acima disso é bomba de descompressão,
 PRAZO_DOWNLOAD_S = 30     # por candidata; o -rw_timeout só pega servidor parado, não o que pinga devagar
 
 
+SEM_RESULTADO_DDGS = "No results found."   # o ddgs 9.16 diz "nada achado" assim (ddgs.py, _search_sync)
+ERRO_BUSCA = "erro na busca de imagens"
+
 rodar_download_real: Rodar = rodar_com_prazo(PRAZO_DOWNLOAD_S)
+
+
+class ErroBusca(ErroRender):
+    """A busca não respondeu (limite de uso, tempo, rede) — diferente de não achar nada."""
 
 
 class BuscaImagens(Protocol):
@@ -80,11 +87,14 @@ def _pequena(c: Candidata) -> bool:
 
 def buscar(busca: str, n: int, ddgs: BuscaImagens) -> list[Candidata]:
     """Até `n` candidatas http(s) sem URL repetida, descartando as menores que TAM_MIN_PX quando o tamanho
-    vem informado. Falha da busca (rede, limite de uso, nenhum resultado) é ErroRender com a busca."""
+    vem informado. Nenhum resultado é lista vazia; falha da busca (limite de uso, tempo, rede) é
+    ErroBusca com a busca e a causa."""
     try:
         brutos = ddgs.images(busca, max_results=n * FOLGA_BUSCA, region=REGIAO, safesearch="moderate")
     except DDGSException as e:
-        raise ErroRender(f"busca de imagens '{busca}' falhou: {e}") from e
+        if type(e) is DDGSException and str(e) == SEM_RESULTADO_DDGS:
+            return []
+        raise ErroBusca(f"{ERRO_BUSCA} '{busca}': {e}") from e
     cands: list[Candidata] = []
     for r in brutos:
         url = str(r.get("image") or "")

@@ -1,12 +1,14 @@
+import re
 from pathlib import Path
 from typing import Any
 
 import pytest
-from ddgs.exceptions import DDGSException
+from ddgs.exceptions import DDGSException, RatelimitException, TimeoutException
 
 from cortes.render.ilustracao import Deixa
 from cortes.render.ilustracao_imagens import (
     Candidata,
+    ErroBusca,
     LinhaFolha,
     args_baixar,
     baixar,
@@ -59,9 +61,18 @@ def test_busca_so_aceita_http_e_https() -> None:
         "HTTPS://x/b.jpg", "http://x/c.jpg"]
 
 
-def test_falha_da_busca_vira_erro_com_a_busca() -> None:
-    with pytest.raises(ErroRender, match="camisa do Corinthians.*Ratelimit"):
-        buscar("camisa do Corinthians", 4, DdgsFalso(DDGSException("Ratelimit")))
+def test_busca_sem_resultado_e_lista_vazia_nao_erro() -> None:
+    """O ddgs 9.16 sinaliza "nada achado" com DDGSException("No results found.") (ddgs.py)."""
+    assert buscar("x", 4, DdgsFalso(DDGSException("No results found."))) == []
+    assert buscar("x", 4, DdgsFalso([])) == []
+
+
+@pytest.mark.parametrize("erro", [RatelimitException("202 Ratelimit"), TimeoutException("timed out"),
+                                  DDGSException("ConnectError('dns')")])
+def test_erro_real_da_busca_vira_erro_de_busca_com_a_busca(erro: Exception) -> None:
+    with pytest.raises(ErroBusca, match=f"camisa do Corinthians.*{re.escape(str(erro))}"):
+        buscar("camisa do Corinthians", 4, DdgsFalso(erro))
+    assert issubclass(ErroBusca, ErroRender)
 
 
 def test_args_baixar_normalizam_com_ffmpeg_e_user_agent() -> None:

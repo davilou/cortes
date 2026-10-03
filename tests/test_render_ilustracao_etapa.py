@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from ddgs.exceptions import DDGSException
+from ddgs.exceptions import DDGSException, RatelimitException
 
 from cortes.llm import ErroLLM
 from cortes.render.corte import concluir
@@ -23,8 +23,9 @@ class Ilustra:
     """Falsos das três dependências do f9, contando as chamadas."""
 
     def __init__(self, deixas: list[dict[str, Any]], escolhas: list[dict[str, Any]],
-                 falha_busca: str | None = None) -> None:
+                 falha_busca: tuple[str, ...] = (), sem_resultado: tuple[str, ...] = ()) -> None:
         self.deixas, self.escolhas, self.falha_busca = deixas, escolhas, falha_busca
+        self.sem_resultado = sem_resultado
         self.llm = self.conferencias = 0
         self.buscas: list[str] = []
         self.pasta_read: Path | None = None
@@ -42,8 +43,10 @@ class Ilustra:
 
     def images(self, query: str, **kwargs: Any) -> list[dict[str, Any]]:
         self.buscas.append(query)
-        if query == self.falha_busca:
-            raise DDGSException("Ratelimit")
+        if query in self.falha_busca:
+            raise RatelimitException("Ratelimit")
+        if query in self.sem_resultado:
+            raise DDGSException("No results found.")
         return [{"image": f"http://img/{query}/{j}.jpg", "url": f"http://loja/{j}", "width": 1000,
                  "height": 1000} for j in (1, 2)]
 
@@ -102,7 +105,7 @@ def test_f9_trecho_novo_apaga_a_ilustracao_e_refaz(tmp_path: Path) -> None:
 def test_f9_busca_que_falha_deixa_so_aquela_deixa_sem_imagem(tmp_path: Path) -> None:
     pasta, f = ep9(tmp_path), Falso()
     il = Ilustra([VANS, CAMISA], [{"deixa": 2, "imagem": 1, "motivo": "é a camisa"}],
-                 falha_busca="tênis Vans Old Skool")
+                 falha_busca=("tênis Vans Old Skool",))
     montar_projeto(pasta, C9, tmp_path, il.dep(f))
     lido = ler_ilustracoes(pasta / "cortes" / "0")
     assert lido is not None
@@ -111,6 +114,24 @@ def test_f9_busca_que_falha_deixa_so_aquela_deixa_sem_imagem(tmp_path: Path) -> 
     assert camisa.imagem is not None and camisa.motivo == "é a camisa"
     html = (pasta / "cortes" / "0" / "projeto" / "index.html").read_text(encoding="utf-8")
     assert "ilus-2.jpg" in html and "ilus-1.jpg" not in html
+
+
+def test_f9_busca_sem_resultado_fica_sem_imagem_com_o_motivo(tmp_path: Path) -> None:
+    pasta, f = ep9(tmp_path), Falso()
+    il = Ilustra([VANS, CAMISA], [{"deixa": 2, "imagem": 1, "motivo": "é a camisa"}],
+                 sem_resultado=("tênis Vans Old Skool",))
+    montar_projeto(pasta, C9, tmp_path, il.dep(f))
+    lido = ler_ilustracoes(pasta / "cortes" / "0")
+    assert lido is not None
+    assert "sem imagem: a busca 'tênis Vans Old Skool' não achou nada" in lido[2][0].motivo
+
+
+def test_f9_busca_falhando_em_todas_as_deixas_diz_que_foi_a_busca(tmp_path: Path) -> None:
+    pasta, f = ep9(tmp_path), Falso()
+    il = Ilustra([VANS, CAMISA], [], falha_busca=("tênis Vans Old Skool", "camisa do Corinthians"))
+    with pytest.raises(ErroRender, match="busca de imagens falhou em todas as deixas.*Ratelimit") as ex:
+        montar_projeto(pasta, C9, tmp_path, il.dep(f))
+    assert NENHUMA not in str(ex.value) and il.conferencias == 0
 
 
 def test_f9_sem_nenhuma_imagem_e_erro_e_nao_grava_cache(tmp_path: Path) -> None:

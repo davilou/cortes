@@ -18,8 +18,10 @@ from cortes.llm import ErroLLM
 from cortes.render.ilustracao import Deixa, deixas_do_corte
 from cortes.render.ilustracao_conferencia import ChamarComRead, conferir
 from cortes.render.ilustracao_imagens import (
+    ERRO_BUSCA,
     BuscaImagens,
     Candidata,
+    ErroBusca,
     LinhaFolha,
     baixar_candidatas,
     buscar,
@@ -33,6 +35,7 @@ ARQUIVO = "ilustracao.json"
 FOLHA = "folha.jpg"
 N_CANDIDATAS = 4
 NENHUMA = "nenhuma coisa concreta ilustrável neste corte — use outro formato"
+BUSCA_FORA = "a busca de imagens falhou em todas as deixas — tente de novo mais tarde"
 LICENCA = "desconhecida"   # foto de terceiros achada na busca (risco como o do B-roll, spec §10)
 
 
@@ -97,10 +100,10 @@ def _candidatas(k: int, deixa: Deixa, pasta: Path,
     """(baixadas, falhas, motivo se nenhuma baixou). Busca que falha é motivo, não exceção."""
     try:
         cands = buscar(deixa.busca, N_CANDIDATAS, dep.ddgs())
-    except ErroRender as e:
+    except ErroBusca as e:
         return [], [], str(e)
     if not cands:
-        return [], [], f"a busca '{deixa.busca}' não trouxe imagem do tamanho mínimo"
+        return [], [], f"sem imagem: a busca '{deixa.busca}' não achou nada do tamanho mínimo"
     baixadas, falhas = baixar_candidatas(cands, pasta, f"D{k}", dep.rodar_download)
     motivo = "" if baixadas else f"nenhuma candidata baixou: {'; '.join(falhas)}"
     return baixadas, falhas, motivo
@@ -146,11 +149,16 @@ def _calcular(pasta: Path, ini: float, fim: float, palavras: list[Palavra],
     except ErroLLM as e:
         raise ErroRender(f"ilustração: {e}") from e
     if not any(i.imagem for i in ilus):
-        # sem gravar o cache: busca fora do ar não fica guardada como "nada para ilustrar"
-        motivos = "; ".join(f"D{i.k} '{i.deixa.coisa}': {i.motivo}" for i in ilus)
-        raise ErroRender(NENHUMA + (f" ({motivos})" if motivos else ""))
+        raise _sem_imagem(ilus)   # sem gravar o cache: busca fora do ar não fica guardada
     salvar_json(pasta / ARQUIVO, {"inicio": ini, "fim": fim, "ilustracoes": [_para_json(i) for i in ilus]})
     return ilus
+
+
+def _sem_imagem(ilus: list[Ilustracao]) -> ErroRender:
+    """Busca fora do ar em todas as deixas não é "nada ilustrável": a mensagem diz que foi a busca."""
+    motivos = "; ".join(f"D{i.k} '{i.deixa.coisa}': {i.motivo}" for i in ilus)
+    rede = bool(ilus) and all(i.motivo.startswith(ERRO_BUSCA) for i in ilus)
+    return ErroRender((BUSCA_FORA if rede else NENHUMA) + (f" ({motivos})" if motivos else ""))
 
 
 def nome_asset(k: int) -> str:
