@@ -60,6 +60,19 @@ def test_planos_e_padrao() -> None:
     assert pl[1].fim == 2.75
 
 
+def test_padrao_entre_pessoas_com_deteccoes_parecidas_e_o_maior_rosto() -> None:
+    """Render real do f7 (wxCto9WSZcI, "Gastava 400 em papel de cigarro"): no plano aberto, o rosto
+    na TV do estúdio (r 76, 196 detecções) ganhava das pessoas da mesa (r 142 e 105, 189 e 184) por
+    poucas detecções. Com detecções parecidas (≥ PARECIDAS × a maior), vale o maior rosto."""
+    tv, mesa, henrique = Face(1097, 135, 76, 0.81), Face(1817, 347, 142, 0.88), Face(171, 424, 105, 0.9)
+    r = Rosto(1920, 1080, tuple(Amostra(i * 0.25, (tv, mesa, henrique)) for i in range(180))
+              + tuple(Amostra(45 + i * 0.25, (tv,)) for i in range(10)), ())
+    assert planos(r)[0].padrao == 2   # pessoas da esquerda para a direita: henrique, tv, mesa
+    poucas = Rosto(1920, 1080, tuple(Amostra(i * 0.25, (tv,)) for i in range(100))
+                   + tuple(Amostra(25 + i * 0.25, (tv, mesa)) for i in range(40)), ())
+    assert planos(poucas)[0].padrao == 0   # o maior rosto com poucas detecções não ganha
+
+
 def test_trilha_fixa_padrao_e_escolha() -> None:
     assert trilha_fixa(R, {}) == [[0.0, -1184.4, 0.0, 1], [1.9, -2333.3, 0.0, 1]]
     assert trilha_fixa(R, {1: 0}) == [[0.0, -1184.4, 0.0, 1], [1.9, -188.9, 0.0, 1]]

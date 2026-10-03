@@ -4,8 +4,9 @@
 Dentro de um plano a câmera virtual não se mexe (seguir o rosto o tempo todo deixou o espectador
 tonto na rodada 1). Em cada plano — intervalo entre trocas reais de câmera — os rostos detectados
 viram pessoas pela posição x (câmera parada: cada pessoa fica no seu lugar). O enquadramento usa
-a pessoa escolhida no editor ou, por padrão, a mais confiável (mais detecções, depois maior
-confiança). A detecção roda fora deste Python: render/visao/rosto.py, no venv do ComfyUI.
+a pessoa escolhida no editor ou, por padrão, a mais confiável (mais detecções; entre detecções
+parecidas, o maior rosto). No f7, a alternância entre pessoas fica em render/conversa.py. A
+detecção roda fora deste Python: render/visao/rosto.py, no venv do ComfyUI.
 """
 import json
 import statistics
@@ -32,6 +33,7 @@ PASSO_S = 0.25             # passo da amostragem em render/visao/rosto.py
 SEPARA = 0.08              # rostos a mais que isso (fração da largura) no eixo x são pessoas diferentes
 RUIDO = 0.2                # pessoa com menos que isso × as detecções da maior é ruído do detector
 MAX_PESSOAS = 3
+PARECIDAS = 0.7            # detecções ≥ isso × as da mais detectada: empate, e o maior rosto vira padrão
 
 
 @dataclass(frozen=True)
@@ -172,9 +174,13 @@ def pessoas(faces: list[Face], largura: int) -> tuple[Pessoa, ...]:
 
 
 def _padrao(ps: tuple[Pessoa, ...]) -> int | None:
+    """A mais detectada; entre as de detecções parecidas (≥ PARECIDAS × a maior), o maior rosto —
+    um rosto na TV do estúdio ganhava das pessoas da mesa por poucas detecções (f7, wxCto9WSZcI)."""
     if not ps:
         return None
-    return max(range(len(ps)), key=lambda i: (ps[i].n, ps[i].conf))
+    maior = max(p.n for p in ps)
+    parecidas = [i for i in range(len(ps)) if ps[i].n >= PARECIDAS * maior]
+    return max(parecidas, key=lambda i: (ps[i].r, ps[i].n, ps[i].conf))
 
 
 def planos(r: Rosto) -> list[Plano]:
