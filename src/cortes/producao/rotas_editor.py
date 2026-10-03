@@ -17,6 +17,7 @@ from cortes.episodio import ler_json
 from cortes.producao.estado import ErroProducao
 from cortes.producao.previas import Previas
 from cortes.regra_inicio import comeca_no_meio
+from cortes.render.assets import FUNDO, GAMEPLAY
 from cortes.render.corte import ARQUIVO, Corte, gravar_corte, ler_corte, pasta_corte
 from cortes.render.edicao import Edicao, aplicar, indices_do_corte, mascarar
 from cortes.render.ilustracao_etapa import ARQUIVO as ARQUIVO_ILUSTRACAO
@@ -34,6 +35,8 @@ PALAVRAS_AVISO = 8              # quantas palavras do início a regra de início
 SEM_CACHE = {"Cache-Control": "no-store"}
 _VERSAO = re.compile(r"short-v(\d+)\.mp4$")
 _IMAGEM_PREVIA = re.compile(r"assets/ilus-\d+\.jpg")   # cartões do f9 (render/ilustracao_etapa.py)
+# lista fechada: trecho de todos, fundo desfocado do f8 e gameplay do f5 (render/assets.py)
+_VIDEOS_PREVIA = frozenset(f"assets/{v}" for v in ("trecho.mp4", FUNDO, GAMEPLAY))
 
 
 def _url(id: str, n: int) -> str:
@@ -213,7 +216,7 @@ def _rotas_leitura(app: FastAPI, pasta_de: Callable[[str], Path], previas: Previ
         if arquivo == "index.html" and (proj / "index.html").exists():
             html = com_runtime((proj / "index.html").read_text(encoding="utf-8"))
             return HTMLResponse(html, headers=SEM_CACHE)
-        if arquivo == "assets/trecho.mp4" and (proj / arquivo).exists():
+        if arquivo in _VIDEOS_PREVIA and (proj / arquivo).exists():
             return FileResponse(proj / arquivo, media_type="video/mp4", headers=SEM_CACHE)
         if _IMAGEM_PREVIA.fullmatch(arquivo) and (proj / arquivo).exists():
             return FileResponse(proj / arquivo, media_type="image/jpeg", headers=SEM_CACHE)

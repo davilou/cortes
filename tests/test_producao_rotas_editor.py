@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from cortes.painel.servidor import Config, criar_app
@@ -247,3 +248,14 @@ def test_previa_serve_o_cartao_do_f9(cfg: Config) -> None:
     a = ambiente_f9(cfg)
     assert a.c.get(f"{EP}/cortes/0/previa/assets/ilus-1.jpg").content == b"vans"
     assert a.c.get(f"{EP}/cortes/0/previa/assets/ilus-1.png").status_code == 422
+
+
+@pytest.mark.parametrize("nome", ["fundo.mp4", "gameplay.mp4"])
+def test_previa_serve_o_video_de_fundo_do_f8_e_do_f5(cfg: Config, nome: str) -> None:
+    a = Ambiente(cfg)
+    (a.d / "projeto" / "assets" / nome).write_bytes(b"fundo")
+    r = a.c.get(f"{EP}/cortes/0/previa/assets/{nome}")
+    assert r.content == b"fundo" and r.headers["content-type"] == "video/mp4"
+    assert a.c.get(f"{EP}/cortes/0/previa/assets/outro.mp4").status_code == 422
+    travessia = f"{EP}/cortes/0/previa/assets%2F..%2Fassets%2F{nome}"   # %2F: o cliente não normaliza
+    assert a.c.get(travessia).status_code == 422
