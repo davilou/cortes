@@ -41,7 +41,8 @@ class DepIlustracao:
     chamar_llm: ChamarLLM
     chamar_com_read: ChamarComRead
     ddgs: Callable[[], BuscaImagens]
-    rodar: Rodar
+    rodar: Rodar            # folha de conferência
+    rodar_download: Rodar   # download das candidatas, com prazo curto próprio
 
 
 @dataclass(frozen=True)
@@ -100,7 +101,7 @@ def _candidatas(k: int, deixa: Deixa, pasta: Path,
         return [], [], str(e)
     if not cands:
         return [], [], f"a busca '{deixa.busca}' não trouxe imagem do tamanho mínimo"
-    baixadas, falhas = baixar_candidatas(cands, pasta, f"D{k}", dep.rodar)
+    baixadas, falhas = baixar_candidatas(cands, pasta, f"D{k}", dep.rodar_download)
     motivo = "" if baixadas else f"nenhuma candidata baixou: {'; '.join(falhas)}"
     return baixadas, falhas, motivo
 

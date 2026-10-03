@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 import cortes.render.processo as processo_mod
-from cortes.render.processo import ErroRender, exigir, rodar_processo
+from cortes.render.processo import ErroRender, exigir, rodar_com_prazo, rodar_processo
 
 
 def test_rodar_processo_que_trava_e_morto_de_verdade(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -14,8 +14,17 @@ def test_rodar_processo_que_trava_e_morto_de_verdade(monkeypatch: pytest.MonkeyP
     no Windows: cmd.exe → node → chromium)."""
     monkeypatch.setattr(processo_mod, "TIMEOUT_S", 1)
     args = [sys.executable, "-c", "import time; time.sleep(30)"]
-    with pytest.raises(ErroRender, match="passou de 0 min"):
+    with pytest.raises(ErroRender, match="passou de 1 s"):
         rodar_processo(args, None)
+
+
+def test_rodar_com_prazo_proprio_mata_a_arvore_no_prazo() -> None:
+    """Prazo curto por chamada (download de imagem do f9) sem mexer no TIMEOUT_S do render."""
+    args = [sys.executable, "-c", "import time; time.sleep(30)"]
+    with pytest.raises(ErroRender, match="passou de 1 s"):
+        rodar_com_prazo(1)(args, None)
+    codigo, saida = rodar_com_prazo(5)([sys.executable, "-c", "print('ok')"], None)
+    assert (codigo, saida.strip()) == (0, "ok")
 
 
 def test_exigir_devolve_a_saida() -> None:

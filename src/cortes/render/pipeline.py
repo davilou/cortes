@@ -22,7 +22,7 @@ from cortes.render.hyperframes import criar_projeto, renderizar
 from cortes.render.ilustracao_conferencia import ChamarComRead, chamar_com_read_real
 from cortes.render.ilustracao_etapa import PASTA as PASTA_ILUSTRACAO
 from cortes.render.ilustracao_etapa import DepIlustracao, Ilustracao, ilustrar
-from cortes.render.ilustracao_imagens import BuscaImagens, ddgs_real
+from cortes.render.ilustracao_imagens import BuscaImagens, ddgs_real, rodar_download_real
 from cortes.render.legenda import grupos, palavras_do_corte
 from cortes.render.montagem import caminho_template, montar_html, usa_rosto, valores
 from cortes.render.processo import ErroRender, Rodar, rodar_processo
@@ -54,6 +54,7 @@ class DepRender:
     chamar_llm: ChamarLLM = chamar_llm_real                    # deixas do f9
     chamar_llm_com_read: ChamarComRead = chamar_com_read_real  # conferência visual do f9
     ddgs: Callable[[], BuscaImagens] = ddgs_real               # busca de imagens do f9
+    rodar_download: Rodar = rodar_download_real                # download das imagens do f9 (30 s)
 
 
 def janela(c: Corte) -> tuple[float, float]:
@@ -135,7 +136,8 @@ def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) ->
         return []
     d = pasta_corte(pasta_ep, c.indice)
     ini, fim = janela(c)
-    deps = DepIlustracao(dep.chamar_llm, dep.chamar_llm_com_read, dep.ddgs, dep.rodar)
+    deps = DepIlustracao(dep.chamar_llm, dep.chamar_llm_com_read, dep.ddgs, dep.rodar,
+                         dep.rodar_download)
     return ilustrar(d, ini, fim, _palavras_trecho(pasta_ep, c, segs), d / "projeto" / "assets", deps)
 
 

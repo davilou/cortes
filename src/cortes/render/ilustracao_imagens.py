@@ -2,8 +2,13 @@
 2026-10-02-ilustrado, Task 2).
 
 A busca é a de imagens do DuckDuckGo (`ddgs`, sem chave), injetável. O download e a folha são
-ffmpeg atrás do executor injetável: o ffmpeg lê HTTP e normaliza qualquer formato (webp, png,
-avif) para JPEG sem precisar de Pillow.
+ffmpeg atrás do executor injetável: o ffmpeg lê HTTP e normaliza jpg, png e webp para JPEG sem
+precisar de Pillow.
+
+Limites do download, por candidata: PRAZO_DOWNLOAD_S de relógio (mata a árvore), o que limita os
+bytes baixados; MAX_PIXELS na decodificação, o que limita a memória. Não há teto de tamanho do
+arquivo gravado: ele já sai normalizado a no máximo 1080 px em JPEG q3 (~100-200 KB), então um
+teto ali nunca dispararia e não protegeria nada.
 """
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -14,7 +19,7 @@ from urllib.parse import urlparse
 from ddgs.exceptions import DDGSException
 
 from cortes.render.ilustracao import Deixa
-from cortes.render.processo import ErroRender, Rodar, exigir
+from cortes.render.processo import ErroRender, Rodar, exigir, rodar_com_prazo
 
 TAM_MIN_PX = 400        # imagem menor que isso estoura no cartão de 860 px
 FOLGA_BUSCA = 3         # pede n × isso à busca: o filtro de tamanho e as repetidas descartam parte
@@ -30,6 +35,10 @@ PROTOCOLOS = "http,https,tls,tcp"        # o que o ffmpeg pode abrir (redirecion
 # abririam outras URLs ou vídeo. Conferido com jpg, png e webp reais em 2026-10-02; avif (mov) fica fora.
 DEMUXERS = "image2,jpeg_pipe,png_pipe,webp_pipe,gif_pipe,bmp_pipe,tiff_pipe"
 MAX_PIXELS = 50_000_000   # ~7000×7000: acima disso é bomba de descompressão, não foto de produto
+PRAZO_DOWNLOAD_S = 30     # por candidata; o -rw_timeout só pega servidor parado, não o que pinga devagar
+
+
+rodar_download_real: Rodar = rodar_com_prazo(PRAZO_DOWNLOAD_S)
 
 
 class BuscaImagens(Protocol):

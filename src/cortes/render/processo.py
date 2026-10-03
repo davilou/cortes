@@ -28,15 +28,28 @@ def _matar_arvore(p: "subprocess.Popen[str]") -> None:
 _FLAGS = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
 
 
+def _texto_prazo(s: int) -> str:
+    return f"{s // 60} min" if s >= 60 else f"{s} s"
+
+
 def rodar_processo(args: list[str], cwd: Path | None) -> tuple[int, str]:
+    return _rodar(args, cwd, TIMEOUT_S)
+
+
+def rodar_com_prazo(prazo_s: int) -> Rodar:
+    """Um `Rodar` com prazo próprio (ex.: download de imagem), matando a árvore como o do render."""
+    return lambda args, cwd: _rodar(args, cwd, prazo_s)
+
+
+def _rodar(args: list[str], cwd: Path | None, prazo_s: int) -> tuple[int, str]:
     p = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                          text=True, encoding="utf-8", errors="replace", creationflags=_FLAGS)
     try:
-        saida, _ = p.communicate(timeout=TIMEOUT_S)
+        saida, _ = p.communicate(timeout=prazo_s)
     except subprocess.TimeoutExpired as ex:
         _matar_arvore(p)
         p.communicate()   # agora retorna: a árvore que segurava os pipes está morta
-        raise ErroRender(f"{args[0]} passou de {TIMEOUT_S // 60} min e foi interrompido") from ex
+        raise ErroRender(f"{args[0]} passou de {_texto_prazo(prazo_s)} e foi interrompido") from ex
     return p.returncode, saida
 
 

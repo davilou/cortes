@@ -28,6 +28,7 @@ class Ilustra:
         self.llm = self.conferencias = 0
         self.buscas: list[str] = []
         self.pasta_read: Path | None = None
+        self.downloads: list[str] = []
 
     def chamar_llm(self, prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
         self.llm += 1
@@ -46,9 +47,14 @@ class Ilustra:
         return [{"image": f"http://img/{query}/{j}.jpg", "url": f"http://loja/{j}", "width": 1000,
                  "height": 1000} for j in (1, 2)]
 
+    def baixar(self, args: list[str], cwd: Path | None) -> tuple[int, str]:
+        self.downloads.append(args[args.index("-i") + 1])
+        Path(args[-1]).write_bytes(b"jpg")
+        return 0, ""
+
     def dep(self, f: Falso) -> DepRender:
         return replace(f.dep(), chamar_llm=self.chamar_llm, chamar_llm_com_read=self.chamar_com_read,
-                       ddgs=lambda: self)
+                       ddgs=lambda: self, rodar_download=self.baixar)
 
 
 def ep9(tmp: Path) -> Path:
@@ -68,8 +74,9 @@ def test_f9_ilustra_uma_vez_e_reaproveita_o_cache(tmp_path: Path) -> None:
     il = Ilustra([VANS], [{"deixa": 1, "imagem": 2, "motivo": "é o tênis"}])
     renderizar_corte(pasta, C9, tmp_path, il.dep(f))
     renderizar_corte(pasta, concluir(C9), tmp_path, il.dep(f))
-    # recorte, rosto, 2 downloads, folha, MP4 — e no segundo render só o MP4
-    assert f.chamadas == ["ffmpeg", "py-visao", "ffmpeg", "ffmpeg", "ffmpeg", "npx", "npx"]
+    # recorte, rosto, folha, MP4 — e no segundo render só o MP4; os downloads têm prazo próprio
+    assert f.chamadas == ["ffmpeg", "py-visao", "ffmpeg", "npx", "npx"]
+    assert il.downloads == ["http://img/tênis Vans Old Skool/1.jpg", "http://img/tênis Vans Old Skool/2.jpg"]
     assert (il.llm, il.conferencias, il.buscas) == (1, 1, ["tênis Vans Old Skool"])
     d = pasta / "cortes" / "0"
     assert il.pasta_read == d / "ilustracao" and (d / "ilustracao" / "folha.jpg").exists()
