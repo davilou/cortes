@@ -55,6 +55,9 @@ objeto (ex.: tênis Vans), lugar, veículo, comida, animal, roupa ou objeto.
   - "acontecimento": uma cena que a fala evoca e que um vídeo mostra (ex.: "a pandemia" → rua \
 vazia; "fui de jatinho" → jato particular decolando).
 - Nada abstrato: "dinheiro" no sentido genérico, "sucesso", "ideia", "vida", sentimentos.
+- Nada de peça ou característica de um produto descrita de forma vaga (ex.: "negócio que evita \
+torção", "sola ultra resistente", "o tecido que não amassa"): a busca disso traz outra coisa. \
+Marque só a coisa inteira, que dá para nomear (a bota, o tênis, a camisa), se ainda não foi marcada.
 - inicio_palavra e fim_palavra são os números entre colchetes das palavras que citam a coisa.
 - "coisa": o nome curto da coisa ou do acontecimento, como foi dito.
 - "busca": o texto para buscar um vídeo no YouTube (e, no literal, também uma foto). Específico, \

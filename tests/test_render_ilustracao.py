@@ -137,3 +137,12 @@ def test_schema_recusa_tipo_fora_da_lista() -> None:
     saida = json.dumps({"is_error": False, "structured_output": {"deixas": [_d(3, 4, tipo="foto")]}})
     with pytest.raises(ErroLLM, match="fora do schema"):
         chamar("p", SCHEMA_DEIXAS, SISTEMA_DEIXAS, executar=lambda a, e, c: saida)
+
+
+def test_prompt_nao_marca_peca_ou_caracteristica_vaga_de_produto() -> None:
+    # real (wxCto9WSZcI, "Bota boa por 250, não 600"): "um negócio que evita torção" (peça de uma
+    # bota) virou busca vaga e trouxe uma bota de motociclista
+    p = prompt_deixas([Palavra("bota", 0.0, 0.5)])
+    assert "peça ou característica de um produto" in p
+    assert '"negócio que evita torção"' in p and '"sola ultra resistente"' in p
+    assert "a coisa inteira, que dá para nomear" in p
