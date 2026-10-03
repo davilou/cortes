@@ -222,3 +222,9 @@ def test_valor_mais_longo_que_o_maximo_entra_no_numero() -> None:
     r = cenas_do_corte(PALAVRAS, DUR, _chamar(_cena(
         "contador", _i("400"), _i("assim?"), rotulo="PAGOU", valor=400, prefixo="R$", sufixo="mil")), EP)
     assert r.cenas[0].inicio == PALAVRAS[_i("400")].inicio
+
+
+def test_prompt_capa_vem_do_trecho_nao_do_titulo_do_episodio() -> None:
+    # render real: a capa saiu "COMO ELE GANHA DINHEIRO FORA DOS PALCOS", o título do episódio
+    assert "O título da capa vem do que ESTE trecho conta, não do título do episódio" in \
+        " ".join(prompt_cenas(PALAVRAS, EP).split())

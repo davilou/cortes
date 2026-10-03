@@ -61,7 +61,8 @@ _COMPONENTES = f"""Componentes (params de cada um; limite de caracteres entre pa
 {_L['destaque']}). O rotulo é o NOME de quem fala quando o título do episódio o identifica (título \
 "COMO MAURÍCIO MEIRELLES GANHA DINHEIRO FORA DOS PALCOS" → rotulo "MAURÍCIO MEIRELLES") e a fala \
 é dessa pessoa (em primeira pessoa, contando a própria história); senão, o tema. Use quando o \
-começo da fala promete algo forte. Opcional.
+começo da fala promete algo forte. Opcional. O título da capa vem do que ESTE trecho conta, não \
+do título do episódio.
 - "contador": um valor dito, contando de 0 até ele, numa faixa em cima do rosto. params: rotulo \
 ({_L['rotulo']}), valor (número), prefixo (ex.: "R$", {_L['prefixo']}), sufixo (ex.: "mil", "%", \
 {_L['sufixo']}), marcos opcional (2 textos, {_L['marco']} cada, ex.: ["ANO 0", "ANO 10"], com uma \

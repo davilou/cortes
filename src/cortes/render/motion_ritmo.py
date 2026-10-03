@@ -9,8 +9,7 @@ painel sem o rosto voltar, ou motion tapando quase todo o Short, estraga o corte
   ROSTO_MIN_S de rosto. Cena "div" pode colar na vizinha: o rosto já está na janela de baixo, e o
   manual (testes/short-400mil-dinamica) cola chat → "PERDI DINHEIRO" e contador → valor cheio;
 - cena que invade a vizinha acaba antes dela (a nova ou a anterior, nunca a capa nem as fixas) se
-  ainda dura DUR_MIN_S; senão a nova
-  seguinte sai. O LLM costuma esticar o fim até a próxima cena;
+  ainda dura DUR_MIN_S; senão a nova sai. O LLM costuma esticar o fim até a próxima cena;
 - motion somado ≤ FRACAO_MAX da duração do Short: passou, saem as últimas (nunca as `fixas`, as
   cenas já aceitas antes da segunda chamada ao LLM; render/motion.py).
 
