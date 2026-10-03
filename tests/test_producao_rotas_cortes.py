@@ -126,3 +126,13 @@ def test_cancelar_recusa_corte_renderizando_ou_inexistente(cfg: Config) -> None:
     assert ler_corte(pasta_corte(pasta, 0)).status == "renderizando"
     r = c.post(f"{EP}/cortes/3/cancelar")
     assert r.status_code == 422 and "não existe" in r.json()["detail"]
+
+
+def test_cancelar_renderizar_de_novo_restaura_o_formato_da_versao_pronta(cfg: Config) -> None:
+    pasta = preparar_concluido(cfg)
+    gravar_corte(pasta_corte(pasta, 0), concluir(novo_corte(0, CAND, "f7")))
+    c, _ = montar(cfg)
+    assert c.post(f"{EP}/cortes/0/renderizar", json={"formato": "f1"}).status_code == 202
+    assert c.post(f"{EP}/cortes/0/cancelar").status_code == 200
+    corte = ler_corte(pasta_corte(pasta, 0))
+    assert corte.status == "pronto" and corte.formato == "f7"

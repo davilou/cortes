@@ -37,6 +37,7 @@ class Corte:
     erro: str | None = None
     edicoes: Edicoes = field(default_factory=Edicoes)
     alterado: bool = False     # edição salva e ainda não renderizada
+    formato_pronto: str | None = None   # formato de short-v<versao>.mp4; None enquanto versao == 0
 
 
 def pasta_corte(pasta_ep: Path, indice: int) -> Path:
@@ -56,7 +57,8 @@ def iniciar(c: Corte) -> Corte:
 
 
 def concluir(c: Corte) -> Corte:
-    return replace(c, status="pronto", versao=c.versao + 1, erro=None, alterado=False)
+    return replace(c, status="pronto", versao=c.versao + 1, erro=None, alterado=False,
+                   formato_pronto=c.formato)
 
 
 def falhar(c: Corte, msg: str) -> Corte:
@@ -72,12 +74,15 @@ def reenfileirar(c: Corte, formato: str) -> Corte:
 
 def cancelar(c: Corte) -> Corte | None:
     """Tira da fila um Short que ainda não começou. Com versão pronta, ela continua valendo (volta a
-    'pronto'); sem versão e sem edição, devolve None e quem chama apaga a pasta do corte; sem versão
-    mas com edição, fica em erro para as edições não se perderem."""
+    'pronto' no formato dela, que "Renderizar de novo" pode ter trocado); sem versão e sem edição,
+    devolve None e quem chama apaga a pasta do corte; sem versão mas com edição, fica em erro para as
+    edições não se perderem."""
     if c.status != "na_fila":
         raise ErroProducao("só dá para cancelar um Short que está na fila e ainda não começou")
     if c.versao > 0:
-        return replace(c, status="pronto", erro=None)
+        if c.formato_pronto is None:
+            raise ErroProducao(f"corte {c.indice} tem versão {c.versao} mas não sabe o formato dela")
+        return replace(c, status="pronto", erro=None, formato=c.formato_pronto)
     if c.edicoes == Edicoes() and not c.alterado:
         return None
     return replace(c, status="erro", erro="render cancelado")
@@ -162,6 +167,19 @@ def _basicos(x: dict[str, Any], d: Path) -> Corte:
                  status, versao, x["erro"])
 
 
+def _formato_pronto(x: dict[str, Any], versao: int) -> str | None:
+    """Ausente: corte.json de antes do campo (migração explícita) — com versão, o formato atual é o
+    da versão pronta (vale enquanto ninguém o trocou depois do último render); sem versão, None."""
+    if "formato_pronto" not in x:
+        return _campo(x, "formato", str) if versao > 0 else None
+    v = x["formato_pronto"]
+    if v is not None and not isinstance(v, str):
+        raise ValueError(f"campo 'formato_pronto' deveria ser texto ou nulo, veio {v!r}")
+    if (v is None) != (versao == 0):
+        raise ValueError(f"formato_pronto {v!r} não combina com versao {versao}")
+    return v
+
+
 def ler_corte(d: Path) -> Corte:
     """`indice` tem que bater com o nome da pasta (uma fonte da verdade só); `versao` não pode ser
     negativa; `status == "pronto"` exige `versao >= 1` (pronto sem MP4 nenhum não existe); `inicio`
@@ -174,7 +192,7 @@ def ler_corte(d: Path) -> Corte:
         alterado = x.get("alterado", False)   # ausente: corte do plano B (migração)
         if not isinstance(alterado, bool):
             raise ValueError("campo 'alterado' deveria ser booleano")
-        return replace(c, edicoes=edicoes, alterado=alterado)
+        return replace(c, edicoes=edicoes, alterado=alterado, formato_pronto=_formato_pronto(x, c.versao))
     except (OSError, KeyError, TypeError, ValueError) as ex:
         raise ErroProducao(f"{arq}: corte inválido ({ex})") from ex
 

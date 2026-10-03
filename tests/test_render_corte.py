@@ -186,3 +186,40 @@ def test_edicoes_invalidas(tmp_path: Path, edicoes: dict[str, object]) -> None:
     (d / "corte.json").write_text(json.dumps({**x, "edicoes": edicoes}), encoding="utf-8")
     with pytest.raises(ErroProducao, match="edicoes"):
         ler_corte(d)
+
+
+def test_cancelar_renderizar_de_novo_volta_ao_formato_da_versao_pronta() -> None:
+    pronto = concluir(iniciar(novo_corte(0, CANDS[0], "f7")))
+    assert pronto.formato_pronto == "f7"
+    c = cancelar(reenfileirar(pronto, "f1"))
+    assert c is not None and c.formato == "f7" and c.formato_pronto == "f7"
+
+
+def test_formato_pronto_vai_e_volta_do_disco(tmp_path: Path) -> None:
+    c = reenfileirar(concluir(iniciar(novo_corte(1, CANDS[1], "f7"))), "f1")
+    gravar_corte(pasta_corte(tmp_path, 1), c)
+    assert ler_corte(pasta_corte(tmp_path, 1)) == c
+
+
+@pytest.mark.parametrize(("versao", "status", "esperado"), [(0, "na_fila", None), (2, "pronto", "f7")])
+def test_corte_sem_formato_pronto_migra(tmp_path: Path, versao: int, status: str,
+                                        esperado: str | None) -> None:
+    d = pasta_corte(tmp_path, 0)
+    d.mkdir(parents=True)
+    x = {"indice": 0, "inicio": 10.0, "fim": 40.0, "formato": "f7", "titulo": "A", "status": status,
+         "versao": versao, "erro": None}
+    (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
+    assert ler_corte(d).formato_pronto == esperado
+
+
+@pytest.mark.parametrize(("versao", "status", "formato_pronto"), [(0, "na_fila", "f7"), (1, "pronto", None),
+                                                                  (1, "pronto", 7)])
+def test_formato_pronto_incoerente_e_erro(tmp_path: Path, versao: int, status: str,
+                                          formato_pronto: object) -> None:
+    d = pasta_corte(tmp_path, 0)
+    d.mkdir(parents=True)
+    x = {"indice": 0, "inicio": 10.0, "fim": 40.0, "formato": "f7", "titulo": "A", "status": status,
+         "versao": versao, "erro": None, "formato_pronto": formato_pronto}
+    (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="formato_pronto"):
+        ler_corte(d)

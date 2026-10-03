@@ -63,8 +63,9 @@ function faixaDe(D, c) {
     inicio: c.inicio, fim: c.fim, preroll: true, fimDoArquivo: false, nome: "trecho" };
 }
 
-// Player + o que acompanha o Short: baixar, copiar título, versão/formato, "Renderizar de novo"
-// (versão nova no formato escolhido), "Cancelar" enquanto está na fila, e a causa do erro com
+// Player + o que acompanha o Short: baixar, copiar título, versão/formato (o da versão pronta,
+// não o pedido na fila), "Renderizar de novo" (versão nova no formato escolhido), "Cancelar"
+// enquanto está na fila, e a causa do erro com
 // "tentar de novo" (um corte em erro pode ainda ter o MP4 da versão anterior). "Editar" só
 // para quem já tem corte fora do render (plano C, decisão 4) — junto do Short, ou do erro se
 // ainda não há Short.
@@ -79,7 +80,7 @@ function htmlMidia(D, c) {
   const acoes = k?.video
     ? `<div class="short-acoes"><a class="botao mini" href="${esc(k.video)}?baixar=true" download>Baixar MP4</a>
         <button class="botao mini" type="button" data-copiar>Copiar título</button>${linkEditar}
-        <span class="num">v${k.versao} · ${esc(k.formato)}</span></div>` : "";
+        <span class="num">v${k.versao} · ${esc(k.formato_pronto)}</span></div>` : "";
   const denovo = k?.status === "pronto"
     ? `<div class="short-acoes">${htmlRender(c.indice, "Renderizar de novo", k.formato)}</div>` : "";
   const cancelar = k?.status === "na_fila" ? `<div class="short-acoes">${htmlCancelar(c.indice)}</div>` : "";
