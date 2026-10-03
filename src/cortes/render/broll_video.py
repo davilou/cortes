@@ -1,12 +1,14 @@
-"""f4 B-roll, passo 2 — vídeo do YouTube: busca, vídeo inteiro baixado e cortado em 3 s de tela cheia
-e os quadros da folha (plano 2026-10-03-broll-automatico, Task 2). Protótipo: `testes/comum/buscar_broll.py`.
+"""f4 B-roll, passo 2 — vídeo do YouTube: busca e vídeo inteiro baixado (plano 2026-10-03-broll-automatico,
+Task 2). Protótipo: `testes/comum/buscar_broll.py`. O que o ffmpeg tira dele — os momentos da folha,
+o trecho escolhido e a foto em tela cheia — fica em `broll_quadros.py`.
 
 Tudo passa pelo executor injetável (`processo.Rodar`), com prazo próprio: nada de rede no check. O
 YouTube já bloqueou este IP uma vez (spec §8): 429 ou "confirme que não é um robô" vira `ErroBusca`,
 a falha transitória da deixa, e nunca é repetido em laço aqui. Quem chama faz busca e download em
 série, sem paralelo no YouTube.
 
-Também a foto de reserva em tela cheia (`args_foto_cheia`), para a deixa literal sem vídeo.
+O vídeo baixado fica no disco até a conferência escolher o momento (plano 2026-10-03-melhora-f4):
+quem chama apaga com `apagar_bruto`.
 """
 import re
 import sys
@@ -14,29 +16,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from cortes.render.ilustracao import DUR_MAX_S
 from cortes.render.ilustracao_imagens import ErroBusca
-from cortes.render.processo import CAUDA, ErroRender, Rodar, exigir, rodar_com_prazo
-from cortes.render.recorte import gerar_por_parcial
+from cortes.render.processo import CAUDA, ErroRender, Rodar, rodar_com_prazo
 
 YT = [sys.executable, "-m", "yt_dlp", "--ignore-config", "--no-warnings"]
 N_RESULTADOS = 15           # resultados pedidos à busca (uma página só); o filtro de duração descarta parte
 DUR_MIN_VIDEO_S = 15.0      # menos que isso é Short ou vinheta
 DUR_MAX_VIDEO_S = 3 * 60.0  # o vídeo é baixado inteiro: acima disso o download passa do prazo
 MAX_CANDIDATOS = 2          # por deixa
-TRECHO_S = DUR_MAX_S        # o clipe mais longo que a deixa pode pedir
-# O vídeo inteiro pelo downloader nativo do yt-dlp, só vídeo, e o ffmpeg corta os TRECHO_S local. Medido
+# O vídeo inteiro pelo downloader nativo do yt-dlp, só vídeo, e o ffmpeg corta o trecho local. Medido
 # em 2026-10-03: `--download-sections` (o ffmpeg lendo a seção por HTTP) levava ~45 s por 5 s de vídeo e
 # estourava o prazo em metade dos casos; o vídeo inteiro de 71 s/1080p/38 MB veio em 9 s (spec §11).
 # O 720p sai visivelmente mais mole no 1080×1920, então fica 1080p.
-POSICAO_TRECHO = 0.25       # o trecho começa a 25% do vídeo: passa da vinheta e da apresentação
 FORMATO = "bv*[height<=1080][ext=mp4]/bv*[height<=1080]"   # só vídeo, sem áudio, até 1080p
 MAX_TAMANHO = "120M"        # 3 min de 1080p só-vídeo ficam bem abaixo; acima é bitrate de 4K disfarçado
 PRAZO_BUSCA_S = 30
-PRAZO_VIDEO_S = 45          # download (~9 s medidos para 38 MB) e, à parte, o ffmpeg dos 3 s
-LARGURA, ALTURA = 1080, 1920
-QUADROS_S = (0.1, TRECHO_S / 2, TRECHO_S - 0.2)   # início, meio e fim do trecho, para a folha
-ALTURA_QUADRO = 640
+PRAZO_VIDEO_S = 45          # download (~9 s medidos para 38 MB) e, à parte, cada ffmpeg
 ID_VIDEO = re.compile(r"^[A-Za-z0-9_-]{11}$")
 CAMPOS_BUSCA = "%(id)s|%(duration)s|%(channel)s|%(title)s"
 LICENCA = "desconhecida (YouTube)"
@@ -52,11 +47,6 @@ SINAIS_REDE = ("Unable to download", "urlopen error", "getaddrinfo failed", "Fai
                "timed out", "Connection reset", "Connection refused", "Connection aborted",
                "Network is unreachable", "Temporary failure", "Remote end closed", "HTTP Error 5")
 MAIOR_QUE_O_TETO = "larger than max-filesize"
-# cover: preenche o 9:16 cortando o centro do 16:9 (o #box-cheio do protótipo)
-_VF_CHEIO = (f"scale={LARGURA}:{ALTURA}:force_original_aspect_ratio=increase,"
-             f"crop={LARGURA}:{ALTURA},setsar=1")
-_SAIDA = ["-an", "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
-          "-movflags", "+faststart"]
 
 rodar_busca_real: Rodar = rodar_com_prazo(PRAZO_BUSCA_S)
 rodar_trecho_real: Rodar = rodar_com_prazo(PRAZO_VIDEO_S)
@@ -150,22 +140,11 @@ def buscar_videos(busca: str, n: int = MAX_CANDIDATOS,
         raise ErroBusca(str(erro))
     return ler_busca(saida, n)
 
-
-def inicio_trecho(c: VideoCandidato) -> float:
-    return c.dur * POSICAO_TRECHO
-
-
 def args_video(c: VideoCandidato, molde: Path) -> list[str]:
     """yt-dlp baixa o vídeo inteiro pelo downloader nativo, só vídeo, até MAX_TAMANHO. `molde` leva
     `%(ext)s`: o contêiner vem do formato."""
     return [*YT, "--no-playlist", "--no-progress", "-f", FORMATO, "--max-filesize", MAX_TAMANHO,
             "-o", str(molde), "--", f"https://www.youtube.com/watch?v={validar_id(c.id)}"]
-
-
-def args_cheio(bruto: Path, destino: Path, c: VideoCandidato) -> list[str]:
-    """Puro. Os TRECHO_S a partir de POSICAO_TRECHO do vídeo, em cover 1080×1920, sem áudio."""
-    return ["ffmpeg", "-v", "error", "-y", "-ss", f"{inicio_trecho(c):.3f}", "-i", str(bruto),
-            "-t", f"{TRECHO_S:.3f}", "-vf", _VF_CHEIO, *_SAIDA, str(destino)]
 
 
 def _bruto(pasta: Path, stem: str) -> Path:
@@ -186,83 +165,32 @@ def _apagar_brutos(pasta: Path, stem: str) -> list[str]:
     return presos
 
 
-def _exigir_apagados(pasta: Path, stem: str) -> None:
+def apagar_bruto(pasta: Path, stem: str) -> None:
+    """Apaga `<stem>.*`; o que o sistema não deixa apagar é ErroRender com o caminho."""
     presos = _apagar_brutos(pasta, stem)
     if presos:
         raise ErroRender(f"não consegui apagar o vídeo baixado: {'; '.join(presos)}")
 
 
-def _baixar_e_cortar(c: VideoCandidato, destino: Path, stem: str, rodar: Rodar) -> None:
-    codigo, saida = rodar(args_video(c, destino.parent / f"{stem}.%(ext)s"), None)
+def _baixar(c: VideoCandidato, pasta: Path, stem: str, rodar: Rodar) -> Path:
+    codigo, saida = rodar(args_video(c, pasta / f"{stem}.%(ext)s"), None)
     if MAIOR_QUE_O_TETO in saida:
         raise ErroRender(f"vídeo de {c.url} passa de {MAX_TAMANHO}: {saida[-CAUDA:]}")
     if codigo != 0:
         raise _falha_yt(codigo, saida, f"vídeo de {c.url}")
-    bruto = _bruto(destino.parent, stem)
-    gerar_por_parcial(destino, lambda p: args_cheio(bruto, p, c), rodar, f"tela cheia de {c.url}")
+    return _bruto(pasta, stem)
 
 
-def baixar_trecho(c: VideoCandidato, destino: Path, rodar: Rodar = rodar_trecho_real) -> None:
-    """`destino` (.mp4): o trecho de TRECHO_S em 1080×1920, cover com corte central, sem áudio. O
-    vídeo baixado é apagado no fim, com ou sem erro; o MP4 só aparece inteiro (`.parcial`). Vídeo
-    que não se deixa apagar não esconde o erro original (vira nota nele)."""
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    stem = f"{destino.stem}.bruto"
-    _exigir_apagados(destino.parent, stem)
+def baixar_bruto(c: VideoCandidato, pasta: Path, stem: str, rodar: Rodar = rodar_trecho_real) -> Path:
+    """O vídeo inteiro em `<pasta>/<stem>.<ext>`, que FICA: quem chama apaga com `apagar_bruto` depois
+    de cortar o momento escolhido. Na falha, o que o yt-dlp deixou é apagado; o que não se deixa
+    apagar não esconde o erro original (vira nota nele)."""
+    pasta.mkdir(parents=True, exist_ok=True)
+    apagar_bruto(pasta, stem)
     try:
-        _baixar_e_cortar(c, destino, stem, rodar)
+        return _baixar(c, pasta, stem, rodar)
     except BaseException as e:
-        presos = _apagar_brutos(destino.parent, stem)
+        presos = _apagar_brutos(pasta, stem)
         if presos:
             e.add_note(f"vídeo baixado não apagado: {'; '.join(presos)}")
         raise
-    _exigir_apagados(destino.parent, stem)
-
-
-def quadros_args(trecho: Path, destinos: tuple[Path, Path, Path]) -> list[str]:
-    """Puro. Um ffmpeg só, os 3 quadros do trecho (QUADROS_S) em JPEG de ALTURA_QUADRO px."""
-    entradas: list[str] = []
-    saidas: list[str] = []
-    for i, (t, d) in enumerate(zip(QUADROS_S, destinos, strict=True)):
-        entradas += ["-ss", f"{t:.2f}", "-i", str(trecho)]
-        saidas += ["-map", f"{i}:v", "-frames:v", "1", "-vf", f"scale=-2:{ALTURA_QUADRO}", "-q:v", "3",
-                   str(d)]
-    return ["ffmpeg", "-v", "error", "-y", *entradas, *saidas]
-
-
-def extrair_quadros(trecho: Path, prefixo: Path, rodar: Rodar) -> tuple[Path, Path, Path]:
-    """`<prefixo>-q1.jpg` a `-q3.jpg`. Quadro que não saiu (trecho curto demais) é erro."""
-    destinos = (prefixo.with_name(f"{prefixo.name}-q1.jpg"), prefixo.with_name(f"{prefixo.name}-q2.jpg"),
-                prefixo.with_name(f"{prefixo.name}-q3.jpg"))
-    for d in destinos:
-        d.unlink(missing_ok=True)   # quadro de outro trecho não pode passar por deste
-    exigir(rodar, quadros_args(trecho, destinos), None, f"quadros de {trecho.name}")
-    faltam = [d.name for d in destinos if not d.exists() or d.stat().st_size == 0]
-    if faltam:
-        raise ErroRender(f"quadros de {trecho.name}: ffmpeg não gerou {', '.join(faltam)}")
-    return destinos
-
-
-def args_foto_cheia(foto: Path, destino: Path) -> list[str]:
-    """Puro. A foto inteira (contain) sobre ela mesma desfocada e escurecida, em 1080×1920: o
-    produto não é cortado e a tela não fica com faixa preta (mesma ideia do fundo do f8)."""
-    fundo = (f"[0:v]scale={LARGURA}:{ALTURA}:force_original_aspect_ratio=increase,crop={LARGURA}:{ALTURA},"
-             "boxblur=40:2,colorchannelmixer=rr=0.55:gg=0.55:bb=0.55[fundo]")
-    frente = f"[1:v]scale={LARGURA}:{ALTURA}:force_original_aspect_ratio=decrease[frente]"
-    juntar = "[fundo][frente]overlay=(W-w)/2:(H-h)/2,setsar=1[cheia]"
-    return ["ffmpeg", "-v", "error", "-y", "-i", str(foto), "-i", str(foto),
-            "-filter_complex", ";".join([fundo, frente, juntar]), "-map", "[cheia]", "-frames:v", "1",
-            "-q:v", "2", str(destino)]
-
-
-def foto_cheia(foto: Path, destino: Path, rodar: Rodar) -> None:
-    """Grava em `<nome>.parcial.jpg` e só renomeia no fim."""
-    parcial = destino.with_name(destino.stem + ".parcial.jpg")
-    try:
-        exigir(rodar, args_foto_cheia(foto, parcial), None, f"foto em tela cheia de {foto.name}")
-        if not parcial.exists() or parcial.stat().st_size == 0:
-            raise ErroRender(f"foto em tela cheia de {foto.name}: ffmpeg não gerou a imagem")
-    except ErroRender:
-        parcial.unlink(missing_ok=True)
-        raise
-    parcial.replace(destino)
