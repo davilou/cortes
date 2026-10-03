@@ -162,8 +162,10 @@ casar cortes de episódio pelo título, e não só as pastas de `testes/` (`liga
   da fila reabre a etapa `render` se ela já tinha fechado. Um `cortes/planejado.json` antigo no
   disco (de antes desta decisão) é ignorado.
 - **Cancelar** (`POST /cortes/{indice}/cancelar`, sob a trava `escrita`): só vale para corte
-  `na_fila`; em qualquer outro status, recusa com motivo. A fila pode pegar o corte entre a
-  leitura e o cancelamento (corrida conhecida) — nesse caso o Short renderiza mesmo assim.
+  `na_fila`; em qualquer outro status, recusa com motivo. A fila reivindica o próximo corte sob
+  a mesma trava `escrita` (`_reivindicar`, `producao/render.py`), então não há corrida: ou o
+  Cancelar vê o corte ainda `na_fila` (e a fila não o pega mais) ou já `renderizando` (e o
+  Cancelar é recusado).
 - Cota do Claude atingida → a fila **pausa** e a tela avisa; não descarta trabalhos.
 
 ### 4.5 Curadoria e retorno ao detector
