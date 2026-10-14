@@ -1,4 +1,5 @@
 import json
+import shutil
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -234,3 +235,9 @@ def test_nova_conta_preserva_comentario_do_topo(cfg: Config) -> None:
     assert r.status_code == 201
     depois = cfg.contas_yaml.read_text(encoding="utf-8")
     assert depois.startswith("# gerado pelo painel, não editar à mão\n")
+
+
+def test_painel_nao_sobe_sem_a_biblioteca_de_trilhas(cfg: Config) -> None:
+    shutil.rmtree(cfg.raiz / "biblioteca")
+    with pytest.raises(ErroPainel, match="plano.json não existe"):
+        criar_app(cfg)

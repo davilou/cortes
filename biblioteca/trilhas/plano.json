@@ -1,0 +1,32 @@
+{
+ "_comentario": "Biblioteca de camas para Shorts de cortes de finanças (canal Cortes). Mesma paleta = identidade sonora; cada fase é uma cue independente.",
+ "_video": "biblioteca",
+ "_duracao_total": 270.0,
+ "paleta": "TrackType: Music, VocalType: Instrumental, Genre: Lo-Fi, Genre: Chillhop, Genre: Ambient, Instruments: Synth Pad, Glockenspiel, Celesta, Shaker, Hi-Hat, Electric Piano, Bass, Vinyl Noise.",
+ "fases": [
+  {
+   "id": "A",
+   "segundos": 90.0,
+   "bpm": 76,
+   "mood": "neutro",
+   "_momento": "neutro: conversa sobre dinheiro, cama de fundo padrão",
+   "prompt": "A calm, airy lo-fi chillhop bed for a conversation about money. The energy lives at the top and the bottom of the spectrum: an airy high shimmer pad, a crisp shaker and a bright closed hi-hat ticking in the high register carry the texture, a light soft bass sits underneath, and the mid-range is left open and sparse so that a speaking voice sits clearly on top. An airy shimmer pad is sustained continuously from the first second to the last, always present. A celesta plays a soft high arpeggio that keeps flowing without a break. The closed hi-hat ticks gentle sixteenth notes and the shaker keeps a constant pulse on every beat. The light bass plays round notes on every bar. A felt electric piano adds high sustained chords far back in the mix. Relaxed and steady, the same texture from start to finish. 76 BPM."
+  },
+  {
+   "id": "B",
+   "segundos": 90.0,
+   "bpm": 70,
+   "mood": "tensao",
+   "_momento": "tensão/curiosidade: cortes de espanto (perdeu dinheiro, apocalipse)",
+   "prompt": "A tense, curious lo-fi underscore for a surprising story about money. The energy lives at the top and the bottom of the spectrum: an airy high shimmer pad, a crisp shaker and a bright closed hi-hat ticking in the high register carry the texture, a light soft bass sits underneath, and the mid-range is left open and sparse so that a speaking voice sits clearly on top. A cold airy shimmer pad is sustained continuously from the first second to the last, unbroken. A glockenspiel repeats a high minor four-note figure on every bar, steady and unbroken. The closed hi-hat ticks fast steady sixteenth notes, and the urgency comes from these fast subdivisions rather than from speed. The light bass pulses steady eighth notes underneath. The shaker keeps a constant pulse. Suspenseful and intriguing, the same steady texture from start to finish. 70 BPM."
+  },
+  {
+   "id": "C",
+   "segundos": 90.0,
+   "bpm": 84,
+   "mood": "leve",
+   "_momento": "leve/bem-humorado: cortes com humor",
+   "prompt": "A light, playful lo-fi chillhop bed for a funny conversation about money. The energy lives at the top and the bottom of the spectrum: an airy high shimmer pad, a crisp shaker and a bright closed hi-hat ticking in the high register carry the texture, a light soft bass sits underneath, and the mid-range is left open and sparse so that a speaking voice sits clearly on top. A bright airy pad holds warm major chords continuously from the first second to the last. A glockenspiel and a celesta play a cheerful bouncing pattern high above, steady and unbroken. The closed hi-hat and the shaker keep a light constant groove on every beat. The light bass bounces with short round notes on every beat. Cheerful, easygoing and steady from start to finish. 84 BPM."
+  }
+ ]
+}

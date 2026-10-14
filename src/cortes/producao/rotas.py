@@ -22,6 +22,7 @@ from cortes.producao.previas import Previas
 from cortes.render.corte import cortes_do_episodio
 from cortes.render.montagem import FORMATOS, validar_formato
 from cortes.render.processo import Rodar, rodar_processo
+from cortes.render.trilha_biblioteca import BIBLIOTECA
 
 FORMATOS_RENDER = FORMATOS   # render/montagem.py
 
@@ -107,7 +108,7 @@ def montar(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock, agora:
     _rotas_leitura(app, raiz, fila)
     _rotas_acao(app, raiz, fila, escrita, agora)
     rotas_cortes.montar(app, lambda id: _pasta(raiz, id), fila, escrita, previas)
-    rotas_editor.montar(app, lambda id: _pasta(raiz, id), previas, rodar, escrita)
+    rotas_editor.montar(app, lambda id: _pasta(raiz, id), previas, rodar, escrita, raiz / BIBLIOTECA)
 
 
 def _rotas_leitura(app: FastAPI, raiz: Path, fila: Fila) -> None:

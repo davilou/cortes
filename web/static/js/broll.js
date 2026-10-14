@@ -42,7 +42,7 @@ async function refazerBroll(b) {
   const ed = ED, meu = desenhar.n;
   b.disabled = true;
   try {
-    const novo = await post(`${urlCorte(ed.id, ed.n)}/broll/refazer`);
+    const novo = await post(urlEditor(ed, "/broll/refazer"));
     if (meu === desenhar.n && ED === ed) aplicarEstado(novo);
   } catch (e) { avisar(e.message); b.disabled = false; }
 }

@@ -45,7 +45,7 @@ async function refazerMotion(b) {
   const ed = ED, meu = desenhar.n;
   b.disabled = true;
   try {
-    const novo = await post(`${urlCorte(ed.id, ed.n)}/motion/refazer`);
+    const novo = await post(urlEditor(ed, "/motion/refazer"));
     if (meu === desenhar.n && ED === ed) aplicarEstado(novo);
   } catch (e) { avisar(e.message); b.disabled = false; }
 }

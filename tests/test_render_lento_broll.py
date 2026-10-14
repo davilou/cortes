@@ -68,6 +68,9 @@ def _preparar_raiz(tmp_path: Path) -> Path:
         except OSError:
             shutil.copy2(EP / arq, pasta / arq)
     shutil.copytree(REPO / "render", tmp_path / "render")
+    bib, bib_tmp = REPO / "biblioteca" / "trilhas", tmp_path / "biblioteca" / "trilhas"
+    shutil.copytree(bib / "final", bib_tmp / "final")
+    shutil.copyfile(bib / "plano.json", bib_tmp / "plano.json")
     return pasta
 
 

@@ -37,6 +37,9 @@ def test_render_real_do_comediante(tmp_path: Path, formato: str) -> None:
         except OSError:
             shutil.copy2(EP / arq, pasta / arq)
     shutil.copytree(REPO / "render", tmp_path / "render")
+    bib, bib_tmp = REPO / "biblioteca" / "trilhas", tmp_path / "biblioteca" / "trilhas"
+    shutil.copytree(bib / "final", bib_tmp / "final")
+    shutil.copyfile(bib / "plano.json", bib_tmp / "plano.json")
     if formato == "f5":
         destino_lib = tmp_path / "biblioteca" / "gameplay"
         destino_lib.mkdir(parents=True)

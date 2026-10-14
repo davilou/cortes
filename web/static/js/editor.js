@@ -1,16 +1,29 @@
 "use strict";
 // Editor do Short (plano C, spec produção §5 "Editor"): três colunas — prévia 9:16 tocando o
 // próprio projeto HyperFrames no navegador (<hyperframes-player>), transcrição palavra a palavra
-// (transcricao.js) e ajustes: título, formato, quem aparece (planos.js), o B-roll do f4
+// (transcricao.js) e ajustes: título, formato, trilha, quem aparece (planos.js), o B-roll do f4
 // (broll.js, com "refazer"), as cenas do f3 (motion.js, com "refazer"), renderizar e versões.
 // Toda edição vai por POST .../editar, que devolve o estado novo; a prévia é refeita fora da fila
 // do render e a tela acompanha até ela ficar pronta.
 let ED = null;   // /api/episodios/{id}/cortes/{n}/editor + {id, n}
 const urlCorte = (id, n) => `/api/episodios/${encodeURIComponent(id)}/cortes/${n}`;
+// Toda rota do editor devolve o estado; a janela de transcrição vai junto para não voltar ao padrão.
+const JANELA_PADRAO_S = 30;   // rotas_editor.JANELA_S
+const urlEditor = (ed, caminho) =>
+  `${urlCorte(ed.id, ed.n)}${caminho}?antes=${ed.janela.antes}&depois=${ed.janela.depois}`;
 const NOMES_PREVIA = { preparando: "preparando a prévia…", erro: "a prévia falhou",
   desatualizada: "atualizando a prévia…", ausente: "gerando a prévia…" };
 // Prévia que a tela pede sozinha: sem arquivo ou mais velha que o corte.json (decisão 6 do plano C).
 const previaVelha = ed => ["ausente", "desatualizada"].includes(ed.previa.situacao) && ed.editavel;
+const MOODS_TRILHA = { neutro: "neutra", tensao: "tensão", leve: "leve" };
+
+// Automática mostra a cama que o LLM escolheu na última prévia, com o motivo no title.
+function opcoesTrilha(t) {
+  const nome = id => { const c = t.camas.find(x => x.id === id); return c ? `${id} · ${MOODS_TRILHA[c.mood]}` : id; };
+  const auto = t.automatica ? `Automática (${nome(t.automatica)})` : "Automática";
+  const ops = [["auto", auto], ...t.camas.map(c => [c.id, nome(c.id)]), ["nenhuma", "Sem trilha"]];
+  return ops.map(([v, r]) => `<option value="${esc(v)}" ${v === t.escolha ? "selected" : ""}>${esc(r)}</option>`).join("");
+}
 
 function htmlPrevia(ed) {
   const p = ed.previa;
@@ -34,6 +47,7 @@ function htmlAjustes(ed) {
   const situacao = c.alterado ? "edições ainda não renderizadas" : c.versao ? `v${c.versao} renderizada` : "ainda não renderizado";
   return `<label>Título<input id="ed-titulo" maxlength="100" value="${esc(c.titulo)}" ${dis}></label>
     <label>Formato<select id="ed-formato" ${dis}>${formatos}</select></label>
+    <label>Trilha<select id="ed-trilha" title="${esc(ed.trilha.motivo ?? "")}" ${dis}>${opcoesTrilha(ed.trilha)}</select></label>
     <div class="ed-render"><button class="botao primario" id="ed-renderizar" ${dis}>Renderizar</button>
       <span class="num">${esc(NOMES_CORTE[c.status] ?? c.status)} · ${esc(situacao)}</span></div>
     ${c.erro ? `<p class="erro-txt" title="${esc(c.erro)}">${esc(c.erro)}</p>` : ""}
@@ -57,7 +71,7 @@ function htmlEditor(ed) {
 async function editar(pedido) {
   const ed = ED, meu = desenhar.n;
   try {
-    const novo = await post(`${urlCorte(ed.id, ed.n)}/editar`, pedido);
+    const novo = await post(urlEditor(ed, "/editar"), pedido);
     if (meu === desenhar.n && ED === ed) aplicarEstado(novo);
   } catch (e) { avisar(e.message); }
 }
@@ -65,7 +79,7 @@ async function editar(pedido) {
 async function pedirPrevia() {
   const ed = ED, meu = desenhar.n;
   try {
-    const novo = await post(`${urlCorte(ed.id, ed.n)}/previa`);
+    const novo = await post(urlEditor(ed, "/previa"));
     if (meu === desenhar.n && ED === ed) aplicarEstado(novo);
   } catch (e) { avisar(e.message); }
 }
@@ -76,7 +90,7 @@ async function renderizarDoEditor(b) {
   try {
     await post(`${urlCorte(ed.id, ed.n)}/renderizar`, {});
     atualizarProducao();   // religa o polling da fila
-    const novo = await api(`${urlCorte(ed.id, ed.n)}/editor`);
+    const novo = await api(urlEditor(ed, "/editor"));
     if (meu === desenhar.n && ED === ed) aplicarEstado(novo);
   } catch (e) { avisar(e.message); b.disabled = false; }
 }
@@ -86,7 +100,7 @@ async function renderizarDoEditor(b) {
 // O foco que estava numa palavra volta para a palavra selecionada (o HTML da coluna é trocado).
 function aplicarEstado(novo) {
   const antes = ED;
-  ED = { ...novo, id: antes.id, n: antes.n };
+  ED = { ...novo, id: antes.id, n: antes.n, janela: antes.janela };
   const focoNaTranscricao = !!document.activeElement?.closest("#ed-transcricao");
   const rolagem = $("#ed-transcricao .palavras")?.scrollTop ?? 0;
   $("#ed-transcricao").innerHTML = htmlTranscricao(ED);
@@ -113,7 +127,7 @@ function acompanharEditor() {
   acompanharEditor.t = setTimeout(async () => {
     if (meu !== desenhar.n || ED !== ed) return;   // saiu do editor: não relê à toa
     try {
-      const novo = await api(`${urlCorte(ed.id, ed.n)}/editor`);
+      const novo = await api(urlEditor(ed, "/editor"));
       if (meu !== desenhar.n || ED !== ed) return;
       aplicarEstado(novo);
       if (previaVelha(ED)) pedirPrevia();
@@ -130,6 +144,8 @@ function ligarEditor() {
   if (t) t.onchange = () => { const v = t.value.trim(); if (v && v !== ED.corte.titulo) editar({ titulo: v }); };
   const f = $("#ed-formato");
   if (f) f.onchange = () => editar({ formato: f.value });
+  const tr = $("#ed-trilha");
+  if (tr) tr.onchange = () => editar({ trilha: tr.value });
   const r = $("#ed-renderizar");
   if (r) r.onclick = () => renderizarDoEditor(r);
   const refazer = $("#refazer-previa");
@@ -139,9 +155,10 @@ function ligarEditor() {
 async function telaEditor(meu, id, n) {
   if (!id || n === undefined) { location.hash = "#episodios"; return; }
   if (!E) await carregar();
-  const novo = await api(`${urlCorte(id, n)}/editor`);
+  const janela = { antes: JANELA_PADRAO_S, depois: JANELA_PADRAO_S };
+  const novo = await api(urlEditor({ id, n, janela }, "/editor"));
   if (meu !== desenhar.n) return;
-  ED = { ...novo, id, n: Number(n) };
+  ED = { ...novo, id, n: Number(n), janela };
   palSel = null;
   $("#tela").innerHTML = htmlEditor(ED);
   ligarEditor();

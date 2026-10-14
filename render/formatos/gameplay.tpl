@@ -29,6 +29,7 @@
         <video id="v-jogo" class="clip" src="assets/gameplay.mp4" data-start="0" data-duration="{{DUR}}" data-media-start="0" data-track-index="1" muted playsinline></video>
       </div>
       <audio id="cam-audio" src="assets/trecho.mp4" data-start="0" data-duration="{{DUR}}" data-track-index="10" data-volume="1" data-audio-group="voz"></audio>
+{{TRILHA}}
 {{LEGENDAS}}
     </div>
     <script>

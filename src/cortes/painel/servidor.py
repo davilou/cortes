@@ -31,9 +31,11 @@ from cortes.producao.etapas import Dependencias, rodar_etapa
 from cortes.producao.fila import Fila
 from cortes.producao.previas import Previas
 from cortes.producao.render import reabrir_render
+from cortes.render.corte import Corte
 from cortes.render.montagem import FORMATOS, caminho_template
 from cortes.render.pipeline import SCRIPT_ROSTO, DepRender, montar_projeto
 from cortes.render.processo import ErroRender, Rodar, rodar_processo
+from cortes.render.trilha_biblioteca import BIBLIOTECA, ler_plano
 
 HOSTS_LOCAIS = ("127.0.0.1", "localhost")
 
@@ -101,8 +103,11 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     # também a usa para pegar o próximo corte (producao/render.py)
     escrita = threading.Lock()
     fila = fila if fila is not None else _fila_real(cfg, agora, dep, escrita)
-    previas = previas if previas is not None else Previas(
-        cfg.raiz, lambda pasta, c: montar_projeto(pasta, c, cfg.raiz, dep))
+
+    def _previa(pasta: Path, c: Corte) -> None:
+        montar_projeto(pasta, c, cfg.raiz, dep)
+
+    previas = previas if previas is not None else Previas(cfg.raiz, _previa)
 
     @asynccontextmanager
     async def ciclo(_: FastAPI) -> AsyncIterator[None]:
@@ -152,7 +157,8 @@ def _handlers(app: FastAPI) -> None:
 
 
 def verificar_render(cfg: Config) -> str:
-    """Configuração do render ausente → o servidor não sobe e diz o que falta (spec produção §8).
+    """Configuração do render ausente (inclusive a biblioteca de trilhas) → o servidor não sobe e
+    diz o que falta (spec produção §8).
     Devolve o caminho do npx (no Windows, npx.cmd)."""
     faltas = [f"{nome} não está no PATH" for nome in ("ffmpeg", "npx") if shutil.which(nome) is None]
     arquivos = [("Python da visão (--py-visao)", cfg.py_visao),
@@ -160,6 +166,10 @@ def verificar_render(cfg: Config) -> str:
                 ("detector de rosto", cfg.raiz / SCRIPT_ROSTO)]
     arquivos += [("template", caminho_template(cfg.raiz, f)) for f in FORMATOS]
     faltas += [f"{rotulo} não existe: {p}" for rotulo, p in arquivos if not p.exists()]
+    try:
+        ler_plano(cfg.raiz / BIBLIOTECA)
+    except ErroRender as e:
+        faltas.append(str(e))
     npx = shutil.which("npx")
     if faltas or npx is None:
         raise ErroPainel("render sem configuração: " + "; ".join(faltas))

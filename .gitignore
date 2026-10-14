@@ -13,3 +13,6 @@ pesquisa/exemplo/*.mp4
 pesquisa/descoberta/
 contas/publicados.jsonl
 contas/retratos/
+biblioteca/trilhas/cues/
+biblioteca/trilhas/medidas.json
+biblioteca/trilhas-descartes/

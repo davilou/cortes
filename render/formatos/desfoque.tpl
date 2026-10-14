@@ -29,6 +29,7 @@
       <div id="quadro"><video id="v-quadro" class="clip" src="assets/trecho.mp4" data-start="0" data-duration="{{DUR}}" data-track-index="1" muted playsinline></video></div>
       <div id="titulo">{{TITULO}}</div>
       <audio id="cam-audio" src="assets/trecho.mp4" data-start="0" data-duration="{{DUR}}" data-track-index="10" data-volume="1" data-audio-group="voz"></audio>
+{{TRILHA}}
 {{LEGENDAS}}
     </div>
     <script>

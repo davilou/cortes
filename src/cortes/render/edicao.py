@@ -1,8 +1,9 @@
 """Regras de edição do editor (plano C; spec produção §5): início/fim por palavra, texto da legenda,
-mascarar palavrão (só na legenda), título, formato e quem aparece. Puro: recebe o corte e as
-palavras do episódio e devolve o corte novo, ou ErroProducao com a causa."""
+mascarar palavrão (só na legenda), título, formato, quem aparece e a trilha (spec trilha §4).
+Puro: recebe o corte e as palavras do episódio e devolve o corte novo, ou ErroProducao com a causa."""
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
 from cortes.producao.estado import ErroProducao
@@ -19,6 +20,8 @@ PALAVROES = frozenset({
     "bosta", "buceta", "cu", "cagado", "cagada", "cagar", "desgraca", "desgracado", "arrombado",
 })
 AUTOMATICO = -1            # pessoa "automático": apaga a escolha do plano (padrão; no f7, alterna)
+AUTO_TRILHA = "auto"       # editor volta a trilha para a escolha do LLM (Edicoes.trilha = None)
+SEM_TRILHA = "nenhuma"
 _VOGAL = re.compile(r"(?<=\w)[aeiouáéíóúâêôãõà]", re.IGNORECASE)
 
 
@@ -32,6 +35,7 @@ class Edicao:
     mascarar: dict[int, bool] = field(default_factory=dict)
     mascarar_palavroes: bool = False
     rosto: tuple[int, int] | None = None                           # (plano, pessoa ou AUTOMATICO)
+    trilha: str | None = None                                      # None não muda
 
 
 def mascarar(texto: str) -> str:
@@ -137,10 +141,23 @@ def _titulo_formato(c: Corte, ed: Edicao) -> Corte:
     return c
 
 
-def aplicar(c: Corte, ed: Edicao, todas: list[Palavra], pessoas_por_plano: list[int]) -> Corte:
-    """`pessoas_por_plano[k]` = quantas pessoas o plano k tem (do rosto.json atual)."""
+def _trilha(c: Corte, ed: Edicao, camas: Sequence[str]) -> Corte:
+    if ed.trilha is None:
+        return c
+    if ed.trilha != AUTO_TRILHA and ed.trilha != SEM_TRILHA and ed.trilha not in camas:
+        raise ErroProducao(f"trilha '{ed.trilha}' não existe; use {AUTO_TRILHA}, {SEM_TRILHA} "
+                           f"ou uma de {list(camas)}")
+    valor = None if ed.trilha == AUTO_TRILHA else ed.trilha
+    return replace(c, edicoes=replace(c.edicoes, trilha=valor))
+
+
+def aplicar(c: Corte, ed: Edicao, todas: list[Palavra], pessoas_por_plano: list[int],
+            camas: Sequence[str] = ()) -> Corte:
+    """`pessoas_por_plano[k]` = quantas pessoas o plano k tem (do rosto.json atual); `camas` = ids
+    da biblioteca de trilhas (só a escolha de uma cama precisa deles)."""
     if ed.rosto is not None and (ed.inicio_palavra is not None or ed.fim_palavra is not None):
         raise ErroProducao(
             "escolha o rosto depois de mudar início/fim: os planos de câmera mudam com o trecho")
-    novo = _titulo_formato(_rosto(_textos(_janela(c, ed, todas), ed, todas), ed, pessoas_por_plano), ed)
+    novo = _trilha(_titulo_formato(_rosto(_textos(_janela(c, ed, todas), ed, todas), ed,
+                                          pessoas_por_plano), ed), ed, camas)
     return novo if novo == c else replace(novo, alterado=True)

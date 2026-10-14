@@ -25,6 +25,7 @@ hyperframes-player.previa, .previa.vazia { display: block; width: 100%; max-widt
 /* Editor: transcrição palavra a palavra (fora do corte apagada; início/fim marcados na borda). */
 .palavras { position: relative; max-height: 62vh; overflow: auto; line-height: 2; font-size: 14px; margin-top: 10px;
   overflow-wrap: anywhere; }
+.palavras .ampliar { display: block; margin: 4px auto; }
 .pal { padding: 1px 3px; border-radius: 4px; cursor: pointer; }
 .pal.fora { color: var(--faint); }
 .pal.sel { background: var(--raised); outline: 1px solid var(--up); }

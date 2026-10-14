@@ -2,6 +2,7 @@ import json
 import shutil
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -9,10 +10,18 @@ import pytest
 from cortes.render.corte import Edicoes, concluir, novo_corte
 from cortes.render.pipeline import DepRender, janela, montar_projeto, renderizar_corte
 from cortes.render.processo import ErroRender
+from cortes.render.trilha import Medida
+from cortes.render.trilha_mood import SCHEMA as SCHEMA_TRILHA
+from tests.test_render_trilha_biblioteca import biblioteca
 
 REPO = Path(__file__).resolve().parents[1]
 ROSTO = {"formato": 2, "largura": 1920, "altura": 1080, "cortes": [],
         "amostras": [{"t": 0.0, "rostos": [{"x": 960, "y": 540, "r": 80, "conf": 0.9}]}]}
+
+
+def responde_mood(prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
+    assert schema is SCHEMA_TRILHA, "fora do f3/f4 o pipeline só chama o LLM para a trilha"
+    return {"mood": "neutro", "motivo": "conversa"}
 
 
 class Falso:
@@ -32,11 +41,13 @@ class Falso:
             t = np.arange(int(dur * 16000)) / 16000
             return (0.5 * np.sin(2 * np.pi * 50 * t)).astype(np.float32)
 
-        return DepRender(Path("py-visao"), Path("m.onnx"), "npx", self.rodar, tom)
+        return DepRender(Path("py-visao"), Path("m.onnx"), "npx", self.rodar, tom, responde_mood,
+                         medir_lufs=lambda a: Medida(-16.0, 90.0))
 
 
 def episodio(tmp: Path) -> Path:
     shutil.copytree(REPO / "render", tmp / "render")
+    biblioteca(tmp / "biblioteca" / "trilhas")
     pasta = tmp / "episodios" / "abcdefghijk"
     pasta.mkdir(parents=True)
     palavras = [{"texto": "Eu", "inicio": 10.1, "fim": 10.5},
@@ -45,7 +56,9 @@ def episodio(tmp: Path) -> Path:
     return pasta
 
 
-C = novo_corte(0, {"inicio": 10.3, "fim": 14.0, "titulo": "T"}, "f7")
+# Trilha escolhida à mão: os LLMs falsos do f3/f4 (que derivam de C) não precisam responder o mood;
+# o caminho automático tem teste próprio (test_trilha_automatica_pergunta_o_mood).
+C = replace(novo_corte(0, {"inicio": 10.3, "fim": 14.0, "titulo": "T"}, "f7"), edicoes=Edicoes(trilha="A"))
 
 
 def test_janela_da_folga_no_inicio() -> None:
@@ -174,3 +187,26 @@ def test_falante_falha_na_deteccao_de_rosto_e_erro(tmp_path: Path) -> None:
     pasta, f = episodio(tmp_path), FalsoSemRosto()
     with pytest.raises(ErroRender, match="detecção de rosto"):
         renderizar_corte(pasta, replace(C, formato="f1"), tmp_path, f.dep())
+
+
+def test_render_grava_a_trilha_da_versao(tmp_path: Path) -> None:
+    pasta, f = episodio(tmp_path), Falso()
+    renderizar_corte(pasta, C, tmp_path, f.dep())
+    d = pasta / "cortes" / "0"
+    assert json.loads((d / "short-v1.trilha.json").read_text(encoding="utf-8"))["cama"] == "A"
+    html = (d / "projeto" / "index.html").read_text(encoding="utf-8")
+    assert 'id="trilha-0"' in html and (d / "projeto" / "assets" / "trilha.m4a").exists()
+
+
+def test_trilha_automatica_pergunta_o_mood(tmp_path: Path) -> None:
+    pasta, f = episodio(tmp_path), Falso()
+    renderizar_corte(pasta, replace(C, edicoes=Edicoes()), tmp_path, f.dep())
+    usada = json.loads((pasta / "cortes" / "0" / "short-v1.trilha.json").read_text(encoding="utf-8"))
+    assert (usada["cama"], usada["origem"], usada["motivo"]) == ("A", "auto", "conversa")
+
+
+def test_sem_trilha_nao_poe_audio(tmp_path: Path) -> None:
+    pasta, f = episodio(tmp_path), Falso()
+    renderizar_corte(pasta, replace(C, edicoes=Edicoes(trilha="nenhuma")), tmp_path, f.dep())
+    html = (pasta / "cortes" / "0" / "projeto" / "index.html").read_text(encoding="utf-8")
+    assert "trilha-0" not in html and "{{" not in html

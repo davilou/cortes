@@ -145,14 +145,15 @@ def _motion(usa: set[str], cenas: Sequence[Cena]) -> dict[str, str]:
 
 def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], escolhas: dict[int, int],
             formato: str, titulo: str, ilustracoes: Sequence[Ilustracao] = (),
-            cenas: Sequence[Cena] = ()) -> dict[str, str]:
+            cenas: Sequence[Cena] = (), trilha: str = "") -> dict[str, str]:
     """Só os placeholders que `tpl` realmente usa: f8 (desfoque) não tem câmera nem metade, e
     calcular `TRILHA_CHEIO`/`TRILHA_METADE` ali exigiria rosto e escolhas válidas à toa — custo e
     chance de erro que o template nunca usa (revisão formatos novos, item 1). `rosto=None` só vale
-    quando `usa_rosto(tpl)` é falso — o chamador (pipeline._html) garante isso."""
+    quando `usa_rosto(tpl)` é falso — o chamador (pipeline._html) garante isso. `trilha` é o HTML
+    dos `<audio>` da cama (render/trilha.py); vazio = sem trilha."""
     usa = _placeholders(tpl)
     out = {"DUR": str(round(dur, 2)), "LEGENDAS": legenda_html(grupos, por_palavra=formato in _POR_PALAVRA),
-           "TITULO": html.escape(titulo)}
+           "TITULO": html.escape(titulo), "TRILHA": trilha}
     if "BROLL" in usa:
         out["BROLL"] = broll_html(ilustracoes, dur)
     out |= _motion(usa, cenas)

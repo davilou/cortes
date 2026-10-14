@@ -114,14 +114,14 @@ def test_corrigir_palavra_da_legenda_refaz_as_deixas(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
     il = Ilustra([VANS], OK)
     montar_projeto(pasta, C4, tmp_path, il.dep(f))
-    montar_projeto(pasta, replace(C4, edicoes=Edicoes(legenda={3: "Vanz"})), tmp_path, il.dep(f))
+    montar_projeto(pasta, replace(C4, edicoes=Edicoes(legenda={3: "Vanz"}, trilha="A")), tmp_path, il.dep(f))
     assert il.llm == 2 and "[3] Vanz" in il.prompts_llm[1]
 
 
 def test_mascarar_palavrao_nao_muda_o_prompt_nem_refaz(tmp_path: Path) -> None:
     pasta, f = ep4(tmp_path), Falso()
     il = Ilustra([VANS], OK)
-    montar_projeto(pasta, replace(C4, edicoes=Edicoes(mascaradas=(2,))), tmp_path, il.dep(f))
+    montar_projeto(pasta, replace(C4, edicoes=Edicoes(mascaradas=(2,), trilha="A")), tmp_path, il.dep(f))
     montar_projeto(pasta, C4, tmp_path, il.dep(f))
     assert il.llm == 1 and "[2] tênis" in il.prompts_llm[0]
     html = (_d(pasta) / "projeto" / "index.html").read_text(encoding="utf-8")

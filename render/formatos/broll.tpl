@@ -31,6 +31,7 @@
         <div class="vinheta"></div>
       </div>
       <audio id="cam-audio" src="assets/trecho.mp4" data-start="0" data-duration="{{DUR}}" data-track-index="10" data-volume="1" data-audio-group="voz"></audio>
+{{TRILHA}}
 {{BROLL}}
 {{LEGENDAS}}
     </div>

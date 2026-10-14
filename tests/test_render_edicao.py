@@ -88,3 +88,21 @@ def test_rosto_automatico_apaga_a_escolha_do_plano() -> None:
 def test_mudar_trecho_e_escolher_rosto_junto_e_recusado() -> None:
     with pytest.raises(ErroProducao, match="escolha o rosto depois de mudar"):
         aplicar(C, Edicao(inicio_palavra=2, fim_palavra=6, rosto=(0, 1)), TODAS, [2])
+
+
+def test_trilha_escolhida_auto_e_sem() -> None:
+    c = aplicar(C, Edicao(trilha="B"), TODAS, [], camas=("A", "B", "C"))
+    assert c.edicoes.trilha == "B" and c.alterado
+    assert aplicar(c, Edicao(trilha="auto"), TODAS, [], camas=("A", "B", "C")).edicoes.trilha is None
+    assert aplicar(c, Edicao(trilha="nenhuma"), TODAS, []).edicoes.trilha == "nenhuma"
+
+
+def test_trilha_desconhecida_e_erro() -> None:
+    with pytest.raises(ErroProducao, match="trilha 'Z'"):
+        aplicar(C, Edicao(trilha="Z"), TODAS, [], camas=("A", "B", "C"))
+
+
+def test_mudar_trilha_nao_mexe_no_resto() -> None:
+    c = replace(C, edicoes=Edicoes(legenda={1: "oi"}, rostos={0: 1}))
+    novo = aplicar(c, Edicao(trilha="nenhuma"), TODAS, [])
+    assert novo.edicoes == replace(c.edicoes, trilha="nenhuma")

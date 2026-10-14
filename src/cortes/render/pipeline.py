@@ -6,12 +6,12 @@ e os assets do formato (fundo do f8, gameplay do f5; render/assets.py) são apag
 O f4 (B-roll) tem ainda a etapa do B-roll (render/ilustracao_etapa.py), com cache em
 `ilustracao/`, e o f3 (motion) a das cenas (render/motion_cache.py), com cache em `motion/`; as duas
 pastas são apagadas junto quando o trecho é refeito.
-`montar_projeto` (trecho + rosto + index.html com as edições) é o que a prévia do editor mostra;
+`montar_projeto` (trecho + rosto + trilha + index.html com as edições) é o que a prévia do editor mostra;
 `renderizar_corte` chama `montar_projeto` e depois gera o MP4.
 """
 import shutil
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from cortes.detector import ChamarLLM, chamar_llm_real
@@ -42,6 +42,9 @@ from cortes.render.recorte import (
     segmentos_sem_pausa,
 )
 from cortes.render.rosto import ler_rosto, medir_rosto
+from cortes.render.trilha_biblioteca import BIBLIOTECA, MedirLufs, medir_lufs_real
+from cortes.render.trilha_etapa import TrilhaUsada, preparar_trilha
+from cortes.render.trilha_mood import texto_para_mood
 from cortes.tipos import Palavra
 
 FOLGA_INICIO = 0.3   # s: folga para o início de palavra estimado. Episódio antigo, com
@@ -63,6 +66,7 @@ class DepRender:
     rodar_download: Rodar = rodar_download_real                # download das fotos do f4 (30 s)
     rodar_busca_video: Rodar = rodar_busca_real                # busca no YouTube do f4 (30 s)
     rodar_video: Rodar = rodar_trecho_real                     # trecho do YouTube e quadros (90 s)
+    medir_lufs: MedirLufs = medir_lufs_real                    # loudness da voz e das camas (trilha)
 
 
 def janela(c: Corte) -> tuple[float, float]:
@@ -146,13 +150,13 @@ def grupos_do_trecho(pasta_ep: Path, c: Corte) -> tuple[list[Grupo], float] | No
 
 
 def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento], ilus: list[Ilustracao],
-          cenas: list[Cena]) -> str:
+          cenas: list[Cena], trilha: str) -> str:
     ws = _palavras_trecho(pasta_ep, c, segs, com_mascara=True)
     dur = duracao(segs)
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
     rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json") if usa_rosto(tpl) else None
     return montar_html(tpl, valores(tpl, dur, rosto, grupos(ws, dur), c.edicoes.rostos, c.formato, c.titulo,
-                                    ilustracoes=ilus, cenas=cenas))
+                                    ilustracoes=ilus, cenas=cenas, trilha=trilha))
 
 
 def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> list[Ilustracao]:
@@ -177,20 +181,35 @@ def _cenas(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> li
                           contexto_do_meta(pasta_ep))
 
 
-def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
-    """Trecho + rosto (com cache) e o index.html com as edições — o que a prévia do editor mostra
-    e o render grava em MP4. Rápido quando início/fim não mudaram (só regera o HTML)."""
+def _trilha(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento],
+            dep: DepRender) -> tuple[str, TrilhaUsada]:
+    ini, fim = janela(c)
+    todas = [Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")]
+    return preparar_trilha(pasta_corte(pasta_ep, c.indice), c, texto_para_mood(todas, c, ini, fim),
+                           duracao(segs), raiz / BIBLIOTECA, dep.chamar_llm, dep.medir_lufs)
+
+
+def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> TrilhaUsada:
+    """Trecho + rosto (com cache), a trilha e o index.html com as edições — o que a prévia do
+    editor mostra e o render grava em MP4. Rápido quando início/fim não mudaram (só regera o HTML;
+    o mood da trilha tem cache pelo texto)."""
     caminho_template(raiz, c.formato)   # formato que não renderiza (ex.: o antigo f9) para antes do trecho
     segs = preparar_trecho(pasta_ep, c, raiz, dep)
     proj = pasta_corte(pasta_ep, c.indice) / "projeto"
     preparar_assets(proj / "assets", c.formato, c.indice, duracao(segs), raiz, dep.rodar)
+    trilha, usada = _trilha(pasta_ep, c, raiz, segs, dep)
     ilus = _ilustrar(pasta_ep, c, segs, dep)
     cenas = _cenas(pasta_ep, c, segs, dep)
-    criar_projeto(proj, _html(pasta_ep, c, raiz, segs, ilus, cenas))
+    criar_projeto(proj, _html(pasta_ep, c, raiz, segs, ilus, cenas, trilha))
+    return usada
 
 
 def renderizar_corte(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
-    """Gera cortes/<indice>/short-v<versao+1>.mp4. Falha alto (ErroRender) em qualquer passo."""
-    montar_projeto(pasta_ep, c, raiz, dep)
+    """Gera cortes/<indice>/short-v<versao+1>.mp4 e o registro da trilha da versão
+    (`short-v<k>.trilha.json`, para o A/B com e sem trilha — pesquisa 04, R12). Falha alto
+    (ErroRender) em qualquer passo."""
+    usada = montar_projeto(pasta_ep, c, raiz, dep)
     d = pasta_corte(pasta_ep, c.indice)
-    renderizar(d / "projeto", d / f"short-v{c.versao + 1}.mp4", dep.npx, dep.rodar)
+    k = c.versao + 1
+    renderizar(d / "projeto", d / f"short-v{k}.mp4", dep.npx, dep.rodar)
+    salvar_json(d / f"short-v{k}.trilha.json", asdict(usada))

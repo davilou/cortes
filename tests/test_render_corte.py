@@ -244,3 +244,30 @@ def test_cortes_do_episodio_ignora_corte_apagado_depois_do_glob(tmp_path: Path,
 
     monkeypatch.setattr(modulo, "ler_corte", ler_depois_de_cancelar)
     assert [c.indice for c in cortes_do_episodio(tmp_path)] == [2]
+
+
+def test_trilha_da_edicao_vai_e_volta_do_disco(tmp_path: Path) -> None:
+    d = tmp_path / "0"
+    c = replace(novo_corte(0, {"inicio": 1.0, "fim": 5.0, "titulo": "T"}, "f7"),
+                edicoes=Edicoes(trilha="B"))
+    gravar_corte(d, c)
+    assert ler_corte(d).edicoes.trilha == "B"
+
+
+def test_corte_antigo_sem_trilha_e_automatico(tmp_path: Path) -> None:
+    d = tmp_path / "0"
+    gravar_corte(d, novo_corte(0, {"inicio": 1.0, "fim": 5.0, "titulo": "T"}, "f7"))
+    x = json.loads((d / "corte.json").read_text(encoding="utf-8"))
+    del x["edicoes"]["trilha"]
+    (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
+    assert ler_corte(d).edicoes.trilha is None
+
+
+def test_trilha_de_tipo_errado_e_erro(tmp_path: Path) -> None:
+    d = tmp_path / "0"
+    gravar_corte(d, novo_corte(0, {"inicio": 1.0, "fim": 5.0, "titulo": "T"}, "f7"))
+    x = json.loads((d / "corte.json").read_text(encoding="utf-8"))
+    x["edicoes"]["trilha"] = 3
+    (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="trilha"):
+        ler_corte(d)

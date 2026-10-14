@@ -60,7 +60,7 @@ def test_f3_monta_as_cenas_e_reaproveita_o_cache(tmp_path: Path) -> None:
 def test_corrigir_a_legenda_ou_mudar_o_trecho_chama_o_llm_de_novo(tmp_path: Path) -> None:
     pasta, llm = _episodio(tmp_path), LLM()
     _montar(pasta, tmp_path, llm)
-    _montar(pasta, tmp_path, llm, replace(C3, edicoes=Edicoes({1: "Comprei,"}, (), {})))
+    _montar(pasta, tmp_path, llm, replace(C3, edicoes=Edicoes({1: "Comprei,"}, (), {}, "A")))
     assert len(llm.prompts) == 4
     (pasta / "cortes" / "0" / "motion" / "lixo.txt").write_text("x", encoding="utf-8")
     _montar(pasta, tmp_path, llm, replace(C3, inicio=10.2))

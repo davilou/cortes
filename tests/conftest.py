@@ -1,4 +1,5 @@
 """Fixtures compartilhadas: a raiz falsa do painel (nicho, contas, formatos, skill, retrato)."""
+import json
 from datetime import date, datetime
 from pathlib import Path
 
@@ -42,6 +43,13 @@ def cfg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Config:
     for arq in (*tpls, "render/visao/rosto.py", "visao/python.exe", "visao/rosto.onnx"):
         (tmp_path / arq).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / arq).write_text("", encoding="utf-8")
+    bib = tmp_path / "biblioteca" / "trilhas"
+    (bib / "final").mkdir(parents=True)
+    fases = [{"id": "A", "mood": "neutro", "bpm": 76}, {"id": "B", "mood": "tensao", "bpm": 70},
+             {"id": "C", "mood": "leve", "bpm": 84}]
+    (bib / "plano.json").write_text(json.dumps({"fases": fases}), encoding="utf-8")
+    for f in fases:
+        (bib / "final" / f"{f['id']}.m4a").write_bytes(b"m4a")
     c = Config(raiz=tmp_path, skill_dir=skill, estatico=estatico, py_visao=tmp_path / "visao" / "python.exe",
                modelo_rosto=tmp_path / "visao" / "rosto.onnx")
     videos = tuple(

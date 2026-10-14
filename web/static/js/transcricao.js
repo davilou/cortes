@@ -2,8 +2,10 @@
 // Coluna de transcrição do editor: palavras em volta do corte (as de fora apagadas); clique
 // seleciona e a barra de ações move início/fim para a palavra (sempre por palavra — spec §5),
 // corrige o texto da legenda ou mascara (p*rra, só na legenda). Aviso quando o início depende de
-// contexto (cortes.regra_inicio, pesquisa R1: erro nº 1 dos fracassos).
+// contexto (cortes.regra_inicio, pesquisa R1: erro nº 1 dos fracassos). A janela começa em 30 s de
+// cada lado e cresce AMPLIAR_S por clique, até o começo/fim do episódio.
 let palSel = null;   // índice global (palavras.json) da palavra selecionada — só local
+const AMPLIAR_S = 60;
 
 function htmlPalavra(ed, p) {
   const cls = ["pal", p.dentro ? "dentro" : "fora", p.i === palSel ? "sel" : "", p.mascarada ? "masc" : "",
@@ -32,7 +34,28 @@ function htmlTranscricao(ed) {
   return `<div class="secao"><h2>Transcrição</h2>
       <button class="botao mini" id="mascarar-palavroes" ${ed.editavel ? "" : "disabled"}>Mascarar palavrões</button></div>
     ${aviso}${htmlAcoesPalavra(ed)}
-    <div class="palavras">${ed.palavras.map(p => htmlPalavra(ed, p)).join(" ")}</div>`;
+    <div class="palavras">${botaoAmpliar(ed, "antes")}${ed.palavras.map(p => htmlPalavra(ed, p)).join(" ")}${botaoAmpliar(ed, "depois")}</div>`;
+}
+
+function botaoAmpliar(ed, lado) {
+  if (!ed[lado === "antes" ? "tem_antes" : "tem_depois"]) return "";
+  return `<button class="botao mini ampliar" data-ampliar="${lado}">+${AMPLIAR_S} s ${lado}</button>`;
+}
+
+// Mais transcrição de um lado. Ao crescer em cima, a rolagem soma a altura nova para o texto que
+// Davi estava lendo não pular.
+async function ampliar(lado) {
+  const ed = ED, meu = desenhar.n;
+  const janela = { ...ed.janela, [lado]: ed.janela[lado] + AMPLIAR_S };
+  try {
+    const novo = await api(urlEditor({ ...ed, janela }, "/editor"));
+    if (meu !== desenhar.n || ED !== ed) return;
+    const altura = $("#ed-transcricao .palavras").scrollHeight;
+    ED.janela = janela;
+    aplicarEstado(novo);
+    const box = $("#ed-transcricao .palavras");
+    if (lado === "antes") box.scrollTop += box.scrollHeight - altura;
+  } catch (e) { avisar(e.message); }
 }
 
 // legenda: null volta ao texto original; "" tira a palavra da legenda (API: PedidoEdicao).
@@ -69,6 +92,7 @@ function ligarTranscricao() {
   const mp = $("#mascarar-palavroes", col);
   if (mp) mp.onclick = () => editar({ mascarar_palavroes: true });
   $$("[data-acao]", col).forEach(b => { b.onclick = () => acaoPalavra(b.dataset.acao); });
+  $$("[data-ampliar]", col).forEach(b => { b.onclick = () => ampliar(b.dataset.ampliar); });
   const inp = $("#pal-texto", col);
   if (inp) inp.onkeydown = ev => { if (ev.key === "Enter") acaoPalavra("texto"); };
 }

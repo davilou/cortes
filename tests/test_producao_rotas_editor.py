@@ -73,6 +73,27 @@ def test_estado_do_editor(cfg: Config) -> None:
     assert d["editavel"] is True and d["formatos"] == ["f7", "f1", "f6", "f5", "f8", "f4", "f3"]
 
 
+def test_janela_da_transcricao_padrao_cobre_o_episodio_curto(cfg: Config) -> None:
+    d = Ambiente(cfg).c.get(f"{EP}/cortes/0/editor").json()
+    assert [p["i"] for p in d["palavras"]] == list(range(9))
+    assert (d["tem_antes"], d["tem_depois"]) == (False, False)
+
+
+def test_janela_da_transcricao_e_escolhida_por_lado(cfg: Config) -> None:
+    """Corte 1.0–7.8: 0.5 s antes deixa a palavra 0 (em 0.0) de fora; 0.5 s depois pega a 8 (8.0)."""
+    a = Ambiente(cfg)
+    d = a.c.get(f"{EP}/cortes/0/editor?antes=0.5&depois=0.5").json()
+    assert [p["i"] for p in d["palavras"]] == list(range(1, 9))
+    assert (d["tem_antes"], d["tem_depois"]) == (True, False)
+    d = a.c.get(f"{EP}/cortes/0/editor?antes=1&depois=0").json()
+    assert [p["i"] for p in d["palavras"]] == list(range(8))
+    assert (d["tem_antes"], d["tem_depois"]) == (False, True)
+
+
+def test_janela_negativa_e_recusada(cfg: Config) -> None:
+    assert Ambiente(cfg).c.get(f"{EP}/cortes/0/editor?antes=-1").status_code == 422
+
+
 def test_previa_pronta_quando_nao_alterado_mesmo_com_corte_json_mais_novo(cfg: Config) -> None:
     """O render grava o index.html e só DEPOIS o corte.json (`concluir`); sem edição pendente
     (`alterado is False`) o index.html mais velho não quer dizer desatualizado — item 3."""
@@ -310,3 +331,36 @@ def test_refazer_broll_recusado_com_o_corte_na_fila(cfg: Config) -> None:
 def test_refazer_broll_recusado_fora_do_f4(cfg: Config) -> None:
     r = Ambiente(cfg).c.post(f"{EP}/cortes/0/broll/refazer")
     assert r.status_code == 422 and "f4" in r.json()["detail"]
+
+
+def test_editor_mostra_a_trilha(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    t = a.c.get(f"{EP}/cortes/0/editor").json()["trilha"]
+    assert t["escolha"] == "auto" and t["automatica"] is None
+    assert [c["id"] for c in t["camas"]] == ["A", "B", "C"]
+    mood = {"mood": "tensao", "motivo": "perda", "chave": {"texto": "outro trecho"}}
+    (a.d / "trilha.json").write_text(json.dumps(mood), encoding="utf-8")
+    t = a.c.get(f"{EP}/cortes/0/editor").json()["trilha"]
+    assert t["automatica"] is None, "mood de outro texto não vale para o trecho atual"
+    mood["chave"] = {"texto": "Mas eu ganhei porra, dez mil reais."}
+    (a.d / "trilha.json").write_text(json.dumps(mood), encoding="utf-8")
+    t = a.c.get(f"{EP}/cortes/0/editor").json()["trilha"]
+    assert (t["automatica"], t["motivo"]) == ("B", "perda")
+
+
+def test_editar_trilha(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    d = a.c.post(f"{EP}/cortes/0/editar", json={"trilha": "C"}).json()
+    assert d["trilha"]["escolha"] == "C" and ler_corte(a.d).edicoes.trilha == "C"
+    a.previas.processar("abcdefghijk", 0)   # editar pede a prévia; enquanto ela prepara, edição é recusada
+    r = a.c.post(f"{EP}/cortes/0/editar", json={"trilha": "Z"})
+    assert r.status_code == 422 and "trilha 'Z'" in r.json()["detail"]
+    d = a.c.post(f"{EP}/cortes/0/editar", json={"trilha": "auto"}).json()
+    assert d["trilha"]["escolha"] == "auto" and ler_corte(a.d).edicoes.trilha is None
+
+
+def test_previa_serve_a_trilha(cfg: Config) -> None:
+    a = Ambiente(cfg)
+    (a.d / "projeto" / "assets" / "trilha.m4a").write_bytes(b"m4a")
+    r = a.c.get(f"{EP}/cortes/0/previa/assets/trilha.m4a")
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mp4"

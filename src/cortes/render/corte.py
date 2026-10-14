@@ -23,6 +23,7 @@ class Edicoes:
     legenda: dict[int, str] = field(default_factory=dict)   # "" tira a palavra da legenda
     mascaradas: tuple[int, ...] = ()
     rostos: dict[int, int] = field(default_factory=dict)
+    trilha: str | None = None   # None = automática (LLM); "nenhuma" ou id da cama (editor)
 
 
 @dataclass(frozen=True)
@@ -144,7 +145,10 @@ def _edicoes(x: Any) -> Edicoes:
     if not isinstance(x["rostos"], dict):
         raise ValueError("edicoes.rostos deveria ser um objeto")
     rostos = {_int(k, "edicoes.rostos"): _int_valor(v, "edicoes.rostos") for k, v in x["rostos"].items()}
-    return Edicoes(legenda, mascaradas, rostos)
+    trilha = x.get("trilha")   # ausente: corte de antes da trilha (migração: automática)
+    if trilha is not None and not isinstance(trilha, str):
+        raise ValueError(f"edicoes.trilha deveria ser texto ou nulo, veio {trilha!r}")
+    return Edicoes(legenda, mascaradas, rostos, trilha)
 
 
 def _basicos(x: dict[str, Any], d: Path) -> Corte:
