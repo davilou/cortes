@@ -1,5 +1,6 @@
 """f3 Motion de verdade: `claude -p` pela assinatura (cenas), ffmpeg, rosto e HyperFrames — minutos
-por corte. Fora do check padrão. É o teste cego do plano E (2026-10-03-motion).
+por corte. Fora do check padrão. É o teste cego do plano E (2026-10-03-motion), refeito no estilo
+denso (spec 2026-10-15-f3-denso §12) com o corte do Sardinha de quebra.
 
 Precisa de CORTES_EPISODIOS apontando para a pasta com os episódios c5xqNNWFT9w (o corte "400 mil
 reais em 10 anos" do protótipo feito à mão) e wxCto9WSZcI (um tema fora do protótipo). Os episódios
@@ -18,12 +19,14 @@ import pytest
 from cortes.cli import MODELO_ROSTO, PY_VISAO
 from cortes.render.corte import novo_corte
 from cortes.render.motion_cache import ler_cenas
+from cortes.render.motion_cobertura import cobertura
 from cortes.render.pipeline import DepRender, renderizar_corte
 
 REPO = Path(__file__).resolve().parents[1]
 EPISODIOS = Path(os.environ.get("CORTES_EPISODIOS", str(REPO / "episodios")))
 CORTES = [("c5xqNNWFT9w", "400 mil reais em 10 anos", "400mil"),
-          ("wxCto9WSZcI", "Uber à noite pagou a dívida", "uber")]
+          ("wxCto9WSZcI", "Uber à noite pagou a dívida", "uber"),
+          ("rZfwNiJhJM0", "430 mil normas tributárias no Brasil", "sardinha")]
 
 
 def _preparar_raiz(tmp_path: Path, ep: str) -> Path:
@@ -68,13 +71,13 @@ def test_render_real_motion(tmp_path: Path, ep: str, titulo: str, nome: str) -> 
     lido = ler_cenas(d)
     assert lido is not None and lido.resultado.cenas
     html = (d / "projeto" / "index.html").read_text(encoding="utf-8")
-    assert all(f'id="m{c.k}"' in html for c in lido.resultado.cenas)
+    assert all(f'id="m{c.k}"' in html for c in lido.resultado.cenas if c.componente != "respiro")
 
     cenas = lido.resultado.cenas
-    cob = sum(c.fim - c.inicio for c in cenas) / dur
-    bordas = {round(t, 2) for c in cenas for t in (c.inicio, c.fim) if 0.01 < t < dur - 0.01}
-    print(f"\n{titulo}: {len(cenas)} cena(s); cobertura {cob:.0%}; {10 * len(bordas) / dur:.2f} "
-          f"trocas/10 s; mp4 {dur:.2f}s; total {total:.0f}s")
+    cob = cobertura(cenas, dur)   # type: ignore[arg-type]   # Cena tem os campos que a conta lê
+    bordas = {round(t, 2) for c in cenas for t in (c.inicio, c.fim, *c.batidas) if 0.01 < t < dur - 0.01}
+    print(f"\n{titulo}: {len(cenas)} cena(s); tema {lido.resultado.tema}; cobertura {cob:.0%}; "
+          f"{10 * len(bordas) / dur:.2f} mudanças/10 s (alvo ~3, pesquisa 05); total {total:.0f}s")
     for c in lido.resultado.cenas:
         print(f"  C{c.k} [{c.inicio:.2f}-{c.fim:.2f}] {c.componente}: {c.params} batidas {c.batidas}")
     for x in lido.resultado.descartadas:

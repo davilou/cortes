@@ -31,12 +31,12 @@ def _cena(comp: str, ini: int, fim: int, **params: Any) -> dict[str, Any]:
 class LLM:
     """Responde cada chamada com a próxima lista de cenas (sem mais listas: nenhuma cena) e guarda
     os prompts."""
-    def __init__(self, *respostas: list[dict[str, Any]]) -> None:
-        self.respostas, self.prompts = list(respostas), []
+    def __init__(self, *respostas: list[dict[str, Any]], tema: str = "dados") -> None:
+        self.respostas, self.prompts, self.tema = list(respostas), [], tema
 
     def __call__(self, prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
         self.prompts.append(prompt)
-        resposta = {"cenas": self.respostas.pop(0) if self.respostas else []}
+        resposta = {"tema": self.tema, "cenas": self.respostas.pop(0) if self.respostas else []}
         jsonschema.validate(resposta, schema)
         return resposta
 
@@ -47,7 +47,8 @@ def _chamar(*cenas: dict[str, Any]) -> LLM:
 
 def test_prompt_numera_as_palavras_e_cita_as_regras() -> None:
     p = prompt_cenas(PALAVRAS, EP)
-    assert "[0] (0.0s) Eu" in p and "[19] 400" in p and '"contador"' in p and "de 50% a 70%" in p
+    assert "[0] (0.0s) Eu" in p and "[19] 400" in p and '"contador"' in p and "(85% do tempo ou mais)" in p
+    assert '"destaque" com a frase-chave' in p and '"noite" (imóvel' in p
 
 
 def test_prompt_leva_o_episodio_e_pede_o_nome_de_quem_fala_na_capa() -> None:
@@ -67,7 +68,7 @@ def test_prompt_reconhece_comparacao_por_contraste_mesmo_sem_numero() -> None:
     p = prompt_cenas(PALAVRAS, EP)
     for frase in ('"perdi dinheiro"', '"rendeu mais"', '"X contra Y"'):
         assert frase in p
-    assert 'valor_texto pode ser uma palavra ("mais", "menos")' in p
+    assert 'O valor_texto pode ser "mais"/"menos"' in p
 
 
 def test_prompt_corrige_nome_proprio_mal_transcrito_sem_inventar() -> None:
@@ -94,24 +95,24 @@ def test_cenas_validas_com_tempo_das_palavras_e_batidas_na_fala() -> None:
     ), EP)
     assert [c.componente for c in r.cenas] == ["capa", "contador", "lista"] and r.descartadas == []
     capa, cont, lista = r.cenas
-    assert (capa.k, capa.inicio, capa.fim) == (1, 0.0, 2.2)
+    assert (capa.k, capa.inicio, capa.fim) == (1, 0.0, 2.0) and r.tema == "dados"
     assert cont.inicio == PALAVRAS[_i("400")].inicio and cont.params == Contador(
         "PAGOU", 400.0, "R$", "mil", ("ANO 0", "ANO 10"))
     assert cont.batidas == (PALAVRAS[_i("10")].inicio,)   # a barra enche no "10 anos"
     assert isinstance(lista.params, Lista)
     # "localização" é dita a 0,35 s do fim da fala: entra a FOLGA_FIM_S do fim, para dar para ler
     assert lista.batidas == (PALAVRAS[_i("oportunidade")].inicio, round(lista.fim - 0.4, 2))
-    assert lista.fim - lista.inicio <= 4.0
+    assert lista.fim - lista.inicio <= 5.0
 
 
 def test_numero_nao_dito_descarta_a_cena_com_o_motivo() -> None:
     r = cenas_do_corte(PALAVRAS, DUR, _chamar(
-        _cena("valor_cheio", _i("valendo"), _i("assim?"), rotulo="VALIA", valor=550, de=400, prefixo="R$",
+        _cena("valor", _i("valendo"), _i("assim?"), rotulo="VALIA", valor=550, de=400, prefixo="R$",
               sufixo="mil", selo="+37,5%"),
     ), EP)
     assert r.cenas == []
     (d,) = r.descartadas
-    assert d.componente == "valor_cheio" and d.motivo == "número que a fala não disse: +37,5%"
+    assert d.componente == "valor" and d.motivo == "número que a fala não disse: +37,5%"
 
 
 def test_numero_dito_depois_da_cena_nao_vale() -> None:
@@ -139,7 +140,12 @@ def test_sem_palavras_ou_duracao_e_erro() -> None:
 
 def test_schema_aceita_so_componente_conhecido() -> None:
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({"cenas": [_cena("grafico", 0, 1)]}, SCHEMA_CENAS)
+        jsonschema.validate({"tema": "dados", "cenas": [_cena("grafico3d", 0, 1)]}, SCHEMA_CENAS)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"tema": "roxo", "cenas": []}, SCHEMA_CENAS)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"tema": "dados", "cenas": [_cena("grade", 0, 1, blocos=[
+            {"icone": "unicornio", "texto": "x"}, {"icone": "casa", "texto": "y"}])]}, SCHEMA_CENAS)
 
 
 def _chat(ini: int, fim: int) -> dict[str, Any]:
@@ -159,27 +165,27 @@ def test_cobertura_baixa_faz_a_segunda_chamada_com_os_vaos_e_as_aceitas() -> Non
     assert '{"app": "CHATGPT", "pergunta": "Quanto renderia?"}' in feedback
     assert f'palavras [{_i("merda,")}' not in feedback and "merda, perdi um dinheiro." in feedback
     assert [c.componente for c in r.cenas] == ["chat", "comparacao"] and [c.k for c in r.cenas] == [1, 2]
-    assert r.cenas[1].inicio == PALAVRAS[_i("merda,")].inicio   # colada no chat (div), sem rosto
+    assert r.cenas[1].inicio == PALAVRAS[_i("merda,")].inicio
+    assert r.cenas[0].fim == r.cenas[1].inicio   # vão curto: o chat fica até a comparação entrar
     (d,) = r.descartadas
     assert d.componente == "chat" and d.motivo.startswith("ritmo: sobrepõe")
 
 
 def test_cobertura_boa_sem_vao_longo_fica_numa_chamada() -> None:
-    llm = LLM([_chat(3, 12), _chat(18, 27), _chat(33, 42), _chat(48, 57)])   # 16 s de 28,4 s
+    llm = LLM([_chat(5, 17), _chat(18, 30), _chat(31, 43), _chat(44, 56), _chat(57, 70)])   # 25 de 26,4 s
     r = cenas_do_corte(PALAVRAS, DUR, llm, EP)
-    assert len(llm.prompts) == 1 and len(r.cenas) == 4
+    assert len(llm.prompts) == 1 and len(r.cenas) == 5
+    assert r.cenas[-1].fim == DUR   # o último painel vai até o fim (vão de 0,6 s)
 
 
-def test_vao_longo_com_algo_mostravel_chama_de_novo_mesmo_com_cobertura_boa() -> None:
-    # 4 cenas de 4 s até "oportunidade" e nada depois; o vão final tem "localização", mas é curto;
-    # deixar o "perdi dinheiro" (11–20 s) de fora abre um vão longo e mostrável
-    llm = LLM([_chat(3, 12), _chat(15, 24), _chat(50, 59), _chat(62, 70)])
+def test_vao_de_mais_de_3_s_chama_de_novo() -> None:
+    llm = LLM([_chat(5, 17), _chat(18, 30), _chat(44, 56), _chat(57, 70)])   # vão de 12,2 a 17,6 s
     cenas_do_corte(PALAVRAS, DUR, llm, EP)
     assert len(llm.prompts) == 2
 
 
 def test_capa_pode_citar_numero_dito_depois_no_corte() -> None:
-    # a capa promete o que o corte mostra: "400 mil" é dito aos 7,6 s, a capa vai até 2,2 s
+    # a capa promete o que o corte mostra: "400 mil" é dito aos 7,6 s, a capa vai até 2 s
     r = cenas_do_corte(PALAVRAS, DUR, _chamar(_cena(
         "capa", 0, 3, rotulo="MAURÍCIO MEIRELLES", titulo="Comprei por 400 mil, perdi dinheiro",
         destaque="perdi")), EP)
@@ -214,7 +220,7 @@ def test_lista_mais_longa_que_o_maximo_entra_mais_tarde_e_acaba_depois_do_ultimo
         "lista", _i("Pra"), _i("localiza"), titulo="Pra comprar imóvel",
         itens=["Oportunidade", "Localização"])), EP)
     (c,) = r.cenas
-    assert (c.inicio, c.fim) == (24.4, DUR)   # 4 s que terminam 0,6 s depois da última palavra (no fim)
+    assert (c.inicio, c.fim) == (23.6, DUR)   # até 5 s, terminando 0,6 s depois da última palavra (no fim)
     assert c.batidas[0] == PALAVRAS[_i("oportunidade")].inicio
 
 
@@ -228,3 +234,24 @@ def test_prompt_capa_vem_do_trecho_nao_do_titulo_do_episodio() -> None:
     # render real: a capa saiu "COMO ELE GANHA DINHEIRO FORA DOS PALCOS", o título do episódio
     assert "O título da capa vem do que ESTE trecho conta, não do título do episódio" in \
         " ".join(prompt_cenas(PALAVRAS, EP).split())
+
+
+def test_sem_vao_para_cobrir_nao_faz_a_segunda_chamada() -> None:
+    # vãos de ~0,85 s entre painéis: 84% antes de emendar, 100% depois; nenhum vão para cobrir
+    llm = LLM([_chat(5, 14), _chat(17, 26), _chat(29, 38), _chat(41, 50), _chat(53, 62), _chat(65, 70)])
+    r = cenas_do_corte(PALAVRAS, DUR, llm, EP)
+    colados = all(a.fim == b.inicio for a, b in zip(r.cenas, r.cenas[1:], strict=False))
+    assert len(llm.prompts) == 1 and colados
+
+
+def test_cena_que_comeca_logo_antes_do_fim_do_gancho_entra_no_fim_dele() -> None:
+    # render real: o valor apontado em 1,94 s era recusado inteiro por 0,06 s
+    r = cenas_do_corte(PALAVRAS, DUR, _chamar(_chat(4, 9), _chat(1, 3)), EP)   # 1,6 s e 0,4 s
+    assert [(c.inicio, c.componente) for c in r.cenas] == [(2.0, "chat")]
+    assert r.descartadas[0].motivo.startswith("ritmo: começa no gancho")
+
+
+def test_prompt_destaque_e_ultimo_recurso_e_corrige_a_transcricao() -> None:
+    p = " ".join(prompt_cenas(PALAVRAS, EP).split())
+    assert "ÚLTIMO RECURSO" in p and "nunca dois seguidos" in p
+    assert '"pedi um dinheiro" → "perdi um dinheiro"' in p

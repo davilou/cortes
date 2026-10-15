@@ -106,3 +106,14 @@ def test_mudar_trilha_nao_mexe_no_resto() -> None:
     c = replace(C, edicoes=Edicoes(legenda={1: "oi"}, rostos={0: 1}))
     novo = aplicar(c, Edicao(trilha="nenhuma"), TODAS, [])
     assert novo.edicoes == replace(c.edicoes, trilha="nenhuma")
+
+
+def test_tema_escolhido_e_auto() -> None:
+    c = aplicar(C, Edicao(tema="clinico"), TODAS, [])
+    assert c.edicoes.tema == "clinico" and c.alterado
+    assert aplicar(c, Edicao(tema="auto"), TODAS, []).edicoes.tema is None
+
+
+def test_tema_desconhecido_e_erro() -> None:
+    with pytest.raises(ErroProducao, match="tema 'roxo'"):
+        aplicar(C, Edicao(tema="roxo"), TODAS, [])

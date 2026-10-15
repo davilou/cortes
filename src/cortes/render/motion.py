@@ -1,6 +1,6 @@
-"""f3 Motion, as cenas (plano 2026-10-03-motion; spec produção §7): o Claude lê a fala do corte e
-escolhe, para os momentos que dá para mostrar, um componente e os parâmetros dele — JSON validado
-por schema, nunca HTML. Daqui para a frente tudo é código: parâmetros conferidos por componente
+"""f3 Motion, as cenas (plano 2026-10-03-motion; estilo denso: spec 2026-10-15-f3-denso): o Claude
+lê a fala do corte e escolhe o tema e, para cada trecho, um componente e os parâmetros dele — JSON
+validado por schema, nunca HTML. Daqui para a frente tudo é código: parâmetros conferidos por componente
 (render/motion_params.py), números só os ditos (render/motion_numeros.py) e o ritmo.
 
 Cena recusada (parâmetro inválido, número não dito, ritmo) fica em `descartadas`, com o motivo,
@@ -24,14 +24,25 @@ from cortes.render.motion_prompt import (
     contexto_do_episodio,
     regras,
 )
-from cortes.render.motion_ritmo import DUR_MAX_S, DUR_MIN_S, Bruta, Descartada, ritmo
+from cortes.render.motion_ritmo import (
+    DUR_MAX_S,
+    DUR_MIN_S,
+    RESPIRO_MAX_S,
+    RESPIRO_MIN_S,
+    Bruta,
+    Descartada,
+    emendar,
+    ritmo,
+)
 from cortes.render.motion_sincronia import tempos_das_batidas
+from cortes.render.motion_tema import TEMAS
 from cortes.render.processo import ErroRender
 from cortes.tipos import Palavra
 
-CAPA_FIM_S = 2.2    # a capa fica de 0 a 2,2 s (protótipo), dentro da janela do gancho (0–2,5 s)
-POR_BATIDAS = ("lista", "rota")   # o conteúdo entra item a item, na fala
+CAPA_FIM_S = 2.0    # o gancho: rosto cheio com o título, de 0 a 2 s (pesquisa/05)
+POR_BATIDAS = ("lista", "rota", "fluxo", "grade", "planta")   # o conteúdo entra item a item, na fala
 LEITURA_S = 0.6     # a última batida fica pelo menos isto depois da palavra que a diz
+ENCOSTA_GANCHO_S = 0.6   # cena que começa até isto antes do fim do gancho entra no fim dele (render real)
 
 
 @dataclass(frozen=True)
@@ -48,6 +59,7 @@ class Cena:
 class Resultado:
     cenas: list[Cena]
     descartadas: list[Descartada]
+    tema: str
 
 
 def prompt_cenas(palavras: list[Palavra], contexto: Contexto) -> str:
@@ -66,6 +78,10 @@ def _tempos(item: dict[str, Any], palavras: list[Palavra], dur: float) -> tuple[
     if item["componente"] == "capa":
         return 0.0, round(min(CAPA_FIM_S, dur), 2)
     ini, fala_fim = palavras[i].inicio, palavras[j].fim
+    if CAPA_FIM_S - ENCOSTA_GANCHO_S <= ini < CAPA_FIM_S:
+        ini = CAPA_FIM_S
+    if item["componente"] == "respiro":
+        return round(ini, 2), round(min(max(fala_fim, ini + RESPIRO_MIN_S), ini + RESPIRO_MAX_S, dur), 2)
     if item["componente"] in POR_BATIDAS:
         # o que importa é o último item / o destino: fica LEITURA_S depois da palavra e, se não
         # cabe no máximo, a cena entra mais tarde, numa palavra (render real: "Localização" ficava
@@ -102,14 +118,19 @@ def cenas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM, conte
     if dur <= 0:
         raise ErroRender(f"duração do corte inválida para o motion: {dur}")
     prompt = prompt_cenas(palavras, contexto)
-    ficam, fora = _rodada(chamar(prompt, SCHEMA_CENAS, SISTEMA_CENAS, modelo), palavras, dur, [])
+    primeira = chamar(prompt, SCHEMA_CENAS, SISTEMA_CENAS, modelo)
+    tema = primeira.get("tema")
+    if tema not in TEMAS:
+        raise ErroLLM(f"tema {tema!r} fora de {tuple(TEMAS)}")
+    ficam, fora = _rodada(primeira, palavras, dur, [])
     vs = vaos(ficam, palavras, dur)
-    if precisa_segunda(ficam, vs, dur):   # a segunda e última chamada (cota)
+    if precisa_segunda(emendar(ficam, dur), vs, dur):   # a segunda e última chamada (cota)
         pedido = f"{prompt}\n\n{feedback(ficam, fora, vs, dur)}"
         ficam, fora2 = _rodada(chamar(pedido, SCHEMA_CENAS, SISTEMA_CENAS, modelo), palavras, dur, ficam)
         fora += fora2
-    cenas = [Cena(k, b.componente, b.inicio, b.fim, b.params, b.batidas) for k, b in enumerate(ficam, 1)]
-    return Resultado(cenas, sorted(fora, key=lambda d: d.inicio))
+    cenas = [Cena(k, b.componente, b.inicio, b.fim, b.params, b.batidas)
+             for k, b in enumerate(emendar(ficam, dur), 1)]
+    return Resultado(cenas, sorted(fora, key=lambda d: d.inicio), str(tema))
 
 
 def _rodada(bruto: dict[str, Any], palavras: list[Palavra], dur: float,

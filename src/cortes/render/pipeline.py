@@ -28,9 +28,8 @@ from cortes.render.ilustracao_etapa import DepIlustracao, ilustrar
 from cortes.render.ilustracao_imagens import BuscaImagens, ddgs_real, rodar_download_real
 from cortes.render.legenda import Grupo, grupos, palavras_do_corte
 from cortes.render.montagem import caminho_template, montar_html, usa_rosto, valores
-from cortes.render.motion import Cena
 from cortes.render.motion_cache import PASTA as PASTA_MOTION
-from cortes.render.motion_cache import contexto_do_meta, preparar_cenas
+from cortes.render.motion_cache import Motion, contexto_do_meta, preparar_cenas
 from cortes.render.processo import ErroRender, Rodar, rodar_processo
 from cortes.render.recorte import (
     LerAudio,
@@ -150,13 +149,13 @@ def grupos_do_trecho(pasta_ep: Path, c: Corte) -> tuple[list[Grupo], float] | No
 
 
 def _html(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento], ilus: list[Ilustracao],
-          cenas: list[Cena], trilha: str) -> str:
+          motion: Motion | None, trilha: str) -> str:
     ws = _palavras_trecho(pasta_ep, c, segs, com_mascara=True)
     dur = duracao(segs)
     tpl = caminho_template(raiz, c.formato).read_text(encoding="utf-8")
     rosto = ler_rosto(pasta_corte(pasta_ep, c.indice) / "rosto.json") if usa_rosto(tpl) else None
     return montar_html(tpl, valores(tpl, dur, rosto, grupos(ws, dur), c.edicoes.rostos, c.formato, c.titulo,
-                                    ilustracoes=ilus, cenas=cenas, trilha=trilha))
+                                    ilustracoes=ilus, motion=motion, trilha=trilha))
 
 
 def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> list[Ilustracao]:
@@ -171,14 +170,14 @@ def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) ->
     return ilustrar(d, ini, fim, palavras, duracao(segs), d / "projeto" / "assets", deps)
 
 
-def _cenas(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> list[Cena]:
+def _cenas(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> Motion | None:
     """Só o f3. Erro de LLM ou "nada vira painel" vira ErroRender e o corte fica em erro."""
     if c.formato != "f3":
-        return []
+        return None
     ini, fim = janela(c)
     palavras = _palavras_trecho(pasta_ep, c, segs, com_mascara=False)
     return preparar_cenas(pasta_corte(pasta_ep, c.indice), ini, fim, palavras, duracao(segs), dep.chamar_llm,
-                          contexto_do_meta(pasta_ep))
+                          contexto_do_meta(pasta_ep), c.edicoes.tema)
 
 
 def _trilha(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento],

@@ -9,9 +9,11 @@ from cortes.producao.estado import ErroProducao
 from cortes.render.conversa import trilha_conversa
 from cortes.render.ilustracao_cache import Ilustracao, Midia, nome_asset
 from cortes.render.legenda import Grupo, legenda_html
-from cortes.render.motion import Cena
 from cortes.render.motion_animacao import animacoes
+from cortes.render.motion_cache import Motion
 from cortes.render.motion_componentes import cenas_html, estados
+from cortes.render.motion_params import Capa
+from cortes.render.motion_tema import css_do_tema
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import (
     ALVO_DIV,
@@ -131,21 +133,25 @@ def _camera(usa: set[str], rosto: Rosto, escolhas: dict[int, int], grupos: list[
     return out
 
 
-def _motion(usa: set[str], cenas: Sequence[Cena]) -> dict[str, str]:
-    """As cenas do f3 (render/motion_componentes.py e motion_animacao.py)."""
-    out: dict[str, str] = {}
-    if "CENAS" in usa:
-        out["CENAS"] = cenas_html(list(cenas))
-    if "ESTADOS" in usa:
-        out["ESTADOS"] = estados(list(cenas))
-    if "ANIMACOES" in usa:
-        out["ANIMACOES"] = animacoes(list(cenas))
-    return out
+_PLACEHOLDERS_MOTION = {"CENAS", "ESTADOS", "ANIMACOES", "TEMA_CSS", "ROTULO_BASE"}
+
+
+def _motion(usa: set[str], motion: Motion | None) -> dict[str, str]:
+    """As cenas, o tema e a faixa de base do f3 (render/motion_componentes.py e motion_animacao.py;
+    spec 2026-10-15-f3-denso). A faixa de base mostra o rótulo da capa quando não há painel."""
+    if not usa & _PLACEHOLDERS_MOTION:
+        return {}
+    if motion is None:
+        raise ErroRender("o template do f3 precisa das cenas do motion, e nenhuma foi preparada")
+    capa = next((c.params for c in motion.cenas if isinstance(c.params, Capa)), None)
+    return {"CENAS": cenas_html(motion.cenas, motion.svgs), "ESTADOS": estados(motion.cenas),
+            "ANIMACOES": animacoes(motion.cenas), "TEMA_CSS": css_do_tema(motion.tema),
+            "ROTULO_BASE": html.escape(capa.rotulo if capa else "")}
 
 
 def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], escolhas: dict[int, int],
             formato: str, titulo: str, ilustracoes: Sequence[Ilustracao] = (),
-            cenas: Sequence[Cena] = (), trilha: str = "") -> dict[str, str]:
+            motion: Motion | None = None, trilha: str = "") -> dict[str, str]:
     """Só os placeholders que `tpl` realmente usa: f8 (desfoque) não tem câmera nem metade, e
     calcular `TRILHA_CHEIO`/`TRILHA_METADE` ali exigiria rosto e escolhas válidas à toa — custo e
     chance de erro que o template nunca usa (revisão formatos novos, item 1). `rosto=None` só vale
@@ -156,7 +162,7 @@ def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], esco
            "TITULO": html.escape(titulo), "TRILHA": trilha}
     if "BROLL" in usa:
         out["BROLL"] = broll_html(ilustracoes, dur)
-    out |= _motion(usa, cenas)
+    out |= _motion(usa, motion)
     if usa & _PLACEHOLDERS_ROSTO:
         if rosto is None:
             raise ErroRender(f"formato '{formato}' usa rosto no template mas nenhum foi medido")

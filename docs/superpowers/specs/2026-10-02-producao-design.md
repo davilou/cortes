@@ -272,6 +272,10 @@ rodapé do trilho, a fila: o que roda agora, com progresso, e quantos esperam.
 
 ## 7. Motion (plano E)
 
+> **Superado em 2026-10-15** pelo estilo denso: `2026-10-15-f3-denso-design.md` (tela dividida com
+> card, painéis de 2–5 s, componentes e temas novos; a regra de ritmo da pesquisa 03 deixa de valer
+> para o f3). O texto abaixo é o f3 original, mantido como histórico.
+
 Feito em 2026-10-03 (plano `2026-10-03-motion.md`). O f3 mostra o que a pessoa diz em painéis
 animados, portados dos feitos à mão em `testes/short-400mil-dinamica/modelo.tpl`, alternando em
 **corte seco** dois estados: **div** (painel numa faixa de 680 px em cima, rosto na janela de

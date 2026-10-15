@@ -271,3 +271,21 @@ def test_trilha_de_tipo_errado_e_erro(tmp_path: Path) -> None:
     (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
     with pytest.raises(ErroProducao, match="trilha"):
         ler_corte(d)
+
+
+def test_tema_da_edicao_vai_e_volta_do_disco(tmp_path: Path) -> None:
+    d = tmp_path / "0"
+    c = replace(novo_corte(0, {"inicio": 1.0, "fim": 5.0, "titulo": "T"}, "f3"),
+                edicoes=Edicoes(tema="noite"))
+    gravar_corte(d, c)
+    assert ler_corte(d).edicoes.tema == "noite"
+
+
+def test_tema_de_tipo_errado_e_erro(tmp_path: Path) -> None:
+    d = tmp_path / "0"
+    gravar_corte(d, novo_corte(0, {"inicio": 1.0, "fim": 5.0, "titulo": "T"}, "f3"))
+    x = json.loads((d / "corte.json").read_text(encoding="utf-8"))
+    x["edicoes"]["tema"] = 7
+    (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="tema"):
+        ler_corte(d)

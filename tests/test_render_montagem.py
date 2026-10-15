@@ -18,6 +18,7 @@ from cortes.render.montagem import (
     validar_formato,
     valores,
 )
+from cortes.render.motion_cache import Motion
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import Amostra, Face, Rosto, trilha_fixa
 
@@ -63,7 +64,8 @@ def test_formatos_do_app() -> None:
 @pytest.mark.parametrize("formato", FORMATOS)
 def test_templates_reais_montam_sem_sobra(formato: str) -> None:
     tpl = caminho_template(REPO, formato).read_text(encoding="utf-8")
-    html = montar_html(tpl, valores(tpl, 12.5, R, G, {}, formato, "Título"))
+    motion = Motion([], "escuro") if formato == "f3" else None   # o f3 exige as cenas (test_render_motion_*)
+    html = montar_html(tpl, valores(tpl, 12.5, R, G, {}, formato, "Título", motion=motion))
     assert 'data-duration="12.5"' in html and ">Oi<" in html
     cheio = formato in ("f7", "f1", "f6", "f4", "f3")
     assert ("3413px" in html) == cheio   # quadro cheio: fonte a 1920 de altura

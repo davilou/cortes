@@ -9,6 +9,7 @@ from dataclasses import dataclass, field, replace
 from cortes.producao.estado import ErroProducao
 from cortes.render.corte import Corte, Edicoes
 from cortes.render.montagem import validar_formato
+from cortes.render.motion_tema import TEMAS
 from cortes.tipos import Palavra
 
 DURACAO_MIN_S = 3.0
@@ -22,6 +23,7 @@ PALAVROES = frozenset({
 AUTOMATICO = -1            # pessoa "automático": apaga a escolha do plano (padrão; no f7, alterna)
 AUTO_TRILHA = "auto"       # editor volta a trilha para a escolha do LLM (Edicoes.trilha = None)
 SEM_TRILHA = "nenhuma"
+AUTO_TEMA = "auto"         # f3: volta o tema para a escolha do LLM (Edicoes.tema = None)
 _VOGAL = re.compile(r"(?<=\w)[aeiouáéíóúâêôãõà]", re.IGNORECASE)
 
 
@@ -36,6 +38,7 @@ class Edicao:
     mascarar_palavroes: bool = False
     rosto: tuple[int, int] | None = None                           # (plano, pessoa ou AUTOMATICO)
     trilha: str | None = None                                      # None não muda
+    tema: str | None = None                                        # None não muda
 
 
 def mascarar(texto: str) -> str:
@@ -151,6 +154,14 @@ def _trilha(c: Corte, ed: Edicao, camas: Sequence[str]) -> Corte:
     return replace(c, edicoes=replace(c.edicoes, trilha=valor))
 
 
+def _tema(c: Corte, ed: Edicao) -> Corte:
+    if ed.tema is None:
+        return c
+    if ed.tema != AUTO_TEMA and ed.tema not in TEMAS:
+        raise ErroProducao(f"tema '{ed.tema}' não existe; use {AUTO_TEMA} ou um de {list(TEMAS)}")
+    return replace(c, edicoes=replace(c.edicoes, tema=None if ed.tema == AUTO_TEMA else ed.tema))
+
+
 def aplicar(c: Corte, ed: Edicao, todas: list[Palavra], pessoas_por_plano: list[int],
             camas: Sequence[str] = ()) -> Corte:
     """`pessoas_por_plano[k]` = quantas pessoas o plano k tem (do rosto.json atual); `camas` = ids
@@ -160,4 +171,5 @@ def aplicar(c: Corte, ed: Edicao, todas: list[Palavra], pessoas_por_plano: list[
             "escolha o rosto depois de mudar início/fim: os planos de câmera mudam com o trecho")
     novo = _trilha(_titulo_formato(_rosto(_textos(_janela(c, ed, todas), ed, todas), ed,
                                           pessoas_por_plano), ed), ed, camas)
+    novo = _tema(novo, ed)
     return novo if novo == c else replace(novo, alterado=True)

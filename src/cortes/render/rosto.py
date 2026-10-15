@@ -24,10 +24,11 @@ ALVO = (540, 700)          # onde o rosto fica na tela 9:16 (protótipo: CAM_CHE
 JANELA_METADE = (1080, 960)
 ALVO_METADE = (540, 380)
 ALTURA_QUADRO_METADE = 1080
-# f3 (motion), estado "div": a janela abaixo da faixa de 680 px, com o rosto mais acima. Protótipo
-# testes/short-400mil-dinamica/gera.py (CAMERAS["div"]): escala 1,2 na fonte 1080p → quadro 2304×1296.
-JANELA_DIV = (1080, 1240)
-ALVO_DIV = (540, 400)
+# f3 (motion), estado "div": o card de 1000 × 980 abaixo do painel (spec 2026-10-15-f3-denso §3), com
+# o rosto a ~38% da altura. Escala 1,2 na fonte 1080p → quadro 2304×1296, como no protótipo
+# testes/short-400mil-dinamica/gera.py (CAMERAS["div"]).
+JANELA_DIV = (1000, 980)
+ALVO_DIV = (500, 370)
 ALTURA_QUADRO_DIV = 1296
 PASSO_S = 0.25             # passo da amostragem em render/visao/rosto.py
 SEPARA = 0.08              # rostos a mais que isso (fração da largura) no eixo x são pessoas diferentes

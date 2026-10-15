@@ -24,6 +24,7 @@ class Edicoes:
     mascaradas: tuple[int, ...] = ()
     rostos: dict[int, int] = field(default_factory=dict)
     trilha: str | None = None   # None = automática (LLM); "nenhuma" ou id da cama (editor)
+    tema: str | None = None     # f3: None = o do LLM; nome de motion_tema.TEMAS (editor)
 
 
 @dataclass(frozen=True)
@@ -148,7 +149,10 @@ def _edicoes(x: Any) -> Edicoes:
     trilha = x.get("trilha")   # ausente: corte de antes da trilha (migração: automática)
     if trilha is not None and not isinstance(trilha, str):
         raise ValueError(f"edicoes.trilha deveria ser texto ou nulo, veio {trilha!r}")
-    return Edicoes(legenda, mascaradas, rostos, trilha)
+    tema = x.get("tema")   # ausente: corte de antes do tema (migração: o do LLM)
+    if tema is not None and not isinstance(tema, str):
+        raise ValueError(f"edicoes.tema deveria ser texto ou nulo, veio {tema!r}")
+    return Edicoes(legenda, mascaradas, rostos, trilha, tema)
 
 
 def _basicos(x: dict[str, Any], d: Path) -> Corte:

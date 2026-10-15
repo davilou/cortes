@@ -22,7 +22,7 @@ from cortes.regra_inicio import comeca_no_meio
 from cortes.render.assets import FUNDO, GAMEPLAY, apagar_clipes
 from cortes.render.conversa import RITMO_ALVO, alternancias, ritmo
 from cortes.render.corte import ARQUIVO, Corte, gravar_corte, ler_corte, pasta_corte
-from cortes.render.edicao import AUTO_TRILHA, Edicao, aplicar, indices_do_corte, mascarar
+from cortes.render.edicao import AUTO_TEMA, AUTO_TRILHA, Edicao, aplicar, indices_do_corte, mascarar
 from cortes.render.ilustracao_cache import ARQUIVO as ARQUIVO_ILUSTRACAO
 from cortes.render.ilustracao_cache import PASTA as PASTA_ILUSTRACAO
 from cortes.render.ilustracao_cache import Fonte, ler_ilustracoes, miniatura
@@ -31,6 +31,8 @@ from cortes.render.montagem import FORMATOS
 from cortes.render.motion_cache import PASTA as PASTA_MOTION
 from cortes.render.motion_cache import ler_cenas
 from cortes.render.motion_params import params_json
+from cortes.render.motion_svg import falha_guardada
+from cortes.render.motion_tema import TEMAS
 from cortes.render.pipeline import grupos_do_trecho
 from cortes.render.pipeline import janela as janela_do_trecho
 from cortes.render.previa import com_runtime
@@ -188,8 +190,11 @@ def _motion_json(d: Path, c: Corte) -> tuple[dict[str, Any] | None, str | None]:
     if lido is None:
         return None, None
     r = lido.resultado
-    return {"cenas": [{"k": x.k, "componente": x.componente, "inicio": x.inicio, "fim": x.fim,
-                       "params": params_json(x.params)} for x in r.cenas],
+    return {"tema": c.edicoes.tema or r.tema, "tema_llm": r.tema, "tema_escolha": c.edicoes.tema or AUTO_TEMA,
+            "temas": list(TEMAS),
+            "cenas": [{"k": x.k, "componente": x.componente, "inicio": x.inicio, "fim": x.fim,
+                       "params": params_json(x.params), "falha_svg": falha_guardada(d, x.k)
+                       if x.componente == "ilustracao" else None} for x in r.cenas],
             "descartadas": [{"componente": x.componente, "inicio": x.inicio, "fim": x.fim,
                              "params": x.params, "motivo": x.motivo} for x in r.descartadas]}, None
 
@@ -266,10 +271,12 @@ class PedidoEdicao(BaseModel):
     mascarar_palavroes: bool = False
     rosto: tuple[int, int] | None = None
     trilha: str | None = None
+    tema: str | None = None
 
     def edicao(self) -> Edicao:
         return Edicao(self.inicio_palavra, self.fim_palavra, self.titulo, self.formato, dict(self.legenda),
-                      dict(self.mascarar), self.mascarar_palavroes, self.rosto, self.trilha)
+                      dict(self.mascarar), self.mascarar_palavroes, self.rosto, self.trilha,
+                      self.tema)
 
 
 def _exigir_editavel(previas: Previas, id: str, c: Corte) -> None:
