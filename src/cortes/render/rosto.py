@@ -31,11 +31,11 @@ JANELA_DIV = (1000, 980)
 ALVO_DIV = (500, 370)
 ALTURA_QUADRO_DIV = 1296
 # f10 (Motion v2, spec 2026-10-15-f10-motion-v2): o card de 1000 × 900 na escala do div, com o rosto
-# alto (y 250) para o alto da cabeça passar da borda de cima e aparecer na faixa de FAIXA_CABECA px,
+# alto (y 160) para o alto da cabeça passar da borda de cima e aparecer na faixa de FAIXA_CABECA px,
 # onde o recorte sem fundo (render/recorte_fundo.py) desenha só a pessoa. O avatar redondo das cenas
 # escuras é a mesma câmera a 40%.
 JANELA_CARD = (1000, 900)
-ALVO_CARD = (500, 250)
+ALVO_CARD = (500, 160)
 FAIXA_CABECA = 200
 JANELA_AVATAR = (220, 220)
 ALVO_AVATAR = (110, 112)
