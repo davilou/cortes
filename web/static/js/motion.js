@@ -39,7 +39,7 @@ function htmlListaMotion(ed) {
 }
 
 function htmlTema(ed) {
-  if (!ed.motion) return "";
+  if (!ed.motion || !ed.motion.temas.length) return "";   // o f10 tem tema fixo
   const m = ed.motion, dis = ed.editavel ? "" : "disabled";
   const ops = [["auto", `Automático (${NOMES_TEMA[m.tema_llm] ?? m.tema_llm})`],
     ...m.temas.map(t => [t, NOMES_TEMA[t] ?? t])];

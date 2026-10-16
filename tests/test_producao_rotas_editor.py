@@ -70,7 +70,7 @@ def test_estado_do_editor(cfg: Config) -> None:
     assert url_previa.startswith(f"{EP}/cortes/0/previa/index.html?v=")
     assert [(p["k"], len(p["pessoas"]), p["escolha"]) for p in d["planos"]] == [(0, 1, 0), (1, 2, 0)]
     assert d["versoes"] == [{"versao": 1, "url": f"{EP}/cortes/0/video?versao=1"}]
-    assert d["editavel"] is True and d["formatos"] == ["f7", "f1", "f6", "f5", "f8", "f4", "f3"]
+    assert d["editavel"] is True and d["formatos"] == ["f7", "f1", "f6", "f5", "f8", "f4", "f3", "f10"]
 
 
 def test_janela_da_transcricao_padrao_cobre_o_episodio_curto(cfg: Config) -> None:

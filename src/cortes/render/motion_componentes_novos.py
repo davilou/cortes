@@ -1,6 +1,6 @@
 """f3 Motion, o HTML dos componentes novos do estilo denso (spec 2026-10-15-f3-denso §5). Puro.
 
-O CSS está em render/formatos/motion.tpl; a animação, em render/motion_animacao_novos.py. Todo
+O CSS está em render/motion_estilo.py; a animação, em render/motion_animacao_novos.py. Todo
 texto do LLM passa por `html.escape`; ícone só pelo nome, da lista fechada (render/motion_icones.py);
 o SVG da ilustração só como saiu de render/motion_svg.py (sanitizado).
 """

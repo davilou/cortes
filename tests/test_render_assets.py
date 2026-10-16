@@ -84,3 +84,18 @@ def test_asset_que_falha_nao_fica_pela_metade(tmp_path: Path) -> None:
     with pytest.raises(ErroRender, match="fundo desfocado"):
         preparar_assets(tmp_path, "f8", 0, 10.0, tmp_path, falha)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_f10_copia_os_efeitos_uma_vez_e_falta_e_erro_claro(tmp_path: Path) -> None:
+    assets, sfx = tmp_path / "projeto" / "assets", tmp_path / "biblioteca" / "sfx"
+    assets.mkdir(parents=True)
+    with pytest.raises(ErroRender, match="whoosh.wav não existe"):
+        preparar_assets(assets, "f10", 0, 10.0, tmp_path, Grava().rodar)
+    sfx.mkdir(parents=True)
+    for nome in ("whoosh", "pop"):
+        (sfx / f"{nome}.wav").write_bytes(nome.encode())
+    g = Grava()
+    preparar_assets(assets, "f10", 0, 10.0, tmp_path, g.rodar)
+    assert g.args == [] and (assets / "sfx-pop.wav").read_bytes() == b"pop"
+    (sfx / "pop.wav").unlink()
+    preparar_assets(assets, "f10", 0, 10.0, tmp_path, g.rodar)   # já copiado: não procura de novo

@@ -30,6 +30,16 @@ ALTURA_QUADRO_METADE = 1080
 JANELA_DIV = (1000, 980)
 ALVO_DIV = (500, 370)
 ALTURA_QUADRO_DIV = 1296
+# f10 (Motion v2, spec 2026-10-15-f10-motion-v2): o card de 1000 × 900 na escala do div, com o rosto
+# alto (y 160) para o alto da cabeça passar da borda de cima e aparecer na faixa de FAIXA_CABECA px,
+# onde o recorte sem fundo (render/recorte_fundo.py) desenha só a pessoa. O avatar redondo das cenas
+# escuras é a mesma câmera a 40%.
+JANELA_CARD = (1000, 900)
+ALVO_CARD = (500, 160)
+FAIXA_CABECA = 200
+JANELA_AVATAR = (220, 220)
+ALVO_AVATAR = (110, 112)
+ESCALA_AVATAR = 0.4
 PASSO_S = 0.25             # passo da amostragem em render/visao/rosto.py
 SEPARA = 0.08              # rostos a mais que isso (fração da largura) no eixo x são pessoas diferentes
 RUIDO = 0.2                # pessoa com menos que isso × as detecções da maior é ruído do detector
@@ -151,6 +161,20 @@ def escala_div(r: Rosto) -> float:
 def quadro_div(r: Rosto) -> tuple[int, int]:
     e = escala_div(r)
     return round(r.largura * e), round(r.altura * e)
+
+
+def escala_avatar(r: Rosto) -> float:
+    return escala_div(r) * ESCALA_AVATAR
+
+
+def quadro_avatar(r: Rosto) -> tuple[int, int]:
+    e = escala_avatar(r)
+    return round(r.largura * e), round(r.altura * e)
+
+
+def trilha_cabeca(trilha_card: list[list[float]]) -> list[list[float]]:
+    """A trilha do card, vista da faixa da cabeça: a faixa começa FAIXA_CABECA px acima do card."""
+    return [[t, x, round(y + FAIXA_CABECA, 1), corte] for t, x, y, corte in trilha_card]
 
 
 def pessoas(faces: list[Face], largura: int) -> tuple[Pessoa, ...]:

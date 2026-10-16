@@ -4,17 +4,23 @@
   HyperFrames sobre o vídeo cheio estourava o tempo de carga (testes/comum/formatos/desfoque.tpl).
 - f5 (gameplay): `gameplay.mp4`, um vídeo de `biblioteca/gameplay/` a 1708×960, repetido até a
   duração do Short (o gameplay de origem pode ser mais curto que o Short).
+- f10 (Motion v2): os efeitos sonoros de `biblioteca/sfx/` (`sfx-<nome>.wav`, render/motion2.py),
+  copiados como estão. O recorte da cabeça precisa da GPU e fica em render/recorte_fundo.py.
 
 Só dependem do trecho: são gerados se faltarem e apagados quando o trecho é refeito (pipeline).
 """
+import shutil
 from pathlib import Path
 
+from cortes.render.motion2 import SFX
 from cortes.render.processo import ErroRender, Rodar
 from cortes.render.recorte import gerar_por_parcial
+from cortes.render.recorte_fundo import RECORTE
 
 FUNDO = "fundo.mp4"
 GAMEPLAY = "gameplay.mp4"
 PASTA_GAMEPLAY = Path("biblioteca") / "gameplay"
+PASTA_SFX = Path("biblioteca") / "sfx"
 _VF_FUNDO = "scale=540:960:force_original_aspect_ratio=increase,crop=540:960,boxblur=20:2"
 # 1708×960: a metade de baixo (1080×960) com o gameplay 16:9 centrado (template: left -314px).
 # O crop protege de um gameplay que não seja 16:9 (sem ele, a imagem esticaria).
@@ -47,6 +53,19 @@ def preparar_assets(assets: Path, formato: str, indice: int, dur: float, raiz: P
     if formato == "f5" and not (assets / GAMEPLAY).exists():
         fonte = escolher_gameplay(raiz / PASTA_GAMEPLAY, indice)
         gerar_por_parcial(assets / GAMEPLAY, lambda p: args_gameplay(fonte, p, dur), rodar, "gameplay")
+    if formato == "f10":
+        copiar_sfx(raiz / PASTA_SFX, assets)
+
+
+def copiar_sfx(pasta: Path, assets: Path) -> None:
+    for nome in SFX:
+        destino = assets / f"sfx-{nome}.wav"
+        if destino.exists():
+            continue
+        fonte = pasta / f"{nome}.wav"
+        if not fonte.exists():
+            raise ErroRender(f"efeito sonoro {fonte} não existe (biblioteca/sfx/LEIAME.md diz como gerar)")
+        shutil.copyfile(fonte, destino)
 
 
 def apagar_clipes(assets: Path) -> None:
@@ -56,7 +75,7 @@ def apagar_clipes(assets: Path) -> None:
 
 
 def apagar_assets(assets: Path) -> None:
-    """Também os clipes do f4: vêm das deixas da fala do trecho anterior."""
-    for nome in (FUNDO, GAMEPLAY):
+    """Também os clipes do f4 (vêm das deixas da fala do trecho anterior) e o recorte do f10."""
+    for nome in (FUNDO, GAMEPLAY, RECORTE):
         (assets / nome).unlink(missing_ok=True)
     apagar_clipes(assets)

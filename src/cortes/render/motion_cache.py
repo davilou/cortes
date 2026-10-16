@@ -25,7 +25,7 @@ from cortes.render.motion_params import ErroParams, Ilustracao, ler_params, para
 from cortes.render.motion_prompt import Contexto
 from cortes.render.motion_ritmo import Descartada
 from cortes.render.motion_svg import svg_da_cena
-from cortes.render.motion_tema import TEMAS
+from cortes.render.motion_tema import TEMAS_LLM
 from cortes.render.processo import ErroRender
 from cortes.tipos import Palavra
 
@@ -91,7 +91,7 @@ def ler_cenas(d_corte: Path) -> CacheMotion | None:
             return None
         ch = b["chave"]
         chave = Chave(float(ch["inicio"]), float(ch["fim"]), str(ch["texto"]))
-        if b["tema"] not in TEMAS:
+        if b["tema"] not in TEMAS_LLM:
             raise ValueError(f"tema {b['tema']!r} desconhecido")
         return CacheMotion(chave, Resultado([_cena(c) for c in b["cenas"]],
                                             [_descartada(d) for d in b["descartadas"]], str(b["tema"])))

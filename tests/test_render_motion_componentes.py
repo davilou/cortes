@@ -10,6 +10,7 @@ from cortes.render.motion import Cena
 from cortes.render.motion_animacao import animacoes
 from cortes.render.motion_cache import Motion
 from cortes.render.motion_componentes import cena_html, cenas_html, estados
+from cortes.render.motion_estilo import MOTION_JS
 from cortes.render.motion_params import (
     Capa,
     Chat,
@@ -150,8 +151,7 @@ def test_faixa_base_escapa_o_rotulo() -> None:
 
 def test_contagem_nao_deixa_o_gsap_ler_o_texto_como_numero() -> None:
     """Sem o espaço de largura zero, o GSAP escrevia "1.500" como "1.5" (teste cego, plano E)."""
-    tpl = caminho_template(REPO, "f3").read_text(encoding="utf-8")
-    assert 'const SEM_NUMERO = "​";' in tpl and "textContent: SEM_NUMERO + fmt(" in tpl
+    assert 'const SEM_NUMERO = "​";' in MOTION_JS and "textContent: SEM_NUMERO + fmt(" in MOTION_JS
 
 
 def test_palavra_destacada_e_a_palavra_inteira() -> None:

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field, replace
 from cortes.producao.estado import ErroProducao
 from cortes.render.corte import Corte, Edicoes
 from cortes.render.montagem import validar_formato
-from cortes.render.motion_tema import TEMAS
+from cortes.render.motion_tema import TEMAS_LLM
 from cortes.tipos import Palavra
 
 DURACAO_MIN_S = 3.0
@@ -157,8 +157,8 @@ def _trilha(c: Corte, ed: Edicao, camas: Sequence[str]) -> Corte:
 def _tema(c: Corte, ed: Edicao) -> Corte:
     if ed.tema is None:
         return c
-    if ed.tema != AUTO_TEMA and ed.tema not in TEMAS:
-        raise ErroProducao(f"tema '{ed.tema}' não existe; use {AUTO_TEMA} ou um de {list(TEMAS)}")
+    if ed.tema != AUTO_TEMA and ed.tema not in TEMAS_LLM:
+        raise ErroProducao(f"tema '{ed.tema}' não existe; use {AUTO_TEMA} ou um de {list(TEMAS_LLM)}")
     return replace(c, edicoes=replace(c.edicoes, tema=None if ed.tema == AUTO_TEMA else ed.tema))
 
 

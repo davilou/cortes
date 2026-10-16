@@ -128,9 +128,10 @@ def args_recorte(video: Path, destino: Path, ini: float, segs: list[Segmento]) -
 
 
 def gerar_por_parcial(destino: Path, args: Callable[[Path], list[str]], rodar: Rodar, passo: str) -> None:
-    """Grava em `<nome>.parcial.mp4` e só renomeia no fim: falha no meio nunca deixa um MP4 pela
-    metade no lugar final. Sair 0 sem gerar o arquivo (ou gerar vazio) também é erro."""
-    parcial = destino.with_name(destino.stem + ".parcial.mp4")
+    """Grava em `<nome>.parcial<ext>` e só renomeia no fim: falha no meio nunca deixa um vídeo pela
+    metade no lugar final. A extensão é a do destino (o ffmpeg escolhe o contêiner por ela). Sair 0
+    sem gerar o arquivo (ou gerar vazio) também é erro."""
+    parcial = destino.with_name(destino.stem + ".parcial" + destino.suffix)
     try:
         exigir(rodar, args(parcial), None, passo)
         if not parcial.exists() or parcial.stat().st_size == 0:

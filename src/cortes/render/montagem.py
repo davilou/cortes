@@ -9,37 +9,47 @@ from cortes.producao.estado import ErroProducao
 from cortes.render.conversa import trilha_conversa
 from cortes.render.ilustracao_cache import Ilustracao, Midia, nome_asset
 from cortes.render.legenda import Grupo, legenda_html
+from cortes.render.motion2 import estados_json, plano, sfx, sfx_html
 from cortes.render.motion_animacao import animacoes
 from cortes.render.motion_cache import Motion
 from cortes.render.motion_componentes import cenas_html, estados
+from cortes.render.motion_estilo import COMPONENTES_CSS, MOTION_JS
 from cortes.render.motion_params import Capa
-from cortes.render.motion_tema import css_do_tema
+from cortes.render.motion_tema import TEMA_F10, css_do_tema
 from cortes.render.processo import ErroRender
 from cortes.render.rosto import (
+    ALVO_AVATAR,
+    ALVO_CARD,
     ALVO_DIV,
     ALVO_METADE,
+    JANELA_AVATAR,
+    JANELA_CARD,
     JANELA_DIV,
     JANELA_METADE,
     Rosto,
+    escala_avatar,
     escala_div,
     escala_metade,
     largura_quadro,
+    quadro_avatar,
     quadro_div,
     quadro_metade,
+    trilha_cabeca,
     trilha_fixa,
 )
 
-FORMATOS = ("f7", "f1", "f6", "f5", "f8", "f4", "f3")   # ordem da tela
+FORMATOS = ("f7", "f1", "f6", "f5", "f8", "f4", "f3", "f10")   # ordem da tela
 _TEMPLATES = {"f7": "conversa", "f1": "falante", "f6": "hormozi", "f5": "gameplay", "f8": "desfoque",
-              "f4": "broll", "f3": "motion"}
+              "f4": "broll", "f3": "motion", "f10": "motion2"}
+MOTIONS = ("f3", "f10")   # os formatos com as cenas do Claude (render/motion_cache.py)
 # o f9 Ilustrado (cartão de foto) virou o f4 B-roll automático (plano 2026-10-03-broll-automatico):
 # corte.json antigo em f9 dá este erro, sem conversão silenciosa
 F9_SAIU = "o formato f9 virou o f4 B-roll; renderize de novo em f4"
-_POR_PALAVRA = ("f6",)
+_POR_PALAVRA = ("f6", "f10")
 _PLACEHOLDER = re.compile(r"\{\{[A-Z_]+\}\}")
 CLIPE_MIN_S = 0.3   # clipe que sobra menos que isso antes do fim do Short só pisca: não entra
 _PLACEHOLDERS_ROSTO = {"QW", "TRILHA_CHEIO", "TRILHA_CONVERSA", "QM_W", "QM_H", "TRILHA_METADE", "QD_W",
-                       "QD_H", "TRILHA_DIV"}
+                       "QD_H", "TRILHA_DIV", "TRILHA_CARD", "TRILHA_CABECA", "QA_W", "QA_H", "TRILHA_AVATAR"}
 
 
 def validar_formato(formato: str) -> None:
@@ -130,24 +140,46 @@ def _camera(usa: set[str], rosto: Rosto, escolhas: dict[int, int], grupos: list[
         out["QD_W"], out["QD_H"] = str(qd_w), str(qd_h)
     if "TRILHA_DIV" in usa:
         out["TRILHA_DIV"] = json.dumps(trilha_fixa(rosto, escolhas, JANELA_DIV, ALVO_DIV, escala_div(rosto)))
+    return out | _camera_f10(usa, rosto, escolhas)
+
+
+def _camera_f10(usa: set[str], rosto: Rosto, escolhas: dict[int, int]) -> dict[str, str]:
+    """O card (e a faixa da cabeça por cima dele, com a mesma trilha) e o avatar redondo."""
+    out: dict[str, str] = {}
+    if "TRILHA_CARD" in usa or "TRILHA_CABECA" in usa:
+        card = trilha_fixa(rosto, escolhas, JANELA_CARD, ALVO_CARD, escala_div(rosto))
+        out["TRILHA_CARD"], out["TRILHA_CABECA"] = json.dumps(card), json.dumps(trilha_cabeca(card))
+    if "QA_W" in usa or "QA_H" in usa:
+        qa_w, qa_h = quadro_avatar(rosto)
+        out["QA_W"], out["QA_H"] = str(qa_w), str(qa_h)
+    if "TRILHA_AVATAR" in usa:
+        av = trilha_fixa(rosto, escolhas, JANELA_AVATAR, ALVO_AVATAR, escala_avatar(rosto))
+        out["TRILHA_AVATAR"] = json.dumps(av)
     return out
 
 
-_PLACEHOLDERS_MOTION = {"CENAS", "ESTADOS", "ANIMACOES", "TEMA_CSS", "ROTULO_BASE"}
+_PLACEHOLDERS_MOTION = {"CENAS", "ESTADOS", "ANIMACOES", "TEMA_CSS", "ROTULO_BASE", "COMPONENTES_CSS",
+                        "MOTION_JS", "SFX"}
 
 
-def _motion(usa: set[str], motion: Motion | None, titulo: str) -> dict[str, str]:
-    """As cenas, o tema e a faixa de base do f3 (render/motion_componentes.py e motion_animacao.py;
+def _motion(usa: set[str], motion: Motion | None, titulo: str, formato: str, dur: float) -> dict[str, str]:
+    """As cenas, o tema e a faixa de base do f3 e do f10 (render/motion_componentes.py, motion2.py;
     spec 2026-10-15-f3-denso). A faixa de base mostra o rótulo da capa quando não há painel; sem
     capa, o título do corte."""
     if not usa & _PLACEHOLDERS_MOTION:
         return {}
     if motion is None:
-        raise ErroRender("o template do f3 precisa das cenas do motion, e nenhuma foi preparada")
+        raise ErroRender("o template do f3/f10 precisa das cenas do motion, e nenhuma foi preparada")
     capa = next((c.params for c in motion.cenas if isinstance(c.params, Capa)), None)
-    return {"CENAS": cenas_html(motion.cenas, motion.svgs), "ESTADOS": estados(motion.cenas),
-            "ANIMACOES": animacoes(motion.cenas), "TEMA_CSS": css_do_tema(motion.tema),
-            "ROTULO_BASE": html.escape(capa.rotulo if capa else titulo)}
+    rotulo = capa.rotulo if capa else titulo
+    comum = {"ANIMACOES": animacoes(motion.cenas), "ROTULO_BASE": html.escape(rotulo),
+             "COMPONENTES_CSS": COMPONENTES_CSS, "MOTION_JS": MOTION_JS}
+    if formato == "f10":
+        p = plano(motion.cenas, dur)
+        return comum | {"CENAS": cenas_html(motion.cenas, motion.svgs, p.solo), "ESTADOS": estados_json(p),
+                        "TEMA_CSS": css_do_tema(TEMA_F10), "SFX": sfx_html(sfx(motion.cenas, p, dur))}
+    return comum | {"CENAS": cenas_html(motion.cenas, motion.svgs), "ESTADOS": estados(motion.cenas),
+                    "TEMA_CSS": css_do_tema(motion.tema)}
 
 
 def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], escolhas: dict[int, int],
@@ -163,7 +195,7 @@ def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], esco
            "TITULO": html.escape(titulo), "TRILHA": trilha}
     if "BROLL" in usa:
         out["BROLL"] = broll_html(ilustracoes, dur)
-    out |= _motion(usa, motion, titulo)
+    out |= _motion(usa, motion, titulo, formato, dur)
     if usa & _PLACEHOLDERS_ROSTO:
         if rosto is None:
             raise ErroRender(f"formato '{formato}' usa rosto no template mas nenhum foi medido")
