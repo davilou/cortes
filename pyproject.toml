@@ -36,6 +36,10 @@ line-length = 110
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# CSS dos componentes, uma regra por linha como no template de onde saiu
+"src/cortes/render/motion_estilo.py" = ["E501"]
+
 [tool.mypy]
 strict = true
 mypy_path = "src"

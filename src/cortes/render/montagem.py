@@ -12,6 +12,7 @@ from cortes.render.legenda import Grupo, legenda_html
 from cortes.render.motion_animacao import animacoes
 from cortes.render.motion_cache import Motion
 from cortes.render.motion_componentes import cenas_html, estados
+from cortes.render.motion_estilo import COMPONENTES_CSS, MOTION_JS
 from cortes.render.motion_params import Capa
 from cortes.render.motion_tema import css_do_tema
 from cortes.render.processo import ErroRender
@@ -133,7 +134,8 @@ def _camera(usa: set[str], rosto: Rosto, escolhas: dict[int, int], grupos: list[
     return out
 
 
-_PLACEHOLDERS_MOTION = {"CENAS", "ESTADOS", "ANIMACOES", "TEMA_CSS", "ROTULO_BASE"}
+_PLACEHOLDERS_MOTION = {"CENAS", "ESTADOS", "ANIMACOES", "TEMA_CSS", "ROTULO_BASE", "COMPONENTES_CSS",
+                        "MOTION_JS"}
 
 
 def _motion(usa: set[str], motion: Motion | None) -> dict[str, str]:
@@ -146,7 +148,8 @@ def _motion(usa: set[str], motion: Motion | None) -> dict[str, str]:
     capa = next((c.params for c in motion.cenas if isinstance(c.params, Capa)), None)
     return {"CENAS": cenas_html(motion.cenas, motion.svgs), "ESTADOS": estados(motion.cenas),
             "ANIMACOES": animacoes(motion.cenas), "TEMA_CSS": css_do_tema(motion.tema),
-            "ROTULO_BASE": html.escape(capa.rotulo if capa else "")}
+            "ROTULO_BASE": html.escape(capa.rotulo if capa else ""), "COMPONENTES_CSS": COMPONENTES_CSS,
+            "MOTION_JS": MOTION_JS}
 
 
 def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], escolhas: dict[int, int],

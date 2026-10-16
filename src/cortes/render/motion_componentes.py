@@ -2,7 +2,7 @@
 
 Estado `div`: o painel (`.faixa` > `.painel`, um cartão de 1000 × 724 px na faixa de cima) e o
 falante no card de baixo. Estado `cheio`: o rosto em tela cheia — no gancho, com a capa por cima;
-no respiro, sozinho (o respiro não tem HTML). O CSS está em render/formatos/motion.tpl; os
+no respiro, sozinho (o respiro não tem HTML). O CSS está em render/motion_estilo.py; os
 componentes novos, em render/motion_componentes_novos.py. Todo texto vem do LLM e passa por
 `html.escape`; o JavaScript só leva ids gerados aqui e números, nunca texto do LLM.
 """
