@@ -111,3 +111,24 @@ def test_prompt_lista_os_atributos_permitidos() -> None:
     from cortes.render.motion_svg import prompt_svg
     p = prompt_svg(IL, "escuro")
     assert "stroke-width" in p and "text-anchor" in p and "font-family" in p
+
+
+def test_cache_do_desenho_revalida_os_numeros_quando_a_fala_muda(tmp_path: Path) -> None:
+    llm = Llm(BOM.replace(">testa<", ">72 m²<"))
+    assert svg_da_cena(tmp_path, 1, IL, "escuro", ["72", "metros"], llm)[1] is None
+    assert svg_da_cena(tmp_path, 1, IL, "escuro", ["setenta"], llm)[1] == \
+        "número que a fala não disse no desenho: 72"
+    assert len(llm.prompts) == 1   # o desenho é o mesmo; só a conferência dos números refaz
+
+
+def test_falha_guardada_so_vale_para_a_mesma_cena_e_tema(tmp_path: Path) -> None:
+    from cortes.render.motion_svg import falha_guardada
+    svg_da_cena(tmp_path, 1, IL, "escuro", [], Llm(BOM.replace("<path ", '<path onload="x" ')))
+    assert falha_guardada(tmp_path, 1, IL, "escuro") is not None
+    assert falha_guardada(tmp_path, 1, IL, "noite") is None
+
+
+def test_id_longo_e_aceito() -> None:
+    longo = "gradiente_do_fundo_da_ilustracao_1"
+    s = sanitizar(BOM.replace('id="g1"', f'id="{longo}"').replace("url(#g1)", f"url(#{longo})"), CORES, "s1-")
+    assert f'id="s1-{longo}"' in s and "<text >" not in s

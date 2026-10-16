@@ -289,3 +289,13 @@ def test_tema_de_tipo_errado_e_erro(tmp_path: Path) -> None:
     (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
     with pytest.raises(ErroProducao, match="tema"):
         ler_corte(d)
+
+
+def test_tema_desconhecido_e_erro_ja_na_leitura(tmp_path: Path) -> None:
+    d = tmp_path / "0"
+    gravar_corte(d, novo_corte(0, {"inicio": 1.0, "fim": 5.0, "titulo": "T"}, "f3"))
+    x = json.loads((d / "corte.json").read_text(encoding="utf-8"))
+    x["edicoes"]["tema"] = "roxo"
+    (d / "corte.json").write_text(json.dumps(x), encoding="utf-8")
+    with pytest.raises(ErroProducao, match="tema 'roxo'"):
+        ler_corte(d)

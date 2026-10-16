@@ -10,6 +10,7 @@ from typing import Any, Literal, cast
 
 from cortes.episodio import ler_json, salvar_json
 from cortes.producao.estado import ErroProducao
+from cortes.render.motion_tema import TEMAS
 
 Status = Literal["na_fila", "renderizando", "pronto", "erro"]
 STATUS = ("na_fila", "renderizando", "pronto", "erro")
@@ -152,6 +153,8 @@ def _edicoes(x: Any) -> Edicoes:
     tema = x.get("tema")   # ausente: corte de antes do tema (migração: o do LLM)
     if tema is not None and not isinstance(tema, str):
         raise ValueError(f"edicoes.tema deveria ser texto ou nulo, veio {tema!r}")
+    if tema is not None and tema not in TEMAS:
+        raise ValueError(f"tema '{tema}' não existe; use um de {tuple(TEMAS)}")
     return Edicoes(legenda, mascaradas, rostos, trilha, tema)
 
 

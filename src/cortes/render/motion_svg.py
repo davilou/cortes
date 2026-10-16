@@ -40,8 +40,8 @@ _ESTILO = {"stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-dasharra
 _CORES = {"fill", "stroke", "stop-color"}
 ATRIBUTOS = frozenset(_GEOMETRIA | _ESTILO | _CORES | {"id"})
 _VALOR = re.compile(r"^[\w\s.,()#%+\-]*$")
-_ID = re.compile(r"^[A-Za-z][\w-]{0,30}$")
-_URL = re.compile(r"^url\(#([A-Za-z][\w-]{0,30})\)$")
+_ID = re.compile(r"^[A-Za-z][\w-]{0,60}$")
+_URL = re.compile(r"^url\(#([A-Za-z][\w-]{0,60})\)$")
 _XML_DECL = re.compile(r"^\s*<\?xml[^>]*\?>")
 # inofensivos e comuns no SVG de LLM: saem em silêncio em vez de recusar o desenho (revisão final);
 # `class`/`font-family` sairiam do tema (o CSS do painel pegaria a classe; a fonte é a do tema)
@@ -153,39 +153,54 @@ links ou eventos.
 points, fx, fy, dx, dy, offset), fill, stroke, stop-color, stroke-width, stroke-linecap, \
 stroke-linejoin, stroke-dasharray, opacity, fill-opacity, stroke-opacity, stop-opacity, font-size, \
 font-weight, text-anchor, dominant-baseline, letter-spacing, transform, gradientUnits, \
-gradientTransform, id (até 30 letras). Sem font-family (a fonte é a do vídeo).
+gradientTransform, id (até 60 letras). Sem font-family (a fonte é a do vídeo).
 - No máximo 3 textos curtos (até 20 caracteres) e SEM números.
 - Até 60 elementos e 7 KB."""
 
 
-def _validar(svg_cru: str, k: int, tema: str, ditos: Sequence[str]) -> tuple[str | None, str | None]:
+def _numeros(svg: str, ditos: Sequence[str]) -> str | None:
+    if faltam := nao_ditos(textos_svg(svg), numeros_da_fala(list(ditos))):
+        return f"número que a fala não disse no desenho: {', '.join(faltam)}"
+    return None
+
+
+def _chave(il: Ilustracao, tema: str) -> dict[str, str]:
+    return {"descricao": il.descricao, "tema": tema}
+
+
+def falha_guardada(d_corte: Path, k: int, il: Ilustracao, tema: str) -> str | None:
+    """O motivo guardado de a ilustração `k` não ter desenho (para o editor), só se o guardado é
+    desta mesma descrição e tema; senão None."""
+    arq = d_corte / PASTA / f"{k}.json"
+    if not arq.exists() or (lido := ler_json(arq)).get("chave") != _chave(il, tema):
+        return None
+    motivo = lido.get("motivo")
+    return str(motivo) if motivo is not None else None
+
+
+def _desenhar(il: Ilustracao, k: int, tema: str, chamar: ChamarLLM) -> tuple[str | None, str | None]:
+    cru = chamar(prompt_svg(il, tema), SCHEMA_SVG, SISTEMA_SVG, MODELO_SVG)["svg"]
     try:
-        svg = sanitizar(svg_cru, cores_do_tema(tema), f"s{k}-")
+        return sanitizar(str(cru), cores_do_tema(tema), f"s{k}-"), None
     except ErroSvg as e:
         return None, f"SVG recusado: {e}"
-    if faltam := nao_ditos(textos_svg(svg), numeros_da_fala(list(ditos))):
-        return None, f"número que a fala não disse no desenho: {', '.join(faltam)}"
-    return svg, None
-
-
-def falha_guardada(d_corte: Path, k: int) -> str | None:
-    """O motivo guardado de a ilustração `k` não ter desenho (para o editor), ou None."""
-    arq = d_corte / PASTA / f"{k}.json"
-    return ler_json(arq).get("motivo") if arq.exists() else None
 
 
 def svg_da_cena(d_corte: Path, k: int, il: Ilustracao, tema: str, ditos: Sequence[str],
                 chamar: ChamarLLM) -> tuple[str | None, str | None]:
-    """(svg, None) ou (None, motivo). `ditos`: as palavras faladas até o fim da cena."""
+    """(svg, None) ou (None, motivo). `ditos`: as palavras faladas até o fim da cena. O cache guarda
+    o desenho sanitizado (ou o motivo da recusa) pela descrição e o tema; os números são conferidos
+    a cada vez contra a fala atual — corrigir a legenda não deixa passar número que deixou de ser dito."""
     arq = d_corte / PASTA / f"{k}.json"
-    chave = {"descricao": il.descricao, "tema": tema}
-    if arq.exists() and (lido := ler_json(arq)).get("chave") == chave:
-        return lido["svg"], lido["motivo"]
-    try:
-        cru = chamar(prompt_svg(il, tema), SCHEMA_SVG, SISTEMA_SVG, MODELO_SVG)["svg"]
-    except ErroLLM as e:
-        return None, f"LLM: {e}"
-    svg, motivo = _validar(str(cru), k, tema, ditos)
-    arq.parent.mkdir(parents=True, exist_ok=True)
-    salvar_json(arq, {"chave": chave, "svg": svg, "motivo": motivo})
-    return svg, motivo
+    if arq.exists() and (lido := ler_json(arq)).get("chave") == _chave(il, tema):
+        svg, motivo = lido["svg"], lido["motivo"]
+    else:
+        try:
+            svg, motivo = _desenhar(il, k, tema, chamar)
+        except ErroLLM as e:
+            return None, f"LLM: {e}"
+        arq.parent.mkdir(parents=True, exist_ok=True)
+        salvar_json(arq, {"chave": _chave(il, tema), "svg": svg, "motivo": motivo})
+    if svg is None:
+        return None, motivo
+    return (None, m) if (m := _numeros(svg, ditos)) else (svg, None)

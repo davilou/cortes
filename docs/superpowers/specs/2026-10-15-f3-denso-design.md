@@ -83,7 +83,9 @@ o LLM escolhe pelo nome numa lista fechada (o schema leva o enum). Nome fora da 
 **Na execução (2026-10-15):** o campo da `grade` virou `blocos` (o schema tem uma propriedade por
 nome e `itens` já é a lista de textos da `lista`); painel que acaba até 1 s antes do seguinte é
 esticado até ele (`motion_ritmo.emendar`) para a faixa não piscar o fundo; área de cômodo calculada
-dá o tamanho na planta mas não aparece escrita (só a dita).
+dá o tamanho na planta mas não aparece escrita (só a dita). O timer saiu como `valor` + `unidade` (s, min ou h), com o
+valor mostrado sem converter (até 59 s, 59 min ou 99 h), em vez de `segundos`/`sentido`; a
+ilustração recusada mostra o `icone` da cena com o rótulo, em vez de uma grade de 1 item.
 
 ## 6. Ilustração em SVG livre (`render/motion_svg.py`, novo)
 

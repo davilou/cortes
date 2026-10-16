@@ -19,6 +19,7 @@ from cortes.render.motion_componentes_novos import (
     grade,
     grafico,
     ilustracao,
+    mesma_palavra,
     planta,
     timer,
 )
@@ -142,7 +143,7 @@ def _rota(k: int, p: Rota) -> str:
 def _capa(k: int, p: Capa) -> str:
     palavras, feito = [], False
     for w in p.titulo.split():
-        if not feito and p.destaque.lower() in w.lower():
+        if not feito and mesma_palavra(w) == mesma_palavra(p.destaque):
             palavras.append(f"<b>{_e(w)}</b>")
             feito = True
         else:

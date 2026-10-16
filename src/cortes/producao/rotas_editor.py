@@ -30,7 +30,7 @@ from cortes.render.miniatura import gerar_miniatura
 from cortes.render.montagem import FORMATOS
 from cortes.render.motion_cache import PASTA as PASTA_MOTION
 from cortes.render.motion_cache import ler_cenas
-from cortes.render.motion_params import params_json
+from cortes.render.motion_params import Ilustracao, params_json
 from cortes.render.motion_svg import falha_guardada
 from cortes.render.motion_tema import TEMAS
 from cortes.render.pipeline import grupos_do_trecho
@@ -190,11 +190,12 @@ def _motion_json(d: Path, c: Corte) -> tuple[dict[str, Any] | None, str | None]:
     if lido is None:
         return None, None
     r = lido.resultado
-    return {"tema": c.edicoes.tema or r.tema, "tema_llm": r.tema, "tema_escolha": c.edicoes.tema or AUTO_TEMA,
+    tema = c.edicoes.tema or r.tema
+    return {"tema": tema, "tema_llm": r.tema, "tema_escolha": c.edicoes.tema or AUTO_TEMA,
             "temas": list(TEMAS),
             "cenas": [{"k": x.k, "componente": x.componente, "inicio": x.inicio, "fim": x.fim,
-                       "params": params_json(x.params), "falha_svg": falha_guardada(d, x.k)
-                       if x.componente == "ilustracao" else None} for x in r.cenas],
+                       "params": params_json(x.params), "falha_svg": falha_guardada(d, x.k, x.params, tema)
+                       if isinstance(x.params, Ilustracao) else None} for x in r.cenas],
             "descartadas": [{"componente": x.componente, "inicio": x.inicio, "fim": x.fim,
                              "params": x.params, "motivo": x.motivo} for x in r.descartadas]}, None
 

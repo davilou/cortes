@@ -152,3 +152,26 @@ def test_contagem_nao_deixa_o_gsap_ler_o_texto_como_numero() -> None:
     """Sem o espaço de largura zero, o GSAP escrevia "1.500" como "1.5" (teste cego, plano E)."""
     tpl = caminho_template(REPO, "f3").read_text(encoding="utf-8")
     assert 'const SEM_NUMERO = "​";' in tpl and "textContent: SEM_NUMERO + fmt(" in tpl
+
+
+def test_palavra_destacada_e_a_palavra_inteira() -> None:
+    h = cena_html(Cena(1, "destaque", 2.0, 4.0, Destaque("A taxação mata a taxa", "taxa"), (2.5,)), {})
+    assert 'class="w" id="m1-w1">taxação<' in h and 'class="w on" id="m1-w4">taxa<' in h
+    capa = cena_html(Cena(1, "capa", 0.0, 2.0, Capa("R", "A taxação e a taxa", "taxa"), ()), {})
+    assert "taxação" in capa and "<b>taxa</b>" in capa and "<b>taxação</b>" not in capa
+
+
+def test_faixa_base_sem_capa_usa_o_titulo_do_corte() -> None:
+    tpl = caminho_template(REPO, "f3").read_text(encoding="utf-8")
+    html = montar_html(
+        tpl, valores(tpl, 10.0, R, G, {}, "f3", "430 mil normas", motion=Motion(CENAS[1:3], "dados"))
+    )
+    assert '<div id="faixa-base"><span>430 mil normas</span>' in html
+
+
+def test_painel_entra_sem_esmaecer_por_cima_da_faixa_base() -> None:
+    js = animacoes(CENAS[1:2])
+    assert (
+        'tl.fromTo("#m2 .painel", { y: -24 }' in js
+        and "opacity: 0 }, { y: 0, opacity: 1" not in js.split("\n")[0]
+    )

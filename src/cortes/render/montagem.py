@@ -136,9 +136,10 @@ def _camera(usa: set[str], rosto: Rosto, escolhas: dict[int, int], grupos: list[
 _PLACEHOLDERS_MOTION = {"CENAS", "ESTADOS", "ANIMACOES", "TEMA_CSS", "ROTULO_BASE"}
 
 
-def _motion(usa: set[str], motion: Motion | None) -> dict[str, str]:
+def _motion(usa: set[str], motion: Motion | None, titulo: str) -> dict[str, str]:
     """As cenas, o tema e a faixa de base do f3 (render/motion_componentes.py e motion_animacao.py;
-    spec 2026-10-15-f3-denso). A faixa de base mostra o rótulo da capa quando não há painel."""
+    spec 2026-10-15-f3-denso). A faixa de base mostra o rótulo da capa quando não há painel; sem
+    capa, o título do corte."""
     if not usa & _PLACEHOLDERS_MOTION:
         return {}
     if motion is None:
@@ -146,7 +147,7 @@ def _motion(usa: set[str], motion: Motion | None) -> dict[str, str]:
     capa = next((c.params for c in motion.cenas if isinstance(c.params, Capa)), None)
     return {"CENAS": cenas_html(motion.cenas, motion.svgs), "ESTADOS": estados(motion.cenas),
             "ANIMACOES": animacoes(motion.cenas), "TEMA_CSS": css_do_tema(motion.tema),
-            "ROTULO_BASE": html.escape(capa.rotulo if capa else "")}
+            "ROTULO_BASE": html.escape(capa.rotulo if capa else titulo)}
 
 
 def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], escolhas: dict[int, int],
@@ -162,7 +163,7 @@ def valores(tpl: str, dur: float, rosto: Rosto | None, grupos: list[Grupo], esco
            "TITULO": html.escape(titulo), "TRILHA": trilha}
     if "BROLL" in usa:
         out["BROLL"] = broll_html(ilustracoes, dur)
-    out |= _motion(usa, motion)
+    out |= _motion(usa, motion, titulo)
     if usa & _PLACEHOLDERS_ROSTO:
         if rosto is None:
             raise ErroRender(f"formato '{formato}' usa rosto no template mas nenhum foi medido")

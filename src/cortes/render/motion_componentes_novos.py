@@ -6,6 +6,7 @@ o SVG da ilustração só como saiu de render/motion_svg.py (sanitizado).
 """
 
 import html
+import re
 
 from cortes.render.motion_icones import icone_svg
 from cortes.render.motion_params import (
@@ -23,6 +24,11 @@ from cortes.render.motion_planta import planta_svg
 
 GRAF_W, GRAF_H, GRAF_X0, GRAF_Y0 = 880.0, 360.0, 60.0, 40.0  # área do gráfico dentro do svg 1000×460
 GRAF_TOPO = 110  # o svg do gráfico fica a 110 px do topo do painel, em escala 1 (motion.tpl)
+
+
+def mesma_palavra(w: str) -> str:
+    """A palavra sem pontuação, em minúsculas: "taxa" acende "taxa," mas não "taxação"."""
+    return re.sub(r"[^\w]", "", w.lower())
 
 
 def _e(t: str) -> str:
@@ -112,9 +118,9 @@ def grade(k: int, p: Grade) -> str:
 
 
 def destaque(k: int, p: Destaque) -> str:
-    alvo, feito, palavras = p.palavra.lower(), False, []
+    alvo, feito, palavras = mesma_palavra(p.palavra), False, []
     for j, w in enumerate(p.frase.split()):
-        on = not feito and alvo in w.lower()
+        on = not feito and mesma_palavra(w) == alvo
         feito = feito or on
         palavras.append(f'<span class="w{" on" if on else ""}" id="m{k}-w{j}">{_e(w)}</span>')
     fs = 96 if len(p.frase) <= 28 else 78 if len(p.frase) <= 44 else 64

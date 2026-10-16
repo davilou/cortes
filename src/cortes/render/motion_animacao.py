@@ -52,7 +52,7 @@ def _entrada(c: Cena) -> list[str]:
             de(f"{s} .titulo", "y: 60, opacity: 0", "y: 0, opacity: 1", 0.35, "expo.out", quando + 0.05),
         ]
     return [
-        de(f"{s} .painel", "y: -24, opacity: 0", "y: 0, opacity: 1", 0.25, "power3.out", quando),
+        de(f"{s} .painel", "y: -24", "y: 0", 0.25, "power3.out", quando),   # sem esmaecer sobre a base
         de(f"{s} .cab", "x: -20, opacity: 0", "x: 0, opacity: 1", 0.25, "power2.out", quando + 0.08),
     ]
 
