@@ -188,23 +188,24 @@ def _corpo(k: int, p: Params, svgs: dict[int, str]) -> str:
             raise ValueError(f"componente sem HTML no painel: {type(p).__name__}")
 
 
-def cena_html(c: Cena, svgs: dict[int, str]) -> str:
+def cena_html(c: Cena, svgs: dict[int, str], classe: str = "") -> str:
     """O clipe da cena: a capa por cima do rosto cheio ou o painel na faixa de cima. O respiro não
-    tem clipe — é só o estado `cheio`."""
+    tem clipe — é só o estado `cheio`. `classe` vai na faixa (o f10 põe `solo` no painel sozinho)."""
     if c.componente == "respiro":
         return ""
     attrs = f'id="m{c.k}" data-start="{_t(c.inicio)}" data-duration="{_t(c.fim - c.inicio)}"'
     if isinstance(c.params, Capa):
         corpo = _capa(c.k, c.params)
         return f'      <div {attrs} class="clip capa" data-track-index="{TRILHA_CAPA}">{corpo}</div>'
+    faixa = f"faixa {classe}".strip()
     return (
-        f'      <div {attrs} class="clip faixa" data-track-index="{TRILHA_DIV}">'
+        f'      <div {attrs} class="clip {faixa}" data-track-index="{TRILHA_DIV}">'
         f'<div class="painel {c.componente}-p">{_corpo(c.k, c.params, svgs)}</div></div>'
     )
 
 
-def cenas_html(cenas: list[Cena], svgs: dict[int, str]) -> str:
-    return "\n".join(h for c in cenas if (h := cena_html(c, svgs)))
+def cenas_html(cenas: list[Cena], svgs: dict[int, str], solo: frozenset[int] = frozenset()) -> str:
+    return "\n".join(h for c in cenas if (h := cena_html(c, svgs, "solo" if c.k in solo else "")))
 
 
 def estados(cenas: list[Cena]) -> str:

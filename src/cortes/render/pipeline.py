@@ -6,6 +6,8 @@ e os assets do formato (fundo do f8, gameplay do f5; render/assets.py) são apag
 O f4 (B-roll) tem ainda a etapa do B-roll (render/ilustracao_etapa.py), com cache em
 `ilustracao/`, e o f3 (motion) a das cenas (render/motion_cache.py), com cache em `motion/`; as duas
 pastas são apagadas junto quando o trecho é refeito.
+O f10 (Motion v2) usa as mesmas cenas do f3 e ainda o recorte da cabeça (render/recorte_fundo.py), na
+GPU, apagado com os outros assets quando o trecho é refeito.
 `montar_projeto` (trecho + rosto + trilha + index.html com as edições) é o que a prévia do editor mostra;
 `renderizar_corte` chama `montar_projeto` e depois gera o MP4.
 """
@@ -27,9 +29,10 @@ from cortes.render.ilustracao_conferencia import ChamarComRead, chamar_com_read_
 from cortes.render.ilustracao_etapa import DepIlustracao, ilustrar
 from cortes.render.ilustracao_imagens import BuscaImagens, ddgs_real, rodar_download_real
 from cortes.render.legenda import Grupo, grupos, palavras_do_corte
-from cortes.render.montagem import caminho_template, montar_html, usa_rosto, valores
+from cortes.render.montagem import MOTIONS, caminho_template, montar_html, usa_rosto, valores
 from cortes.render.motion_cache import PASTA as PASTA_MOTION
 from cortes.render.motion_cache import Motion, contexto_do_meta, preparar_cenas
+from cortes.render.motion_tema import TEMA_F10
 from cortes.render.processo import ErroRender, Rodar, rodar_processo
 from cortes.render.recorte import (
     LerAudio,
@@ -40,6 +43,8 @@ from cortes.render.recorte import (
     recortar,
     segmentos_sem_pausa,
 )
+from cortes.render.recorte_fundo import MODELO as MODELO_RECORTE
+from cortes.render.recorte_fundo import preparar_recorte
 from cortes.render.rosto import ler_rosto, medir_rosto
 from cortes.render.trilha_biblioteca import BIBLIOTECA, MedirLufs, medir_lufs_real
 from cortes.render.trilha_etapa import TrilhaUsada, preparar_trilha
@@ -66,6 +71,7 @@ class DepRender:
     rodar_busca_video: Rodar = rodar_busca_real                # busca no YouTube do f4 (30 s)
     rodar_video: Rodar = rodar_trecho_real                     # trecho do YouTube e quadros (90 s)
     medir_lufs: MedirLufs = medir_lufs_real                    # loudness da voz e das camas (trilha)
+    modelo_recorte: Path = MODELO_RECORTE                      # recorte da cabeça do f10 (u2net)
 
 
 def janela(c: Corte) -> tuple[float, float]:
@@ -171,13 +177,15 @@ def _ilustrar(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) ->
 
 
 def _cenas(pasta_ep: Path, c: Corte, segs: list[Segmento], dep: DepRender) -> Motion | None:
-    """Só o f3. Erro de LLM ou "nada vira painel" vira ErroRender e o corte fica em erro."""
-    if c.formato != "f3":
+    """Só o f3 e o f10 (mesmas cenas, mesmo cache). Erro de LLM ou "nada vira painel" vira ErroRender
+    e o corte fica em erro. O f10 tem o tema fixo: a troca de tema do editor é do f3."""
+    if c.formato not in MOTIONS:
         return None
     ini, fim = janela(c)
     palavras = _palavras_trecho(pasta_ep, c, segs, com_mascara=False)
+    tema = TEMA_F10 if c.formato == "f10" else c.edicoes.tema
     return preparar_cenas(pasta_corte(pasta_ep, c.indice), ini, fim, palavras, duracao(segs), dep.chamar_llm,
-                          contexto_do_meta(pasta_ep), c.edicoes.tema)
+                          contexto_do_meta(pasta_ep), tema)
 
 
 def _trilha(pasta_ep: Path, c: Corte, raiz: Path, segs: list[Segmento],
@@ -196,6 +204,8 @@ def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> Tril
     segs = preparar_trecho(pasta_ep, c, raiz, dep)
     proj = pasta_corte(pasta_ep, c.indice) / "projeto"
     preparar_assets(proj / "assets", c.formato, c.indice, duracao(segs), raiz, dep.rodar)
+    if c.formato == "f10":
+        preparar_recorte(proj / "assets", raiz, dep.py_visao, dep.modelo_recorte, dep.rodar)
     trilha, usada = _trilha(pasta_ep, c, raiz, segs, dep)
     ilus = _ilustrar(pasta_ep, c, segs, dep)
     cenas = _cenas(pasta_ep, c, segs, dep)

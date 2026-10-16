@@ -35,7 +35,7 @@ from cortes.render.motion_ritmo import (
     ritmo,
 )
 from cortes.render.motion_sincronia import tempos_das_batidas
-from cortes.render.motion_tema import TEMAS
+from cortes.render.motion_tema import TEMAS_LLM
 from cortes.render.processo import ErroRender
 from cortes.tipos import Palavra
 
@@ -120,8 +120,8 @@ def cenas_do_corte(palavras: list[Palavra], dur: float, chamar: ChamarLLM, conte
     prompt = prompt_cenas(palavras, contexto)
     primeira = chamar(prompt, SCHEMA_CENAS, SISTEMA_CENAS, modelo)
     tema = primeira.get("tema")
-    if tema not in TEMAS:
-        raise ErroLLM(f"tema {tema!r} fora de {tuple(TEMAS)}")
+    if tema not in TEMAS_LLM:
+        raise ErroLLM(f"tema {tema!r} fora de {TEMAS_LLM}")
     ficam, fora = _rodada(primeira, palavras, dur, [])
     vs = vaos(ficam, palavras, dur)
     if precisa_segunda(emendar(ficam, dur), vs, dur):   # a segunda e última chamada (cota)

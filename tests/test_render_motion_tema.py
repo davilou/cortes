@@ -1,11 +1,15 @@
 import pytest
 
-from cortes.render.motion_tema import TEMA_PADRAO, TEMAS, cores_do_tema, css_do_tema
+from cortes.render.motion_prompt import SCHEMA_CENAS
+from cortes.render.motion_tema import TEMA_F10, TEMA_PADRAO, TEMAS, TEMAS_LLM, cores_do_tema, css_do_tema
 from cortes.render.processo import ErroRender
 
 
-def test_os_quatro_temas_da_spec() -> None:
-    assert set(TEMAS) == {"escuro", "noite", "clinico", "dados"} and TEMA_PADRAO == "escuro"
+def test_os_quatro_temas_da_spec_e_o_fixo_do_f10() -> None:
+    """O LLM escolhe entre os quatro do f3; o `bolo` é do f10 e fica fora do enum do prompt."""
+    assert set(TEMAS_LLM) == {"escuro", "noite", "clinico", "dados"} and TEMA_PADRAO == "escuro"
+    assert set(TEMAS) == {*TEMAS_LLM, TEMA_F10} and TEMA_F10 == "bolo"
+    assert SCHEMA_CENAS["properties"]["tema"]["enum"] == list(TEMAS_LLM)
 
 
 @pytest.mark.parametrize("nome", ["escuro", "noite", "clinico", "dados"])

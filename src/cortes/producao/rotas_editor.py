@@ -27,12 +27,12 @@ from cortes.render.ilustracao_cache import ARQUIVO as ARQUIVO_ILUSTRACAO
 from cortes.render.ilustracao_cache import PASTA as PASTA_ILUSTRACAO
 from cortes.render.ilustracao_cache import Fonte, ler_ilustracoes, miniatura
 from cortes.render.miniatura import gerar_miniatura
-from cortes.render.montagem import FORMATOS
+from cortes.render.montagem import FORMATOS, MOTIONS
 from cortes.render.motion_cache import PASTA as PASTA_MOTION
 from cortes.render.motion_cache import ler_cenas
 from cortes.render.motion_params import params_json
 from cortes.render.motion_svg import falha_guardada
-from cortes.render.motion_tema import TEMAS
+from cortes.render.motion_tema import TEMAS_LLM
 from cortes.render.pipeline import grupos_do_trecho
 from cortes.render.pipeline import janela as janela_do_trecho
 from cortes.render.previa import com_runtime
@@ -179,9 +179,9 @@ def _broll_json(id: str, d: Path, c: Corte) -> tuple[list[dict[str, Any]], str |
 
 
 def _motion_json(d: Path, c: Corte) -> tuple[dict[str, Any] | None, str | None]:
-    """Só o f3: as cenas e as descartadas (com o motivo), só leitura. Cache ilegível não derruba o
+    """Só o f3 e o f10: as cenas e as descartadas (com o motivo), só leitura. Cache ilegível não derruba o
     editor: fica em `motion_erro`."""
-    if c.formato != "f3":
+    if c.formato not in MOTIONS:
         return None, None
     try:
         lido = ler_cenas(d)
@@ -191,7 +191,7 @@ def _motion_json(d: Path, c: Corte) -> tuple[dict[str, Any] | None, str | None]:
         return None, None
     r = lido.resultado
     return {"tema": c.edicoes.tema or r.tema, "tema_llm": r.tema, "tema_escolha": c.edicoes.tema or AUTO_TEMA,
-            "temas": list(TEMAS),
+            "temas": list(TEMAS_LLM) if c.formato == "f3" else [],   # o f10 tem tema fixo
             "cenas": [{"k": x.k, "componente": x.componente, "inicio": x.inicio, "fim": x.fim,
                        "params": params_json(x.params), "falha_svg": falha_guardada(d, x.k)
                        if x.componente == "ilustracao" else None} for x in r.cenas],
@@ -319,8 +319,8 @@ def refazer_motion(pasta: Path, n: int, previas: Previas) -> None:
     """Apaga o cache do f3 (`motion/`) e pede a prévia: o LLM escolhe as cenas de novo. Recusado
     enquanto a prévia ou o render usam a pasta."""
     c = corte_de(pasta, n)
-    if c.formato != "f3":
-        raise ErroProducao(f"corte {n} não é Motion (f3): não há motion para refazer")
+    if c.formato not in MOTIONS:
+        raise ErroProducao(f"corte {n} não é Motion (f3/f10): não há motion para refazer")
     _exigir_editavel(previas, pasta.name, c)
     d = pasta_corte(pasta, n)
     if (d / PASTA_MOTION).exists():

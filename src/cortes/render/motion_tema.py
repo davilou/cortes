@@ -26,8 +26,13 @@ TEMAS: dict[str, Paleta] = {
     "noite": Paleta("#0b1424", "#12203a", "#24365a", "#eef2f8", "#8fa0bd", "#d9b46a", "#ff6b6b", True),
     "clinico": Paleta("#f4f6f8", "#ffffff", "#dde3ea", "#16202a", "#6b7886", "#2f7de1", "#e5484d", False),
     "dados": Paleta("#0c1512", "#13211c", "#22362e", "#eaf4ef", "#86a397", "#3ddc84", "#ff5d4f", False),
+    # f10 (Motion v2): cartões claros e acento roxo sobre o fundo que alterna entre claro pontilhado e
+    # marinho (render/motion2.py); fixo, o LLM não escolhe
+    "bolo": Paleta("#f4f2fb", "#ffffff", "#e3def5", "#0d0b1a", "#7a7690", "#7b5cff", "#e5484d", False),
 }
 TEMA_PADRAO = "escuro"
+TEMA_F10 = "bolo"
+TEMAS_LLM = tuple(t for t in TEMAS if t != TEMA_F10)   # os que o Claude escolhe para o f3
 
 
 def paleta(nome: str) -> Paleta:

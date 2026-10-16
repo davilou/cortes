@@ -22,7 +22,7 @@ from cortes.render.motion_ritmo import (
     RESPIRO_MIN_S,
     RESPIROS_MAX,
 )
-from cortes.render.motion_tema import TEMAS
+from cortes.render.motion_tema import TEMAS_LLM
 
 MAX_CENAS = 30
 _NAO_VAZIO = r"\S"
@@ -69,7 +69,7 @@ _PARAMS: dict[str, Any] = {
 SCHEMA_CENAS: dict[str, Any] = {
     "type": "object", "required": ["tema", "cenas"], "additionalProperties": False,
     "properties": {
-        "tema": {"type": "string", "enum": list(TEMAS)},
+        "tema": {"type": "string", "enum": list(TEMAS_LLM)},
         "cenas": {
             "type": "array", "maxItems": MAX_CENAS,
             "items": {

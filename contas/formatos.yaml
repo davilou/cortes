@@ -55,3 +55,9 @@ formatos:
     evidencia: "Anti-controle: zero virais na R1 e na R2."
     no_app: "plano B"
     demo: "testes/f8-desfoque-20-vezes/f8-desfoque-20-vezes.mp4"
+  f10:
+    nome: Motion v2 (bolo de camadas)
+    obs: piloto
+    descricao: "As cenas do f3 num layout que alterna fundo claro pontilhado e marinho: painel em cima e quem fala num card embaixo, com a cabeça saindo por cima do card (recorte na GPU), ou o painel sozinho com o rosto num avatar redondo; legenda grande palavra a palavra e um efeito sonoro em cada movimento."
+    evidencia: "Sem dado ainda: estilo do reel do @cauhi (2026-10-15), piloto no Sardinha."
+    no_app: "plano B"

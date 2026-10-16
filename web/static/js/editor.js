@@ -53,7 +53,7 @@ function htmlAjustes(ed) {
     ${c.erro ? `<p class="erro-txt" title="${esc(c.erro)}">${esc(c.erro)}</p>` : ""}
     <h3>Quem aparece</h3>${htmlPlanos(ed)}
     ${c.formato === "f4" ? `<h3>B-roll</h3>${htmlBroll(ed)}` : ""}
-    ${c.formato === "f3" ? `<h3>Motion</h3>${htmlMotion(ed)}` : ""}
+    ${["f3", "f10"].includes(c.formato) ? `<h3>Motion</h3>${htmlMotion(ed)}` : ""}
     <h3>Versões</h3>${htmlVersoes(ed)}`;
 }
 

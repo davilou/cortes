@@ -58,13 +58,13 @@ G = [Grupo(0.0, 1.0, ("Oi",), (0.0,))]
 
 
 def test_formatos_do_app() -> None:
-    assert FORMATOS == ("f7", "f1", "f6", "f5", "f8", "f4", "f3")
+    assert FORMATOS == ("f7", "f1", "f6", "f5", "f8", "f4", "f3", "f10")
 
 
 @pytest.mark.parametrize("formato", FORMATOS)
 def test_templates_reais_montam_sem_sobra(formato: str) -> None:
     tpl = caminho_template(REPO, formato).read_text(encoding="utf-8")
-    motion = Motion([], "escuro") if formato == "f3" else None   # o f3 exige as cenas (test_render_motion_*)
+    motion = Motion([], "escuro") if formato in ("f3", "f10") else None   # exigem as cenas
     html = montar_html(tpl, valores(tpl, 12.5, R, G, {}, formato, "Título", motion=motion))
     assert 'data-duration="12.5"' in html and ">Oi<" in html
     cheio = formato in ("f7", "f1", "f6", "f4", "f3")
