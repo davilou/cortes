@@ -1,6 +1,8 @@
+import json
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,13 +28,23 @@ AGORA = datetime(2026, 10, 2, 9)
 EP = "/api/episodios/abcdefghijk"
 
 
-def montar(cfg: Config, rodadas: list[str] | None = None) -> tuple[TestClient, Fila]:
+SEO = {"titulo": "Como ele ganhou", "descricao": "Ele conta.", "hashtags": ["#dinheiro"], "tags": ["renda"]}
+
+
+def montar(cfg: Config, rodadas: list[str] | None = None, prompts: list[str] | None = None,
+           abertos: list[Path] | None = None) -> tuple[TestClient, Fila]:
     def rodar(nome: str, pasta: Path, e: EstadoEpisodio) -> None:
         if rodadas is not None:
             rodadas.append(nome)
 
     fila = Fila(cfg.raiz, rodar, lambda: AGORA, antes=lambda p: reabrir_render(p, AGORA))
-    app = criar_app(cfg, executar=lambda a, c: "", abrir=lambda a, c: None, fila=fila)
+    def llm(prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
+        if prompts is not None:
+            prompts.append(prompt)
+        return SEO
+
+    app = criar_app(cfg, executar=lambda a, c: "", abrir=lambda a, c: None, fila=fila, chamar_llm=llm,
+                    abrir_pasta=lambda arq: abertos.append(arq) if abertos is not None else None)
     return TestClient(app, base_url="http://127.0.0.1"), fila
 
 
@@ -155,3 +167,43 @@ def test_cancelar_com_erro_de_disco_e_erro_claro_sem_corte_fantasma(cfg: Config,
     assert r.status_code == 422 and "não deu para apagar" in r.json()["detail"]
     assert "arquivo em uso" in r.json()["detail"]
     assert cortes_do_episodio(pasta) == [] and c.get(EP).json()["candidatos"][0]["corte"] is None
+
+
+def _pronto(pasta: Path) -> None:
+    gravar_corte(pasta_corte(pasta, 0), concluir(novo_corte(0, CAND, "f7")))
+    (pasta_corte(pasta, 0) / "short-v1.mp4").write_bytes(b"mp4")
+    palavras = [{"texto": "eu", "inicio": CAND["inicio"] + 0.5, "fim": CAND["inicio"] + 1.0}]
+    (pasta / "palavras.json").write_text(json.dumps(palavras), encoding="utf-8")
+
+
+def test_seo_gera_de_novo_e_aparece_no_detalhe(cfg: Config) -> None:
+    pasta = preparar_concluido(cfg)
+    _pronto(pasta)
+    prompts: list[str] = []
+    c, _ = montar(cfg, prompts=prompts)
+    assert c.get(EP).json()["cortes"][0]["seo"] is None
+    assert c.post(f"{EP}/cortes/0/seo").json()["titulo"] == "Como ele ganhou"
+    assert c.post(f"{EP}/cortes/0/seo").status_code == 200
+    assert len(prompts) == 2 and "PrimoCast" in prompts[0]   # "gerar de novo" ignora o cache
+    assert c.get(EP).json()["cortes"][0]["seo"]["hashtags"] == ["#dinheiro"]
+
+
+def test_seo_recusa_corte_sem_video_ou_na_fila(cfg: Config) -> None:
+    pasta = preparar_concluido(cfg)
+    c, _ = montar(cfg)
+    assert "não existe" in c.post(f"{EP}/cortes/0/seo").json()["detail"]
+    gravar_corte(pasta_corte(pasta, 0), novo_corte(0, CAND, "f7"))
+    assert "sem vídeo" in c.post(f"{EP}/cortes/0/seo").json()["detail"]
+    _pronto(pasta)
+    gravar_corte(pasta_corte(pasta, 0), reenfileirar(ler_corte(pasta_corte(pasta, 0)), "f7"))
+    assert "na fila" in c.post(f"{EP}/cortes/0/seo").json()["detail"]
+
+
+def test_abrir_pasta_mostra_o_mp4_da_versao_atual(cfg: Config) -> None:
+    pasta = preparar_concluido(cfg)
+    abertos: list[Path] = []
+    c, _ = montar(cfg, abertos=abertos)
+    assert c.post(f"{EP}/cortes/0/abrir-pasta").status_code == 422 and abertos == []
+    _pronto(pasta)
+    assert c.post(f"{EP}/cortes/0/abrir-pasta").json() == {"aberto": True}
+    assert abertos == [pasta_corte(pasta, 0) / "short-v1.mp4"]

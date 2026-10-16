@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from cortes.detector import ChamarLLM, chamar_llm_real
 from cortes.episodio import id_do_video
 from cortes.painel import coleta, formatos_rotas
 from cortes.painel.comparacao import comparaveis, confusoes, dimensao, grupos, matriz
@@ -31,9 +32,10 @@ from cortes.producao.etapas import Dependencias, rodar_etapa
 from cortes.producao.fila import Fila
 from cortes.producao.previas import Previas
 from cortes.producao.render import reabrir_render
+from cortes.producao.rotas_cortes import AbrirPasta, AcoesCorte, abrir_pasta_real
 from cortes.render.corte import Corte
 from cortes.render.montagem import FORMATOS, caminho_template
-from cortes.render.pipeline import SCRIPT_ROSTO, DepRender, montar_projeto
+from cortes.render.pipeline import SCRIPT_ROSTO, DepRender, gerar_seo, montar_projeto
 from cortes.render.processo import ErroRender, Rodar, rodar_processo
 from cortes.render.trilha_biblioteca import BIBLIOTECA, ler_plano
 
@@ -94,11 +96,12 @@ class PedidoAtualizar(BaseModel):
 def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
               abrir: coleta.Abridor = coleta._abrir,
               agora: Callable[[], datetime] = datetime.now, fila: Fila | None = None,
-              previas: Previas | None = None, rodar: Rodar = rodar_processo) -> FastAPI:
+              previas: Previas | None = None, rodar: Rodar = rodar_processo,
+              chamar_llm: ChamarLLM = chamar_llm_real, abrir_pasta: AbrirPasta = abrir_pasta_real) -> FastAPI:
     carregar_vocabulario(cfg.raiz)       # configuração inválida: não sobe
     coleta.verificar_skill(cfg.skill_dir)
     npx = verificar_render(cfg)
-    dep = DepRender(cfg.py_visao, cfg.modelo_rosto, npx, rodar=rodar)
+    dep = DepRender(cfg.py_visao, cfg.modelo_rosto, npx, rodar=rodar, chamar_llm=chamar_llm)
     # ler-validar-gravar de contas.yaml, publicados.jsonl, curadoria e corte.json; a fila do render
     # também a usa para pegar o próximo corte (producao/render.py)
     escrita = threading.Lock()
@@ -127,7 +130,8 @@ def criar_app(cfg: Config, executar: coleta.Executor = coleta._executar,
     _handlers(app)
     _rotas_leitura(app, cfg, estado)
     _rotas_acao(app, cfg, estado, escrita, executar, abrir, agora)
-    rotas_producao.montar(app, cfg.raiz, fila, escrita, agora, previas, rodar)
+    acoes = AcoesCorte(lambda pasta, c: gerar_seo(pasta, c, dep), abrir_pasta)
+    rotas_producao.montar(app, cfg.raiz, fila, escrita, agora, previas, acoes, rodar)
     formatos_rotas.montar(app, cfg.raiz)
     app.mount("/", StaticFiles(directory=cfg.estatico, html=True), name="web")
     return app

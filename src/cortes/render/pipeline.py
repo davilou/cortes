@@ -7,7 +7,7 @@ O f4 (B-roll) tem ainda a etapa do B-roll (render/ilustracao_etapa.py), com cach
 `ilustracao/`, e o f3 (motion) a das cenas (render/motion_cache.py), com cache em `motion/`; as duas
 pastas são apagadas junto quando o trecho é refeito.
 `montar_projeto` (trecho + rosto + trilha + index.html com as edições) é o que a prévia do editor mostra;
-`renderizar_corte` chama `montar_projeto` e depois gera o MP4.
+`renderizar_corte` gera o SEO (render/seo.py), chama `montar_projeto` e depois gera o MP4.
 """
 import shutil
 from collections.abc import Callable
@@ -41,6 +41,7 @@ from cortes.render.recorte import (
     segmentos_sem_pausa,
 )
 from cortes.render.rosto import ler_rosto, medir_rosto
+from cortes.render.seo import Seo, preparar_seo, texto_do_corte
 from cortes.render.trilha_biblioteca import BIBLIOTECA, MedirLufs, medir_lufs_real
 from cortes.render.trilha_etapa import TrilhaUsada, preparar_trilha
 from cortes.render.trilha_mood import texto_para_mood
@@ -59,7 +60,7 @@ class DepRender:
     npx: str
     rodar: Rodar = rodar_processo
     ler_audio: LerAudio = ler_trecho_wav
-    chamar_llm: ChamarLLM = chamar_llm_real                    # deixas do f4 e cenas do f3
+    chamar_llm: ChamarLLM = chamar_llm_real                    # SEO, deixas do f4 e cenas do f3
     chamar_llm_com_read: ChamarComRead = chamar_com_read_real  # conferência visual do f4
     ddgs: Callable[[], BuscaImagens] = ddgs_real               # busca de fotos do f4
     rodar_download: Rodar = rodar_download_real                # download das fotos do f4 (30 s)
@@ -203,11 +204,19 @@ def montar_projeto(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> Tril
     return usada
 
 
+def gerar_seo(pasta_ep: Path, c: Corte, dep: DepRender) -> Seo:
+    ini, fim = janela(c)
+    todas = [Palavra(**p) for p in ler_json(pasta_ep / "palavras.json")]
+    return preparar_seo(pasta_ep, c, texto_do_corte(todas, c, ini, fim), contexto_do_meta(pasta_ep),
+                        dep.chamar_llm)
+
+
 def renderizar_corte(pasta_ep: Path, c: Corte, raiz: Path, dep: DepRender) -> None:
-    """Gera cortes/<indice>/short-v<versao+1>.mp4 e o registro da trilha da versão
+    """Gera cortes/<indice>/short-v<versao+1>.mp4, o seo.json e o registro da trilha da versão
     (`short-v<k>.trilha.json`, para o A/B com e sem trilha — pesquisa 04, R12). Falha alto
-    (ErroRender) em qualquer passo."""
+    (ErroRender) em qualquer passo; o SEO vem antes do MP4, que é o passo de minutos."""
     usada = montar_projeto(pasta_ep, c, raiz, dep)
+    gerar_seo(pasta_ep, c, dep)
     d = pasta_corte(pasta_ep, c.indice)
     k = c.versao + 1
     renderizar(d / "projeto", d / f"short-v{k}.mp4", dep.npx, dep.rodar)

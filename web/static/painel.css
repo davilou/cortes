@@ -345,6 +345,12 @@ video.trecho { width: 100%; aspect-ratio: 16/9; border-radius: 10px; background:
 video.short-video { height: 70vh; width: auto; max-width: 100%; aspect-ratio: 9/16; object-fit: contain;
   border-radius: 10px; background: #000; display: block; margin: 0 auto; cursor: pointer; }
 .short-acoes { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.seo { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 10px;
+  font-size: 12.5px; }
+.seo h4 { font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.seo .seo-cab { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12px; }
+.seo p { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.seo > button { justify-self: start; }
 a.botao { color: var(--text); text-decoration: none; display: inline-block; }
 .corte-erro { margin: 10px 0 6px; font-size: 12px; }
 .painel h3 { font: 400 22px/1.15 var(--serif); margin-top: 14px; }

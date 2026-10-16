@@ -102,12 +102,12 @@ def _validar(raiz: Path, pedido: NovoEpisodio) -> str:
 
 
 def montar(app: FastAPI, raiz: Path, fila: Fila, escrita: threading.Lock, agora: Callable[[], datetime],
-           previas: Previas, rodar: Rodar = rodar_processo) -> None:
+           previas: Previas, acoes: rotas_cortes.AcoesCorte, rodar: Rodar = rodar_processo) -> None:
     """`escrita` é a trava do servidor: serializa criar episódio e gravar curadoria (que
     escreve nos exemplos do nicho e não trava nada sozinha)."""
     _rotas_leitura(app, raiz, fila)
     _rotas_acao(app, raiz, fila, escrita, agora)
-    rotas_cortes.montar(app, lambda id: _pasta(raiz, id), fila, escrita, previas)
+    rotas_cortes.montar(app, lambda id: _pasta(raiz, id), fila, escrita, previas, acoes)
     rotas_editor.montar(app, lambda id: _pasta(raiz, id), previas, rodar, escrita, raiz / BIBLIOTECA)
 
 

@@ -78,7 +78,7 @@ function faixaDe(D, c) {
     inicio: c.inicio, fim: c.fim, preroll: true, fimDoArquivo: false, nome: "trecho" };
 }
 
-// Player + o que acompanha o Short: baixar, copiar título, versão/formato (o da versão pronta,
+// Player + o que acompanha o Short: baixar, abrir a pasta, o SEO, versão/formato (o da versão pronta,
 // não o pedido na fila), "Renderizar de novo" (versão nova no formato escolhido), "Cancelar"
 // enquanto está na fila, e a causa do erro com
 // "tentar de novo" (um corte em erro pode ainda ter o MP4 da versão anterior). "Editar" só
@@ -94,13 +94,35 @@ function htmlMidia(D, c) {
        ${k.video ? "" : linkEditar}</div>` : "";
   const acoes = k?.video
     ? `<div class="short-acoes"><a class="botao mini" href="${esc(k.video)}?baixar=true" download>Baixar MP4</a>
-        <button class="botao mini" type="button" data-copiar>Copiar título</button>${linkEditar}
+        <button class="botao mini" type="button" data-abrir-pasta>Abrir pasta</button>${linkEditar}
         <span class="num">v${k.versao} · ${esc(k.formato_pronto)}</span></div>` : "";
   const denovo = k?.status === "pronto"
     ? `<div class="short-acoes">${htmlRender(D, c.indice, "Renderizar de novo", k.formato)}</div>` : "";
   const cancelar = k?.status === "na_fila"
     ? `<div class="short-acoes">${htmlCancelar(D, c.indice)}</div>` : "";
-  return `${htmlPlayer(faixaDe(D, c))}${acoes}${denovo}${cancelar}${erro}`;
+  return `${htmlPlayer(faixaDe(D, c))}${acoes}${htmlSeo(k)}${denovo}${cancelar}${erro}`;
+}
+
+// O que copiar de cada campo do SEO para o YouTube Studio: as hashtags vão no fim da descrição.
+const COPIA_SEO = {
+  titulo: s => s.titulo,
+  descricao: s => s.hashtags.length ? `${s.descricao}
+
+${s.hashtags.join(" ")}` : s.descricao,
+  tags: s => s.tags.join(", "),
+};
+
+// SEO do Short (render/seo.py): sai junto do render; Short de antes dele ganha "Gerar SEO".
+function htmlSeo(k) {
+  if (!k?.video) return "";
+  const ocupado = ["na_fila", "renderizando"].includes(k.status);
+  const gerar = rotulo => ocupado ? "" : `<button class="botao mini" type="button" data-seo>${rotulo}</button>`;
+  if (!k.seo) return `<div class="seo"><p class="muted">Este Short não tem SEO.</p>${gerar("Gerar SEO")}</div>`;
+  const campo = (chave, nome) => `<div class="seo-campo"><div class="seo-cab"><span>${nome}</span>
+    <button class="botao mini" type="button" data-copiar-seo="${chave}">Copiar</button></div>
+    <p>${esc(COPIA_SEO[chave](k.seo))}</p></div>`;
+  return `<div class="seo"><h4>SEO para o YouTube</h4>${campo("titulo", "Título")}${campo("descricao", "Descrição")}
+    ${k.seo.tags.length ? campo("tags", "Tags") : ""}${gerar("Gerar SEO de novo")}</div>`;
 }
 
 function htmlPainel(D, c) {
@@ -180,11 +202,21 @@ function ligarPainel(D, c) {
     const motivo = txt ? `${$("#motivo-cat").value}: ${txt}` : $("#motivo-cat").value;
     decidir(D, c, "rejeitado", motivo, controlesDecisao(painel));
   };
-  // Copia o título do CORTE (o que vai pro YouTube), não o do candidato.
-  const copiar = $("[data-copiar]", painel);
-  if (copiar) copiar.onclick = () => navigator.clipboard.writeText(corteDe(D, c.indice).titulo)
-    .then(() => avisar("título copiado"), e => avisar(`não deu pra copiar: ${e.message}`));
+  ligarSeo(D, c, painel);
   ligarVideo(painel, faixaDe(D, c));
+}
+
+function ligarSeo(D, c, painel) {
+  const k = corteDe(D, c.indice);
+  $$("[data-copiar-seo]", painel).forEach(b => {
+    b.onclick = () => navigator.clipboard.writeText(COPIA_SEO[b.dataset.copiarSeo](k.seo))
+      .then(() => avisar("copiado"), e => avisar(`não deu pra copiar: ${e.message}`));
+  });
+  const gerar = $("[data-seo]", painel);
+  if (gerar) gerar.onclick = () => { gerar.textContent = "gerando SEO…"; acaoCorte(D, c.indice, gerar, "seo", {}); };
+  const pasta = $("[data-abrir-pasta]", painel);
+  if (pasta) pasta.onclick = () =>
+    post(`/api/episodios/${encodeURIComponent(D.id)}/cortes/${c.indice}/abrir-pasta`, {}).catch(e => avisar(e.message));
 }
 
 function ligarSelecao(alvo, id) {

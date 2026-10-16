@@ -10,6 +10,7 @@ import pytest
 from cortes.render.corte import Edicoes, concluir, novo_corte
 from cortes.render.pipeline import DepRender, janela, montar_projeto, renderizar_corte
 from cortes.render.processo import ErroRender
+from cortes.render.seo import SCHEMA as SCHEMA_SEO
 from cortes.render.trilha import Medida
 from cortes.render.trilha_mood import SCHEMA as SCHEMA_TRILHA
 from tests.test_render_trilha_biblioteca import biblioteca
@@ -17,11 +18,15 @@ from tests.test_render_trilha_biblioteca import biblioteca
 REPO = Path(__file__).resolve().parents[1]
 ROSTO = {"formato": 2, "largura": 1920, "altura": 1080, "cortes": [],
         "amostras": [{"t": 0.0, "rostos": [{"x": 960, "y": 540, "r": 80, "conf": 0.9}]}]}
+SEO = {"titulo": "Eu ganhei", "descricao": "Ele conta como ganhou.", "hashtags": ["#dinheiro"],
+       "tags": ["ganhar dinheiro"]}
 
 
-def responde_mood(prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
-    assert schema is SCHEMA_TRILHA, "fora do f3/f4 o pipeline só chama o LLM para a trilha"
-    return {"mood": "neutro", "motivo": "conversa"}
+def responde_seo(prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
+    if schema is SCHEMA_TRILHA:
+        return {"mood": "neutro", "motivo": "conversa"}
+    assert schema is SCHEMA_SEO, "o pipeline só chama o LLM para o SEO e a trilha fora do f3/f4"
+    return SEO
 
 
 class Falso:
@@ -41,7 +46,7 @@ class Falso:
             t = np.arange(int(dur * 16000)) / 16000
             return (0.5 * np.sin(2 * np.pi * 50 * t)).astype(np.float32)
 
-        return DepRender(Path("py-visao"), Path("m.onnx"), "npx", self.rodar, tom, responde_mood,
+        return DepRender(Path("py-visao"), Path("m.onnx"), "npx", self.rodar, tom, responde_seo,
                          medir_lufs=lambda a: Medida(-16.0, 90.0))
 
 
@@ -53,6 +58,8 @@ def episodio(tmp: Path) -> Path:
     palavras = [{"texto": "Eu", "inicio": 10.1, "fim": 10.5},
                 {"texto": "ganhei.", "inicio": 10.5, "fim": 11.0}]
     (pasta / "palavras.json").write_text(json.dumps(palavras), encoding="utf-8")
+    meta = {"titulo": "Episódio", "canal": "Podcast"}
+    (pasta / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     return pasta
 
 

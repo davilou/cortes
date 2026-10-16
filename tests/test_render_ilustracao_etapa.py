@@ -16,7 +16,8 @@ from cortes.render.ilustracao_etapa import NENHUMA, TEMPORARIA
 from cortes.render.montagem import F9_SAIU
 from cortes.render.pipeline import DepRender, montar_projeto, renderizar_corte
 from cortes.render.processo import ErroRender
-from tests.test_render_pipeline import C, Falso, episodio
+from cortes.render.seo import SCHEMA as SCHEMA_SEO
+from tests.test_render_pipeline import SEO, C, Falso, episodio
 
 TEXTOS = ["Comprei", "um", "tênis", "Vans", "Old", "Skool", "e", "depois", "de", "um", "tempo", "comprei",
           "também", "a", "camisa", "do", "Timão.", "Foi", "isso", "aí."]
@@ -51,6 +52,8 @@ class Ilustra:
         self.prompts_conferencia: list[str] = []
 
     def chamar_llm(self, prompt: str, schema: dict[str, Any], sistema: str, modelo: str) -> dict[str, Any]:
+        if schema is SCHEMA_SEO:   # o SEO do render não conta como chamada do B-roll
+            return SEO
         self.llm += 1
         self.prompts_llm.append(prompt)
         return {"deixas": self.deixas}
